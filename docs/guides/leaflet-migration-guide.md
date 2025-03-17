@@ -29,8 +29,8 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 ### Mapmetrics
 
 ```js
-import "mapmetrics-gl/dist/mapmetrics-gl.css";
-import { Map } from "mapmetrics-gl";
+import "@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.css";
+import { Map } from "@mapmetrics/mapmetrics-gl"
 
 const map = new Map({
     container: "map",

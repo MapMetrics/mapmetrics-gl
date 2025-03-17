@@ -38,8 +38,8 @@ const map = new Map({
 ### Mapmetrics
 
 ```js
-import "mapmetrics-gl/dist/mapmetrics-gl.css";
-import { Map } from "mapmetrics-gl";
+import "@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.css";
+import { Map } from "@mapmetrics/mapmetrics-gl"
 
 const accessToken = "<YOUR_ACCESS_TOKEN>";
 const map = new Map({

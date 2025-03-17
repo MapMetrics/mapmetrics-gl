@@ -43,8 +43,8 @@ npm i mapmetrics-gl
 ```
 
 ```html
-import mapmetricsgl from "mapmetrics-gl"; 
-import "mapmetrics-gl/dist/mapmetrics-gl.css"; 
+import mapmetricsgl from "@mapmetrics/mapmetrics-gl" 
+import "@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.css"; 
 
 export function App() {
     const mapContainerRef = useRef(null);
