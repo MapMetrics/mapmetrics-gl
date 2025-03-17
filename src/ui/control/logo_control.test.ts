@@ -1,0 +1,89 @@
+import {describe, beforeEach, test, expect} from 'vitest';
+import {createMap as globalCreateMap, beforeMapTest} from '../../util/test/util';
+
+function createMap(logoPosition, mapmetricsLogo) {
+
+    const mapobj = {
+        logoPosition,
+        mapmetricsLogo,
+        style: {
+            version: 8,
+            sources: {},
+            layers: []
+        }
+    };
+
+    return globalCreateMap(mapobj, undefined);
+}
+
+beforeEach(() => {
+    beforeMapTest();
+});
+
+describe('LogoControl', () => {
+    test('does not appear by default', async () => {
+        const map = createMap(undefined, undefined);
+        await map.once('load');
+        expect(map.getContainer().querySelectorAll(
+            '.mapmetricsgl-ctrl-logo'
+        )).toHaveLength(0);
+    });
+
+    test('is not displayed when the mapmetricsLogo property is false', () => new Promise<void>(done => {
+        const map = createMap(undefined, false);
+        map.on('load', () => {
+            expect(map.getContainer().querySelectorAll(
+                '.mapmetricsgl-ctrl-logo'
+            )).toHaveLength(0);
+            done();
+        });
+    }));
+
+    test('appears in bottom-left when mapmetricsLogo is true and logoPosition is undefined', () => new Promise<void>(done => {
+        const map = createMap(undefined, true);
+        map.on('load', () => {
+            expect(map.getContainer().querySelectorAll(
+                '.mapmetricsgl-ctrl-bottom-left .mapmetricsgl-ctrl-logo'
+            )).toHaveLength(1);
+            done();
+        });
+    }));
+
+    test('appears in the position specified by the position option', () => new Promise<void>(done => {
+        const map = createMap('top-left', true);
+        map.on('load', () => {
+            expect(map.getContainer().querySelectorAll(
+                '.mapmetricsgl-ctrl-top-left .mapmetricsgl-ctrl-logo'
+            )).toHaveLength(1);
+            done();
+        });
+    }));
+
+    test('appears in compact mode if container is less then 640 pixel wide', () => {
+        const map = createMap(undefined, true);
+        const container = map.getContainer();
+
+        Object.defineProperty(map.getCanvasContainer(), 'offsetWidth', {value: 645, configurable: true});
+        map.resize();
+        expect(
+            container.querySelectorAll('.mapmetricsgl-ctrl-logo:not(.mapmetricsgl-compact)')
+        ).toHaveLength(1);
+
+        Object.defineProperty(map.getCanvasContainer(), 'offsetWidth', {value: 635, configurable: true});
+        map.resize();
+        expect(
+            container.querySelectorAll('.mapmetricsgl-ctrl-logo.mapmetricsgl-compact')
+        ).toHaveLength(1);
+    });
+
+    test('has `rel` noopener and nofollow', () => new Promise<void>(done => {
+        const map = createMap(undefined, true);
+
+        map.on('load', () => {
+            const container = map.getContainer();
+            const logo = container.querySelector('.mapmetricsgl-ctrl-logo');
+            expect(logo).toHaveProperty('rel', 'noopener nofollow');
+            done();
+        });
+    }));
+});

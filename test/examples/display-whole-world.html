@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta
+            property="og:description"
+            content="Display a globe with a vector map."
+        />
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link
+            rel="stylesheet"
+            href="https://gateway.mapmetrics.org/assets/css/mapmetrics-gl.css"
+        />
+        <script src="https://gateway.mapmetrics.org/assets/js/mapmetrics-gl.js"></script>
+        <script src="https://gateway.mapmetrics.org/assets/js/pmtiles.js"></script>
+
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            html,
+            body,
+            #map {
+                height: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="map"></div>
+        <script>
+            // Don't forget to replace <YOUR_ACCESS_TOKEN> by your own access token
+            const accessToken = "<YOUR_ACCESS_TOKEN>";
+
+            const map = new mapmetrics.Map({
+                container: "map",
+                style: `https://gateway.mapmetrics.org/styles/light.json?token=${accessToken}`,
+                zoom: 0,
+                center: [137.9150899566626, 36.25956997955441],
+            });
+
+            map.on("style.load", () => {
+                map.setProjection({
+                    type: "globe", // Set projection to globe
+                });
+            });
+        </script>
+    </body>
+</html>

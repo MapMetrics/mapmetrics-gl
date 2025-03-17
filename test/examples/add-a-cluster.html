@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link
+            rel="stylesheet"
+            href="https://gateway.mapmetrics.org/assets/css/mapmetrics-gl.css"
+        />
+        <script src="https://gateway.mapmetrics.org/assets/js/mapmetrics-gl.js"></script>
+        <script src="https://gateway.mapmetrics.org/assets/js/pmtiles.js"></script>
+        <style>
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                height: 100%;
+            }
+            #map {
+                min-height: 500px;
+                height: 100%;
+                width: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="map"></div>
+        <script>
+            const accessToken = "<YOUR_ACCESS_TOKEN>";
+
+            const protocol = new pmtiles.Protocol();
+            mapmetrics.addProtocol("pmtiles", protocol.tile);
+            const map = new mapmetrics.Map({
+                container: "map",
+                style: `https://gateway.mapmetrics.org/styles/light.json?token=${accessToken}`,
+                center: [-103.59179687498357, 40.66995747013945],
+                zoom: 3,
+            });
+            mapmetrics.setRTLTextPlugin(
+                "https://gateway.mapmetrics.org/assets/js/mapmetrics-gl-rtl-text.min.js"
+            );
+            map.on("load", () => {
+                map.addSource("earthquakes", {
+                    type: "geojson",
+                    data: "https://gateway.mapmetrics.org/assets/earthquakes.geojson",
+                    cluster: true,
+                    clusterMaxZoom: 14,
+                    clusterRadius: 50,
+                });
+
+                map.addLayer({
+                    id: "clusters",
+                    type: "circle",
+                    source: "earthquakes",
+                    filter: ["has", "point_count"],
+                    paint: {
+                        "circle-color": [
+                            "step",
+                            ["get", "point_count"],
+                            "#51bbd6",
+                            100,
+                            "#f1f075",
+                            750,
+                            "#f28cb1",
+                        ],
+                        "circle-radius": [
+                            "step",
+                            ["get", "point_count"],
+                            20,
+                            100,
+                            30,
+                            750,
+                            40,
+                        ],
+                    },
+                });
+
+                map.addLayer({
+                    id: "cluster-count",
+                    type: "symbol",
+                    source: "earthquakes",
+                    filter: ["has", "point_count"],
+                    layout: {
+                        "text-field": "{point_count_abbreviated}",
+                        "text-font": ["Noto Sans Medium"],
+                        "text-size": 12,
+                    },
+                });
+
+                map.addLayer({
+                    id: "unclustered-point",
+                    type: "circle",
+                    source: "earthquakes",
+                    filter: ["!", ["has", "point_count"]],
+                    paint: {
+                        "circle-color": "#11b4da",
+                        "circle-radius": 4,
+                        "circle-stroke-width": 1,
+                        "circle-stroke-color": "#fff",
+                    },
+                });
+
+                map.on("click", "clusters", async (e) => {
+                    const features = map.queryRenderedFeatures(e.point, {
+                        layers: ["clusters"],
+                    });
+                    const clusterId = features[0].properties.cluster_id;
+                    const zoom = await map
+                        .getSource("earthquakes")
+                        .getClusterExpansionZoom(clusterId);
+                    map.easeTo({
+                        center: features[0].geometry.coordinates,
+                        zoom,
+                    });
+                });
+                map.on("click", "unclustered-point", (e) => {
+                    const coordinates =
+                        e.features[0].geometry.coordinates.slice();
+                    const mag = e.features[0].properties.mag;
+                    let tsunami;
+
+                    if (e.features[0].properties.tsunami === 1) {
+                        tsunami = "yes";
+                    } else {
+                        tsunami = "no";
+                    }
+                    while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                        coordinates[0] +=
+                            e.lngLat.lng > coordinates[0] ? 360 : -360;
+                    }
+
+                    new mapmetrics.Popup()
+                        .setLngLat(coordinates)
+                        .setHTML(
+                            `magnitude: ${mag}<br>Was there a tsunami?: ${tsunami}`
+                        )
+                        .addTo(map);
+                });
+
+                map.on("mouseenter", "clusters", () => {
+                    map.getCanvas().style.cursor = "pointer";
+                });
+                map.on("mouseleave", "clusters", () => {
+                    map.getCanvas().style.cursor = "";
+                });
+            });
+        </script>
+    </body>
+</html>
