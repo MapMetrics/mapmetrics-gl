@@ -1,6 +1,6 @@
 import {loadGlyphRange} from '../style/load_glyph_range';
 
-import TinySDF from '@mapbox/tiny-sdf';
+import TinySDF from '@mapmetrics/tiny-sdf';
 import {unicodeBlockLookup} from '../util/is_char_in_unicode_block';
 import {AlphaImage} from '../util/image';
 

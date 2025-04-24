@@ -17,9 +17,9 @@ importers:
       '@mapbox/point-geometry':
         specifier: ^0.1.0
         version: 0.1.0
-      '@mapbox/tiny-sdf':
-        specifier: ^2.0.6
-        version: 2.0.6
+      '@mapmetrics/tiny-sdf':
+        specifier: ^0.0.1
+        version: 0.0.1
       '@mapbox/unitbezier':
         specifier: ^0.0.1
         version: 0.0.1
@@ -1052,7 +1052,7 @@ packages:
     resolution: {integrity: sha512-ZTOuuwGuMOJN+HEmG/68bSEw15HHaMWmQ5gdTsWdWsjDe56K1kGvLOK6bOSC8gWgIvEO0w6un/2Gvv1q5hJSkQ==}
     hasBin: true
 
-  '@mapbox/tiny-sdf@2.0.6':
+  '@mapmetrics/tiny-sdf@0.0.1':
     resolution: {integrity: sha512-qMqa27TLw+ZQz5Jk+RcwZGH7BQf5G/TrutJhspsca/3SHwmgKQ1iq+d3Jxz5oysPVYTGP6aXxCo5Lk9Er6YBAA==}
 
   '@mapbox/unitbezier@0.0.1':
@@ -5478,7 +5478,7 @@ snapshots:
 
   '@mapbox/sphericalmercator@1.2.0': {}
 
-  '@mapbox/tiny-sdf@2.0.6': {}
+  '@mapmetrics/tiny-sdf@2.0.6': {}
 
   '@mapbox/unitbezier@0.0.1': {}
 

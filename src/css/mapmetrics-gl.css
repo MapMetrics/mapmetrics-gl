@@ -36,22 +36,26 @@
 }
 
 .mapmetricsgl-canvas-container.mapmetricsgl-touch-zoom-rotate,
-.mapmetricsgl-canvas-container.mapmetricsgl-touch-zoom-rotate .mapmetricsgl-canvas {
+.mapmetricsgl-canvas-container.mapmetricsgl-touch-zoom-rotate
+    .mapmetricsgl-canvas {
     touch-action: pan-x pan-y;
 }
 
 .mapmetricsgl-canvas-container.mapmetricsgl-touch-drag-pan,
-.mapmetricsgl-canvas-container.mapmetricsgl-touch-drag-pan .mapmetricsgl-canvas {
+.mapmetricsgl-canvas-container.mapmetricsgl-touch-drag-pan
+    .mapmetricsgl-canvas {
     touch-action: pinch-zoom;
 }
 
 .mapmetricsgl-canvas-container.mapmetricsgl-touch-zoom-rotate.mapmetricsgl-touch-drag-pan,
-.mapmetricsgl-canvas-container.mapmetricsgl-touch-zoom-rotate.mapmetricsgl-touch-drag-pan .mapmetricsgl-canvas {
+.mapmetricsgl-canvas-container.mapmetricsgl-touch-zoom-rotate.mapmetricsgl-touch-drag-pan
+    .mapmetricsgl-canvas {
     touch-action: none;
 }
 
 .mapmetricsgl-canvas-container.mapmetricsgl-touch-drag-pan.mapmetricsgl-cooperative-gestures,
-.mapmetricsgl-canvas-container.mapmetricsgl-touch-drag-pan.mapmetricsgl-cooperative-gestures .mapmetricsgl-canvas {
+.mapmetricsgl-canvas-container.mapmetricsgl-touch-drag-pan.mapmetricsgl-cooperative-gestures
+    .mapmetricsgl-canvas {
     touch-action: pan-x pan-y;
 }
 
@@ -70,9 +74,9 @@
 }
 
 .mapmetricsgl-ctrl-top-right {
-     top: 0;
-     right: 0;
-    }
+    top: 0;
+    right: 0;
+}
 
 .mapmetricsgl-ctrl-bottom-left {
     bottom: 0;
@@ -80,8 +84,8 @@
 }
 
 .mapmetricsgl-ctrl-bottom-right {
-     right: 0;
-     bottom: 0;
+    right: 0;
+    bottom: 0;
 }
 
 .mapmetricsgl-ctrl {
@@ -94,7 +98,7 @@
 
 .mapmetricsgl-ctrl-top-left .mapmetricsgl-ctrl {
     margin: 10px 0 0 10px;
-     float: left;
+    float: left;
 }
 
 .mapmetricsgl-ctrl-top-right .mapmetricsgl-ctrl {
@@ -211,7 +215,10 @@
 }
 
 .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-zoom-out .mapmetricsgl-ctrl-icon {
-    background-image: svg-load("svg/mapmetricsgl-ctrl-zoom-out.svg", fill: #333);
+    background-image: svg-load(
+        "svg/mapmetricsgl-ctrl-zoom-out.svg",
+        fill: #333
+    );
 }
 
 .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-zoom-in .mapmetricsgl-ctrl-icon {
@@ -219,27 +226,50 @@
 }
 
 @media (forced-colors: active) {
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-zoom-out .mapmetricsgl-ctrl-icon {
-        background-image: svg-load("svg/mapmetricsgl-ctrl-zoom-out.svg", fill: #fff);
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-zoom-out
+        .mapmetricsgl-ctrl-icon {
+        background-image: svg-load(
+            "svg/mapmetricsgl-ctrl-zoom-out.svg",
+            fill: #fff
+        );
     }
 
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-zoom-in .mapmetricsgl-ctrl-icon {
-        background-image: svg-load("svg/mapmetricsgl-ctrl-zoom-in.svg", fill: #fff);
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-zoom-in
+        .mapmetricsgl-ctrl-icon {
+        background-image: svg-load(
+            "svg/mapmetricsgl-ctrl-zoom-in.svg",
+            fill: #fff
+        );
     }
 }
 
 @media (forced-colors: active) and (prefers-color-scheme: light) {
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-zoom-out .mapmetricsgl-ctrl-icon {
-        background-image: svg-load("svg/mapmetricsgl-ctrl-zoom-out.svg", fill: #000);
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-zoom-out
+        .mapmetricsgl-ctrl-icon {
+        background-image: svg-load(
+            "svg/mapmetricsgl-ctrl-zoom-out.svg",
+            fill: #000
+        );
     }
 
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-zoom-in .mapmetricsgl-ctrl-icon {
-        background-image: svg-load("svg/mapmetricsgl-ctrl-zoom-in.svg", fill: #000);
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-zoom-in
+        .mapmetricsgl-ctrl-icon {
+        background-image: svg-load(
+            "svg/mapmetricsgl-ctrl-zoom-in.svg",
+            fill: #000
+        );
     }
 }
 
 .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-fullscreen .mapmetricsgl-ctrl-icon {
-    background-image: svg-load("svg/mapmetricsgl-ctrl-fullscreen.svg", fill: #333);
+    background-image: svg-load(
+        "svg/mapmetricsgl-ctrl-fullscreen.svg",
+        fill: #333
+    );
 }
 
 .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-shrink .mapmetricsgl-ctrl-icon {
@@ -247,22 +277,38 @@
 }
 
 @media (forced-colors: active) {
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-fullscreen .mapmetricsgl-ctrl-icon {
-        background-image: svg-load("svg/mapmetricsgl-ctrl-fullscreen.svg", fill: #fff);
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-fullscreen
+        .mapmetricsgl-ctrl-icon {
+        background-image: svg-load(
+            "svg/mapmetricsgl-ctrl-fullscreen.svg",
+            fill: #fff
+        );
     }
 
     .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-shrink .mapmetricsgl-ctrl-icon {
-        background-image: svg-load("svg/mapmetricsgl-ctrl-shrink.svg", fill: #fff);
+        background-image: svg-load(
+            "svg/mapmetricsgl-ctrl-shrink.svg",
+            fill: #fff
+        );
     }
 }
 
 @media (forced-colors: active) and (prefers-color-scheme: light) {
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-fullscreen .mapmetricsgl-ctrl-icon {
-        background-image: svg-load("svg/mapmetricsgl-ctrl-fullscreen.svg", fill: #000);
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-fullscreen
+        .mapmetricsgl-ctrl-icon {
+        background-image: svg-load(
+            "svg/mapmetricsgl-ctrl-fullscreen.svg",
+            fill: #000
+        );
     }
 
     .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-shrink .mapmetricsgl-ctrl-icon {
-        background-image: svg-load("svg/mapmetricsgl-ctrl-shrink.svg", fill: #000);
+        background-image: svg-load(
+            "svg/mapmetricsgl-ctrl-shrink.svg",
+            fill: #000
+        );
     }
 }
 
@@ -271,10 +317,14 @@
 }
 
 @media (forced-colors: active) {
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-compass .mapmetricsgl-ctrl-icon {
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-compass
+        .mapmetricsgl-ctrl-icon {
         @svg-load ctrl-compass-white url("svg/mapmetricsgl-ctrl-compass.svg") {
             fill: #fff;
-            #south { fill: #999; }
+            #south {
+                fill: #999;
+            }
         }
 
         background-image: svg-inline(ctrl-compass-white);
@@ -282,8 +332,13 @@
 }
 
 @media (forced-colors: active) and (prefers-color-scheme: light) {
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-compass .mapmetricsgl-ctrl-icon {
-        background-image: svg-load("svg/mapmetricsgl-ctrl-compass.svg", fill: #000);
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-compass
+        .mapmetricsgl-ctrl-icon {
+        background-image: svg-load(
+            "svg/mapmetricsgl-ctrl-compass.svg",
+            fill: #000
+        );
     }
 }
 
@@ -299,147 +354,205 @@
     background-image: svg-inline(ctrl-globe);
 }
 
-.mapmetricsgl-ctrl button.mapmetricsgl-ctrl-globe-enabled .mapmetricsgl-ctrl-icon {
+.mapmetricsgl-ctrl
+    button.mapmetricsgl-ctrl-globe-enabled
+    .mapmetricsgl-ctrl-icon {
     background-image: svg-inline(ctrl-globe-enabled);
 }
 
 @svg-load ctrl-terrain url("svg/mapmetricsgl-ctrl-terrain.svg") {
     fill: #333;
-    
 }
 
 @svg-load ctrl-terrain-enabled url("svg/mapmetricsgl-ctrl-terrain.svg") {
     fill: #33b5e5;
-    
 }
 
 .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-terrain .mapmetricsgl-ctrl-icon {
     background-image: svg-inline(ctrl-terrain);
 }
 
-.mapmetricsgl-ctrl button.mapmetricsgl-ctrl-terrain-enabled .mapmetricsgl-ctrl-icon {
+.mapmetricsgl-ctrl
+    button.mapmetricsgl-ctrl-terrain-enabled
+    .mapmetricsgl-ctrl-icon {
     background-image: svg-inline(ctrl-terrain-enabled);
 }
 
 @svg-load ctrl-geolocate url("svg/mapmetricsgl-ctrl-geolocate.svg") {
     fill: #333;
-    #stroke { display: none; }
+    #stroke {
+        display: none;
+    }
 }
 
 @svg-load ctrl-geolocate-white url("svg/mapmetricsgl-ctrl-geolocate.svg") {
     fill: #fff;
-    #stroke { display: none; }
+    #stroke {
+        display: none;
+    }
 }
 
 @svg-load ctrl-geolocate-black url("svg/mapmetricsgl-ctrl-geolocate.svg") {
     fill: #000;
-    #stroke { display: none; }
+    #stroke {
+        display: none;
+    }
 }
 
 @svg-load ctrl-geolocate-disabled url("svg/mapmetricsgl-ctrl-geolocate.svg") {
     fill: #aaa;
-    #stroke { fill: #f00; }
+    #stroke {
+        fill: #f00;
+    }
 }
 
 @svg-load ctrl-geolocate-disabled-white url("svg/mapmetricsgl-ctrl-geolocate.svg") {
     fill: #999;
-    #stroke { fill: #f00; }
+    #stroke {
+        fill: #f00;
+    }
 }
 
 @svg-load ctrl-geolocate-disabled-black url("svg/mapmetricsgl-ctrl-geolocate.svg") {
     fill: #666;
-    #stroke { fill: #f00; }
+    #stroke {
+        fill: #f00;
+    }
 }
 
 @svg-load ctrl-geolocate-active url("svg/mapmetricsgl-ctrl-geolocate.svg") {
     fill: #33b5e5;
-    #stroke { display: none; }
+    #stroke {
+        display: none;
+    }
 }
 
 @svg-load ctrl-geolocate-active-error url("svg/mapmetricsgl-ctrl-geolocate.svg") {
     fill: #e58978;
-    #stroke { display: none; }
+    #stroke {
+        display: none;
+    }
 }
 
 @svg-load ctrl-geolocate-background url("svg/mapmetricsgl-ctrl-geolocate.svg") {
     fill: #33b5e5;
-    #stroke { display: none; }
-    #dot { display: none; }
+    #stroke {
+        display: none;
+    }
+    #dot {
+        display: none;
+    }
 }
 
 @svg-load ctrl-geolocate-background-error url("svg/mapmetricsgl-ctrl-geolocate.svg") {
     fill: #e54e33;
-    #stroke { display: none; }
-    #dot { display: none; }
+    #stroke {
+        display: none;
+    }
+    #dot {
+        display: none;
+    }
 }
 
 .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate .mapmetricsgl-ctrl-icon {
     background-image: svg-inline(ctrl-geolocate);
 }
 
-.mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate:disabled .mapmetricsgl-ctrl-icon {
+.mapmetricsgl-ctrl
+    button.mapmetricsgl-ctrl-geolocate:disabled
+    .mapmetricsgl-ctrl-icon {
     background-image: svg-inline(ctrl-geolocate-disabled);
 }
 
-.mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-active .mapmetricsgl-ctrl-icon {
+.mapmetricsgl-ctrl
+    button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-active
+    .mapmetricsgl-ctrl-icon {
     background-image: svg-inline(ctrl-geolocate-active);
 }
 
-.mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-active-error .mapmetricsgl-ctrl-icon {
+.mapmetricsgl-ctrl
+    button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-active-error
+    .mapmetricsgl-ctrl-icon {
     background-image: svg-inline(ctrl-geolocate-active-error);
 }
 
-.mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-background .mapmetricsgl-ctrl-icon {
+.mapmetricsgl-ctrl
+    button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-background
+    .mapmetricsgl-ctrl-icon {
     background-image: svg-inline(ctrl-geolocate-background);
 }
 
-.mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-background-error .mapmetricsgl-ctrl-icon {
+.mapmetricsgl-ctrl
+    button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-background-error
+    .mapmetricsgl-ctrl-icon {
     background-image: svg-inline(ctrl-geolocate-background-error);
 }
 
-.mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-waiting .mapmetricsgl-ctrl-icon {
+.mapmetricsgl-ctrl
+    button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-waiting
+    .mapmetricsgl-ctrl-icon {
     animation: mapmetricsgl-spin 2s infinite linear;
 }
 
 @media (forced-colors: active) {
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate .mapmetricsgl-ctrl-icon {
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-geolocate
+        .mapmetricsgl-ctrl-icon {
         background-image: svg-inline(ctrl-geolocate-white);
     }
 
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate:disabled .mapmetricsgl-ctrl-icon {
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-geolocate:disabled
+        .mapmetricsgl-ctrl-icon {
         background-image: svg-inline(ctrl-geolocate-disabled-white);
     }
 
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-active .mapmetricsgl-ctrl-icon {
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-active
+        .mapmetricsgl-ctrl-icon {
         background-image: svg-inline(ctrl-geolocate-active);
     }
 
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-active-error .mapmetricsgl-ctrl-icon {
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-active-error
+        .mapmetricsgl-ctrl-icon {
         background-image: svg-inline(ctrl-geolocate-active-error);
     }
 
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-background .mapmetricsgl-ctrl-icon {
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-background
+        .mapmetricsgl-ctrl-icon {
         background-image: svg-inline(ctrl-geolocate-background);
     }
 
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-background-error .mapmetricsgl-ctrl-icon {
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-geolocate.mapmetricsgl-ctrl-geolocate-background-error
+        .mapmetricsgl-ctrl-icon {
         background-image: svg-inline(ctrl-geolocate-background-error);
     }
 }
 
 @media (forced-colors: active) and (prefers-color-scheme: light) {
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate .mapmetricsgl-ctrl-icon {
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-geolocate
+        .mapmetricsgl-ctrl-icon {
         background-image: svg-inline(ctrl-geolocate-black);
     }
 
-    .mapmetricsgl-ctrl button.mapmetricsgl-ctrl-geolocate:disabled .mapmetricsgl-ctrl-icon {
+    .mapmetricsgl-ctrl
+        button.mapmetricsgl-ctrl-geolocate:disabled
+        .mapmetricsgl-ctrl-icon {
         background-image: svg-inline(ctrl-geolocate-disabled-black);
     }
 }
 
 @keyframes mapmetricsgl-spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 a.mapmetricsgl-ctrl-logo {
@@ -460,8 +573,12 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
 @media (forced-colors: active) {
     a.mapmetricsgl-ctrl-logo {
         @svg-load ctrl-logo-white url("svg/mapmetricsgl-ctrl-logo.svg") {
-            #outline { opacity: 1; }
-            #fill { opacity: 1; }
+            #outline {
+                opacity: 1;
+            }
+            #fill {
+                opacity: 1;
+            }
         }
 
         background-color: transparent;
@@ -472,8 +589,15 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
 @media (forced-colors: active) and (prefers-color-scheme: light) {
     a.mapmetricsgl-ctrl-logo {
         @svg-load ctrl-logo-black url("svg/mapmetricsgl-ctrl-logo.svg") {
-            #outline { opacity: 1; fill: #fff; stroke: #fff; }
-            #fill { opacity: 1; fill: #000; }
+            #outline {
+                opacity: 1;
+                fill: #fff;
+                stroke: #fff;
+            }
+            #fill {
+                opacity: 1;
+                fill: #000;
+            }
         }
 
         background-image: svg-inline(ctrl-logo-black);
@@ -503,13 +627,16 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
         visibility: visible;
     }
 
-    .mapmetricsgl-ctrl-top-left > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact-show,
-    .mapmetricsgl-ctrl-bottom-left > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact-show {
+    .mapmetricsgl-ctrl-top-left
+        > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact-show,
+    .mapmetricsgl-ctrl-bottom-left
+        > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact-show {
         padding: 2px 8px 2px 28px;
         border-radius: 12px;
     }
 
-    .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact .mapmetricsgl-ctrl-attrib-inner {
+    .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact
+        .mapmetricsgl-ctrl-attrib-inner {
         display: none;
     }
 
@@ -534,7 +661,8 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
         list-style: none;
     }
 
-    .mapmetricsgl-ctrl-attrib summary.mapmetricsgl-ctrl-attrib-button::-webkit-details-marker {
+    .mapmetricsgl-ctrl-attrib
+        summary.mapmetricsgl-ctrl-attrib-button::-webkit-details-marker {
         display: none;
     }
 
@@ -543,31 +671,38 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
         left: 0;
     }
 
-    .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact .mapmetricsgl-ctrl-attrib-button,
-    .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact-show .mapmetricsgl-ctrl-attrib-inner {
+    .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact
+        .mapmetricsgl-ctrl-attrib-button,
+    .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact-show
+        .mapmetricsgl-ctrl-attrib-inner {
         display: block;
     }
 
-    .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact-show .mapmetricsgl-ctrl-attrib-button {
+    .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact-show
+        .mapmetricsgl-ctrl-attrib-button {
         background-color: rgb(0 0 0 / 5%);
     }
 
-    .mapmetricsgl-ctrl-bottom-right > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact::after {
+    .mapmetricsgl-ctrl-bottom-right
+        > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact::after {
         bottom: 0;
         right: 0;
     }
 
-    .mapmetricsgl-ctrl-top-right > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact::after {
+    .mapmetricsgl-ctrl-top-right
+        > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact::after {
         top: 0;
         right: 0;
     }
 
-    .mapmetricsgl-ctrl-top-left > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact::after {
+    .mapmetricsgl-ctrl-top-left
+        > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact::after {
         top: 0;
         left: 0;
     }
 
-    .mapmetricsgl-ctrl-bottom-left > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact::after {
+    .mapmetricsgl-ctrl-bottom-left
+        > .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact::after {
         bottom: 0;
         left: 0;
     }
@@ -575,7 +710,10 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
 
 @media screen and (forced-colors: active) {
     .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact::after {
-        background-image: svg-load("svg/mapmetricsgl-ctrl-attrib.svg", fill=#fff);
+        background-image: svg-load(
+            "svg/mapmetricsgl-ctrl-attrib.svg",
+            fill=#fff
+        );
     }
 }
 
@@ -793,9 +931,18 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
 }
 
 @keyframes mapmetricsgl-user-location-dot-pulse {
-    0%   { transform: scale(1); opacity: 1; }
-    70%  { transform: scale(3); opacity: 0; }
-    100% { transform: scale(1); opacity: 0; }
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    70% {
+        transform: scale(3);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 0;
+    }
 }
 
 .mapmetricsgl-user-location-dot-stale {

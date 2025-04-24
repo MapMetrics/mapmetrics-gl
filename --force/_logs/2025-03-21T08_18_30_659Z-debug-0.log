@@ -1,0 +1,29 @@
+0 verbose cli /home/mudasar/.nvm/versions/node/v20.15.0/bin/node /home/mudasar/.nvm/versions/node/v20.15.0/bin/npm
+1 info using npm@10.7.0
+2 info using node@v20.15.0
+3 silly config:load:file:/home/mudasar/.nvm/versions/node/v20.15.0/lib/node_modules/npm/npmrc
+4 silly config:load:file:/home/mudasar/Desktop/projects/final-library/mapmetrics-gl/.npmrc
+5 silly config:load:file:/home/mudasar/.npmrc
+6 silly config:load:file:/home/mudasar/.nvm/versions/node/v20.15.0/etc/npmrc
+7 verbose title npm run clean
+8 verbose argv "run" "clean" "--cache" "--force"
+9 verbose logfile logs-max:10 dir:/home/mudasar/Desktop/projects/final-library/mapmetrics-gl/--force/_logs/2025-03-21T08_18_30_659Z-
+10 verbose logfile /home/mudasar/Desktop/projects/final-library/mapmetrics-gl/--force/_logs/2025-03-21T08_18_30_659Z-debug-0.log
+11 silly logfile done cleaning log files
+12 verbose stack Error: Missing script: "clean"
+12 verbose stack
+12 verbose stack To see a list of scripts, run:
+12 verbose stack   npm run
+12 verbose stack     at RunScript.run (/home/mudasar/.nvm/versions/node/v20.15.0/lib/node_modules/npm/lib/commands/run-script.js:79:13)
+12 verbose stack     at async module.exports (/home/mudasar/.nvm/versions/node/v20.15.0/lib/node_modules/npm/lib/cli/entry.js:74:5)
+13 verbose cwd /home/mudasar/Desktop/projects/final-library/mapmetrics-gl
+14 verbose Linux 6.8.0-54-generic
+15 verbose node v20.15.0
+16 verbose npm  v10.7.0
+17 error Missing script: "clean"
+17 error
+17 error To see a list of scripts, run:
+17 error   npm run
+18 verbose exit 1
+19 verbose code 1
+20 error A complete log of this run can be found in: /home/mudasar/Desktop/projects/final-library/mapmetrics-gl/--force/_logs/2025-03-21T08_18_30_659Z-debug-0.log
