@@ -3,76 +3,80 @@ import { createAbortError } from "./abort_error";
 import { getProtocol } from "../source/protocol_crud";
 import { MessageType } from "./actor_messages";
 
+/**
+ * This is used to identify the global dispatcher id when sending a message from the worker without a target map id.
+ */
 export const GLOBAL_DISPATCHER_ID = "global-dispatcher";
 
-// Cookie Manager to handle session cookies
-class CookieManager {
-    private static usageSession: string | null = null;
-    private static cookieAttributes = "SameSite=Lax; Secure; path=/";
-
-    static setCookieFromResponse(response: Response): void {
-        const setCookieHeader = response.headers.get("Set-Cookie");
-        if (setCookieHeader) {
-            // Handle multiple Set-Cookie headers
-            const cookies = Array.isArray(setCookieHeader)
-                ? setCookieHeader
-                : [setCookieHeader];
-
-            cookies.forEach((cookie) => {
-                if (cookie.includes("usageSession")) {
-                    this.usageSession = cookie.split(";")[0].split("=")[1];
-                    // Update browser cookie with proper attributes
-                    document.cookie = `usageSession=${this.usageSession}; ${this.cookieAttributes}`;
-                }
-            });
-        }
-    }
-
-    static getCookie(): string {
-        // First check if we have a managed session
-        if (this.usageSession) {
-            return `usageSession=${this.usageSession}`;
-        }
-
-        // Fallback to document cookies
-        const cookie = document.cookie
-            .split("; ")
-            .find((row) => row.startsWith("usageSession="));
-
-        if (cookie) {
-            this.usageSession = cookie.split("=")[1];
-        }
-
-        return cookie || "";
-    }
-
-    static clearCookie(): void {
-        this.usageSession = null;
-        document.cookie = `usageSession=; expires=Thu, 01 Jan 1970 00:00:00 GMT; ${this.cookieAttributes}`;
-    }
-}
-
+/**
+ * A type used to store the tile's expiration date and cache control definition
+ */
 export type ExpiryData = {
     cacheControl?: string | null;
     expires?: Date | string | null;
 };
 
+/**
+ * A `RequestParameters` object to be returned from Map.options.transformRequest callbacks.
+ * @example
+ * ```ts
+ * // use transformRequest to modify requests that begin with `http://myHost`
+ * transformRequest: function(url, resourceType) {
+ *  if (resourceType === 'Source' && url.indexOf('http://myHost') > -1) {
+ *    return {
+ *      url: url.replace('http', 'https'),
+ *      headers: { 'my-custom-header': true },
+ *      credentials: 'include'  // Include cookies for cross-origin requests
+ *    }
+ *   }
+ * }
+ * ```
+ */
 export type RequestParameters = {
+    /**
+     * The URL to be requested.
+     */
     url: string;
+    /**
+     * The headers to be sent with the request.
+     */
     headers?: any;
+    /**
+     * Request method `'GET' | 'POST' | 'PUT'`.
+     */
     method?: "GET" | "POST" | "PUT";
+    /**
+     * Request body.
+     */
     body?: string;
+    /**
+     * Response body type to be returned.
+     */
     type?: "string" | "json" | "arrayBuffer" | "image";
+    /**
+     * `'same-origin'|'include'` Use 'include' to send cookies with cross-origin requests.
+     */
     credentials?: "same-origin" | "include";
+    /**
+     * If `true`, Resource Timing API information will be collected for these transformed requests and returned in a resourceTiming property of relevant data events.
+     */
     collectResourceTiming?: boolean;
+    /**
+     * Parameters supported only by browser fetch API. Property of the Request interface contains the cache mode of the request. It controls how the request will interact with the browser's HTTP cache. (https://developer.mozilla.org/en-US/docs/Web/API/Request/cache)
+     */
     cache?: RequestCache;
 };
 
+/**
+ * The response object returned from a successful AJAx request
+ */
 export type GetResourceResponse<T> = ExpiryData & {
     data: T;
-    cookies?: string | null;
 };
 
+/**
+ * The response callback used in various places
+ */
 export type ResponseCallback<T> = (
     error?: Error | null,
     data?: T | null,
@@ -80,12 +84,36 @@ export type ResponseCallback<T> = (
     expires?: string | Date | null
 ) => void;
 
+/**
+ * An error thrown when a HTTP request results in an error response.
+ */
 export class AJAXError extends Error {
+    /**
+     * The response's HTTP status code.
+     */
     status: number;
+
+    /**
+     * The response's HTTP status text.
+     */
     statusText: string;
+
+    /**
+     * The request's URL.
+     */
     url: string;
+
+    /**
+     * The response's body.
+     */
     body: Blob;
 
+    /**
+     * @param status - The response's HTTP status code.
+     * @param statusText - The response's HTTP status text.
+     * @param url - The request's URL.
+     * @param body - The response's body.
+     */
     constructor(status: number, statusText: string, url: string, body: Blob) {
         super(`AJAXError: ${statusText} (${status}): ${url}`);
         this.status = status;
@@ -95,123 +123,86 @@ export class AJAXError extends Error {
     }
 }
 
-export const getReferrer = () => {
-    if (typeof window === "undefined") return ""; // SSR safety
-    return isWorker(self)
+/**
+ * Ensure that we're sending the correct referrer from blob URL worker bundles.
+ * For files loaded from the local file system, `location.origin` will be set
+ * to the string(!) "null" (Firefox), or "file://" (Chrome, Safari, Edge),
+ * and we will set an empty referrer. Otherwise, we're using the document's URL.
+ */
+export const getReferrer = () =>
+    isWorker(self)
         ? self.worker && self.worker.referrer
         : (window.location.protocol === "blob:" ? window.parent : window)
               .location.href;
-};
 
-const isFileURL = (url) => {
-    if (typeof window === "undefined") return false;
-    return (
-        /^file:/.test(url) ||
-        (/^file:/.test(getReferrer()) && !/^\w+:/.test(url))
-    );
-};
+/**
+ * Determines whether a URL is a file:// URL. This is obviously the case if it begins
+ * with file://. Relative URLs are also file:// URLs iff the original document was loaded
+ * via a file:// URL.
+ * @param url - The URL to check
+ * @returns `true` if the URL is a file:// URL, `false` otherwise
+ */
+const isFileURL = (url) =>
+    /^file:/.test(url) || (/^file:/.test(getReferrer()) && !/^\w+:/.test(url));
 
 async function makeFetchRequest(
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
-    const headers = new Headers(requestParameters.headers);
-    const isCrossOrigin = !sameOrigin(requestParameters.url);
-
-    // Add session cookie if available
-    const sessionCookie = CookieManager.getCookie();
-    if (sessionCookie) {
-        headers.set("Cookie", sessionCookie);
-        requestParameters.credentials = "include";
-    }
-
-    // Add Origin header for CORS requests
-    if (isCrossOrigin && !headers.has("Origin")) {
-        headers.set("Origin", window.location.origin);
-    }
-
-    const requestInit: RequestInit = {
+    const request = new Request(requestParameters.url, {
         method: requestParameters.method || "GET",
         body: requestParameters.body,
-        credentials: isCrossOrigin
-            ? "include"
-            : requestParameters.credentials || "same-origin",
-        headers: headers,
+        credentials: requestParameters.credentials,
+        headers: requestParameters.headers,
         cache: requestParameters.cache,
+        referrer: getReferrer(),
         signal: abortController.signal,
-    };
+    });
 
-    if (requestParameters.type === "json" && !headers.has("Accept")) {
-        headers.set("Accept", "application/json");
+    // If the user has already set an Accept header, do not overwrite it here
+    if (requestParameters.type === "json" && !request.headers.has("Accept")) {
+        request.headers.set("Accept", "application/json");
     }
 
     let response: Response;
     try {
-        response = await fetch(requestParameters.url, requestInit);
-
-        // Handle CORS error specifically
-        if (response.type === "opaque" && isCrossOrigin) {
-            throw new AJAXError(
-                0,
-                "CORS policy blocked the request",
-                requestParameters.url,
-                new Blob()
-            );
-        }
-
-        // Store any new cookies from the response
-        CookieManager.setCookieFromResponse(response);
-
-        if (!response.ok) {
-            const errorBody = await response
-                .blob()
-                .catch(() => new Blob([response.statusText]));
-            throw new AJAXError(
-                response.status,
-                response.statusText,
-                requestParameters.url,
-                errorBody
-            );
-        }
-
-        let data: any;
-        switch (requestParameters.type) {
-            case "arrayBuffer":
-            case "image":
-                data = await response.arrayBuffer();
-                break;
-            case "json":
-                data = await response.json();
-                break;
-            default:
-                data = await response.text();
-        }
-
-        if (abortController.signal.aborted) {
-            throw createAbortError();
-        }
-
-        return {
-            data,
-            cacheControl: response.headers.get("Cache-Control"),
-            expires: response.headers.get("Expires"),
-            cookies: response.headers.get("Set-Cookie"),
-        };
+        response = await fetch(request);
     } catch (e) {
-        if (e instanceof AJAXError) throw e;
+        // When the error is due to CORS policy, DNS issue or malformed URL, the fetch call does not resolve but throws a generic TypeError instead.
+        // It is preferable to throw an AJAXError so that the Map event "error" can catch it and still have
+        // access to the faulty url. In such case, we provide the arbitrary HTTP error code of `0`.
+        throw new AJAXError(0, e.message, requestParameters.url, new Blob());
+    }
 
-        const errorMessage =
-            e instanceof TypeError && isCrossOrigin
-                ? "Cross-origin request blocked"
-                : e.message;
-
+    if (!response.ok) {
+        const body = await response.blob();
         throw new AJAXError(
-            e instanceof DOMException && e.name === "AbortError" ? -1 : 0,
-            errorMessage,
+            response.status,
+            response.statusText,
             requestParameters.url,
-            new Blob()
+            body
         );
     }
+    let parsePromise: Promise<any>;
+    if (
+        requestParameters.type === "arrayBuffer" ||
+        requestParameters.type === "image"
+    ) {
+        parsePromise = response.arrayBuffer();
+    } else if (requestParameters.type === "json") {
+        parsePromise = response.json();
+    } else {
+        parsePromise = response.text();
+    }
+    const result = await parsePromise;
+    if (abortController.signal.aborted) {
+        throw createAbortError();
+    }
+    return {
+        data: result,
+        cacheControl: response.headers.get("Cache-Control"),
+        expires: response.headers.get("Expires"),
+    };
 }
 
 function makeXMLHttpRequest(
@@ -220,50 +211,43 @@ function makeXMLHttpRequest(
 ): Promise<GetResourceResponse<any>> {
     return new Promise((resolve, reject) => {
         const xhr: XMLHttpRequest = new XMLHttpRequest();
+
         xhr.open(
             requestParameters.method || "GET",
             requestParameters.url,
             true
         );
-
-        // Add session cookie if available
-        const sessionCookie = CookieManager.getCookie();
-        if (sessionCookie) {
-            xhr.setRequestHeader("Cookie", sessionCookie);
-            xhr.withCredentials = true;
-        }
-
         if (
             requestParameters.type === "arrayBuffer" ||
             requestParameters.type === "image"
         ) {
             xhr.responseType = "arraybuffer";
         }
-
         for (const k in requestParameters.headers) {
             xhr.setRequestHeader(k, requestParameters.headers[k]);
         }
-
         if (requestParameters.type === "json") {
             xhr.responseType = "text";
+            // Do not overwrite the user-provided Accept header
             if (!requestParameters.headers?.Accept) {
                 xhr.setRequestHeader("Accept", "application/json");
             }
         }
-
+        xhr.withCredentials = requestParameters.credentials === "include";
         xhr.onerror = () => {
             reject(new Error(xhr.statusText));
         };
-
         xhr.onload = () => {
-            if (abortController.signal.aborted) return;
-
+            if (abortController.signal.aborted) {
+                return;
+            }
             if (
                 ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 0) &&
                 xhr.response !== null
             ) {
                 let data: unknown = xhr.response;
                 if (requestParameters.type === "json") {
+                    // We're manually parsing JSON here to get better error messages.
                     try {
                         data = JSON.parse(xhr.response);
                     } catch (err) {
@@ -271,27 +255,10 @@ function makeXMLHttpRequest(
                         return;
                     }
                 }
-
-                // Store any new cookies from the response
-                const setCookieHeader = xhr.getResponseHeader("Set-Cookie");
-                if (
-                    setCookieHeader &&
-                    setCookieHeader.includes("usageSession")
-                ) {
-                    CookieManager.setCookieFromResponse(
-                        new Response(null, {
-                            headers: new Headers({
-                                "Set-Cookie": setCookieHeader,
-                            }),
-                        })
-                    );
-                }
-
                 resolve({
                     data,
                     cacheControl: xhr.getResponseHeader("Cache-Control"),
                     expires: xhr.getResponseHeader("Expires"),
-                    cookies: setCookieHeader,
                 });
             } else {
                 const body = new Blob([xhr.response], {
@@ -307,16 +274,22 @@ function makeXMLHttpRequest(
                 );
             }
         };
-
         abortController.signal.addEventListener("abort", () => {
             xhr.abort();
             reject(createAbortError());
         });
-
         xhr.send(requestParameters.body);
     });
 }
 
+/**
+ * We're trying to use the Fetch API if possible. However, requests for resources with the file:// URI scheme don't work with the Fetch API.
+ * In this case we unconditionally use XHR on the current thread since referrers don't matter.
+ * This method can also use the registered method if `addProtocol` was called.
+ * @param requestParameters - The request parameters
+ * @param abortController - The abort controller allowing to cancel the request
+ * @returns a promise resolving to the response, including cache control and expiry data
+ */
 export const makeRequest = function (
     requestParameters: RequestParameters,
     abortController: AbortController
@@ -385,33 +358,27 @@ export const getArrayBuffer = (
 };
 
 export function sameOrigin(inComingUrl: string) {
-    if (typeof window === "undefined") return true;
-
-    try {
-        if (
-            !inComingUrl ||
-            inComingUrl.startsWith("data:") ||
-            inComingUrl.startsWith("blob:")
-        ) {
-            return true;
-        }
-
-        const urlObj = new URL(inComingUrl);
-        const locationObj = new URL(window.location.href);
-
-        // Consider same origin if protocol, host and port match
-        return urlObj.origin === locationObj.origin;
-    } catch (e) {
-        // Invalid URL is treated as same origin
+    // A relative URL "/foo" or "./foo" will throw exception in URL's ctor,
+    // try-catch is expansive so just use a heuristic check to avoid it
+    // also check data URL
+    if (
+        !inComingUrl ||
+        inComingUrl.indexOf("://") <= 0 || // relative URL
+        inComingUrl.indexOf("data:image/") === 0 || // data image URL
+        inComingUrl.indexOf("blob:") === 0
+    ) {
+        // blob
         return true;
     }
+    const urlObj = new URL(inComingUrl);
+    const locationObj = window.location;
+    return (
+        urlObj.protocol === locationObj.protocol &&
+        urlObj.host === locationObj.host
+    );
 }
 
 export const getVideo = (urls: Array<string>): Promise<HTMLVideoElement> => {
-    if (typeof window === "undefined") {
-        return Promise.reject(new Error("Document not available in SSR"));
-    }
-
     const video: HTMLVideoElement = window.document.createElement("video");
     video.muted = true;
     return new Promise((resolve) => {
