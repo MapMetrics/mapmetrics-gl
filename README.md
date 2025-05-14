@@ -39,7 +39,7 @@ Include the following code in the `<body>` of your HTML file.
 Install npm library
 
 ```html
-npm i mapmetrics-gl
+npm i @mapmetrics/mapmetrics-gl
 ```
 
 ```html
