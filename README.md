@@ -43,30 +43,49 @@ npm i mapmetrics-gl
 ```
 
 ```html
-import mapmetricsgl from "@mapmetrics/mapmetrics-gl" 
-import "@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.css"; 
+import React, { useEffect, useRef } from "react";
+import mapmetricsgl from "@mapmetrics/mapmetrics-gl";
+import "@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.css";
 
-export function App() {
-    const mapContainerRef = useRef(null);
-    const mapInstanceRef = useRef(null); // ✅ Store the map instance const
-    accessToken = ``; 
-    useEffect(() => { 
-        if (!mapContainerRef.current) return; 
-        // ✅Create map instance and store it in ref 
-        const map = (mapInstanceRef.current = new mapmetricsgl.Map({ 
-            container: mapContainerRef.current, 
-            style: `https://gateway.mapmetrics.org/styles/dark.json?token=${accessToken}`, 
-            zoom: 11, 
-            center: [2.349902, 48.852966], 
-            minZoom: 1, 
-            maxZoom: 15, 
-        }));
-        map.touchZoomRotate.enable({ around: "center" }); 
-        map.touchPitch.enable({ around: "center" }); })
-    }
-    return (<div ref={mapContainerRef} style={{ width: '100%', height:"100vh" }} />)
+const App = () => {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<mapmetricsgl.Map | null>(null);
+
+  const accessToken = ``;
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    const map = new mapmetricsgl.Map({
+      container: mapContainerRef.current,
+      style: `https://gateway.mapmetrics.org/styles/dark.json?token=${accessToken}`,
+      center: [2.349902, 48.852966],
+      zoom: 11,
+      minZoom: 1,
+      maxZoom: 24,
+      attributionControl: false,
+      cooperativeGestures: true,
+    });
+
+    mapRef.current = map;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  return (
+    <div
+      id="map"
+      ref={mapContainerRef}
+      style={{ height: "100vh", width: "100%" }}
+    ></div>
+  );
+};
+
+export default App;
+
 ```
-
 
 Enjoy the map!
 
