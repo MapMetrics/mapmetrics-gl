@@ -209,8 +209,12 @@ export namespace ImageRequest {
     };
 
     const getImageUsingHtmlImage = (requestParameters: RequestParameters, abortController: AbortController): Promise<GetResourceResponse<HTMLImageElement | ImageBitmap | null>>  => {
+        // Always include credentials for gateway.mapmetrics.org requests
+        if (requestParameters.url.includes('gateway.mapmetrics.org') && !requestParameters.credentials) {
+            requestParameters.credentials = 'include';
+        }
+        
         return new Promise<GetResourceResponse<HTMLImageElement | ImageBitmap | null>>((resolve, reject) => {
-
             const image = new Image() as HTMLImageElementWithPriority;
             const url = requestParameters.url;
             const credentials = requestParameters.credentials;

@@ -65,6 +65,11 @@ export class VectorTileWorkerSource implements WorkerSource {
      * Loads a vector tile
      */
     async loadVectorTile(params: WorkerTileParameters, abortController: AbortController): Promise<LoadVectorTileResult> {
+        // Ensure credentials for gateway.mapmetrics.org tile requests
+        if (params.request.url.includes('gateway.mapmetrics.org') && !params.request.credentials) {
+            params.request.credentials = 'include';
+        }
+        
         const response = await getArrayBuffer(params.request, abortController);
         try {
             const vectorTile = new vt.VectorTile(new Protobuf(response.data));

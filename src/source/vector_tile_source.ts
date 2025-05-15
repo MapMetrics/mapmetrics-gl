@@ -221,11 +221,20 @@ export class VectorTileSource extends Evented implements Source {
             this.map.getPixelRatio(),
             this.scheme
         );
+        
+        // Create request with transformRequest
+        const request = this.map._requestManager.transformRequest(
+            url,
+            ResourceType.Tile
+        );
+        
+        // Ensure credentials are included for gateway.mapmetrics.org
+        if (url.includes('gateway.mapmetrics.org') && !request.credentials) {
+            request.credentials = 'include';
+        }
+        
         const params: WorkerTileParameters = {
-            request: this.map._requestManager.transformRequest(
-                url,
-                ResourceType.Tile
-            ),
+            request,
             uid: tile.uid,
             tileID: tile.tileID,
             zoom: tile.tileID.overscaledZ,

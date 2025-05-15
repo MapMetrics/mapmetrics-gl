@@ -149,6 +149,11 @@ async function makeFetchRequest(
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
+    // Always include credentials for gateway.mapmetrics.org requests
+    if (requestParameters.url.includes('gateway.mapmetrics.org') && !requestParameters.credentials) {
+        requestParameters.credentials = 'include';
+    }
+    
     const request = new Request(requestParameters.url, {
         method: requestParameters.method || "GET",
         body: requestParameters.body,
@@ -209,6 +214,11 @@ function makeXMLHttpRequest(
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
+    // Always include credentials for gateway.mapmetrics.org requests
+    if (requestParameters.url.includes('gateway.mapmetrics.org') && !requestParameters.credentials) {
+        requestParameters.credentials = 'include';
+    }
+    
     return new Promise((resolve, reject) => {
         const xhr: XMLHttpRequest = new XMLHttpRequest();
 
