@@ -115,11 +115,33 @@ export default class Worker {
             return (this._getWorkerSource(mapId, params.type, params.source) as GeoJSONWorkerSource).getData();
         });
 
-        this.actor.registerMessageHandler(MessageType.loadTile, (mapId: string, params: WorkerTileParameters) => {
+        this.actor.registerMessageHandler(MessageType.loadTile, async (mapId: string, params: WorkerTileParameters) => {
+            // Ensure credentials and headers for MapMetrics domains
+            if (params.request && params.request.url && 
+                (params.request.url.includes('mapmetrics.org') || params.request.url.includes('gateway.mapmetrics1.org'))) {
+                params.request.credentials = 'include';
+                params.request.headers = {
+                    ...params.request.headers,
+                    'Accept': 'application/x-protobuf',
+                    'Origin': 'https://localhost:8000'
+                };
+                console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
+            }
             return this._getWorkerSource(mapId, params.type, params.source).loadTile(params);
         });
 
-        this.actor.registerMessageHandler(MessageType.reloadTile, (mapId: string, params: WorkerTileParameters) => {
+        this.actor.registerMessageHandler(MessageType.reloadTile, async (mapId: string, params: WorkerTileParameters) => {
+            // Ensure credentials and headers for MapMetrics domains
+            if (params.request && params.request.url && 
+                (params.request.url.includes('mapmetrics.org') || params.request.url.includes('gateway.mapmetrics1.org'))) {
+                params.request.credentials = 'include';
+                params.request.headers = {
+                    ...params.request.headers,
+                    'Accept': 'application/x-protobuf',
+                    'Origin': 'https://localhost:8000'
+                };
+                console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
+            }
             return this._getWorkerSource(mapId, params.type, params.source).reloadTile(params);
         });
 

@@ -22,6 +22,65 @@ export type VectorTileSourceOptions = VectorSourceSpecification & {
     tileSize?: number;
 };
 
+// Cookie prefetch mechanism
+let globalCookiePrefetchPromise: Promise<void> | null = null;
+const cookiePrefetchDomains = new Set<string>();
+
+// Use a valid tile URL pattern for MapMetrics to ensure the proper cookie is set
+/**
+ * Performs a single cookie prefetch request for a domain
+ */
+async function prefetchSingleDomain(domain: string): Promise<void> {
+    if (cookiePrefetchDomains.has(domain)) return;
+    
+    console.log(`🍪 Starting prefetch for domain: ${domain}`);
+    
+    try {
+        // Use the same URL pattern as the working example
+        const prefetchUrl = `https://twilight-bush-94ef.jim9710.workers.dev/20250110/1/1/0.mvt?token=`;
+        
+        console.log(`🍪 Prefetching URL: ${prefetchUrl}`);
+        
+        const prefetchResponse = await fetch(prefetchUrl, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Accept': 'application/x-protobuf',
+                'Origin': 'https://localhost:8000'
+            },
+            cache: 'no-store'
+        });
+        
+        console.log(`🍪 Prefetch completed for ${domain} with status: ${prefetchResponse.status}`);
+        cookiePrefetchDomains.add(domain);
+    } catch (e) {
+        console.warn(`🍪 Cookie prefetch failed for ${domain}:`, e);
+        cookiePrefetchDomains.add(domain);
+    }
+}
+
+/**
+ * Ensures cookies are fetched for any MapMetrics domains
+ * @returns Promise that resolves when all prefetches are complete
+ */
+function ensureGlobalCookiePrefetch(): Promise<void> {
+    if (globalCookiePrefetchPromise) {
+        return globalCookiePrefetchPromise;
+    }
+    
+    console.log(`🍪 Starting global cookie prefetch`);
+    
+    globalCookiePrefetchPromise = prefetchSingleDomain('twilight-bush-94ef.jim9710.workers.dev')
+        .then(() => {
+            console.log('🍪 Global cookie prefetch completed');
+        })
+        .catch(err => {
+            console.warn('🍪 Global cookie prefetch failed:', err);
+        });
+    
+    return globalCookiePrefetchPromise;
+}
+
 /**
  * A source containing vector tiles in [Mapbox Vector Tile format](https://docs.mapbox.com/vector-tiles/reference/).
  * (See the [Style Specification]() for detailed documentation of options.)
@@ -78,6 +137,7 @@ export class VectorTileSource extends Evented implements Source {
     isTileClipped: boolean;
     _tileJSONRequest: AbortController;
     _loaded: boolean;
+    _prefetchCompleted: boolean = false;
 
     constructor(
         id: string,
@@ -97,6 +157,7 @@ export class VectorTileSource extends Evented implements Source {
         this.reparseOverscaled = true;
         this.isTileClipped = true;
         this._loaded = false;
+        this._prefetchCompleted = false;
 
         extend(this, pick(options, ["url", "scheme", "tileSize", "promoteId"]));
         this._options = extend({ type: "vector" }, options);
@@ -108,6 +169,27 @@ export class VectorTileSource extends Evented implements Source {
         }
 
         this.setEventedParent(eventedParent);
+        
+        // Start cookie prefetch immediately for MapMetrics domains
+        if (options.tiles && options.tiles.some(url => url.includes('mapmetrics.org'))) {
+            this._startCookiePrefetch();
+        }
+    }
+    
+    /**
+     * Starts the cookie prefetch process for MapMetrics domains
+     */
+    private _startCookiePrefetch(): void {
+        // Start global prefetch
+        ensureGlobalCookiePrefetch()
+            .then(() => {
+                this._prefetchCompleted = true;
+                console.log(`🍪 Cookie prefetch completed for source ${this.id}`);
+            })
+            .catch(() => {
+                // Set prefetch completed even on error to allow tiles to load
+                this._prefetchCompleted = true;
+            });
     }
 
     async load() {
@@ -131,6 +213,11 @@ export class VectorTileSource extends Evented implements Source {
                         this.minzoom,
                         this.maxzoom
                     );
+
+                // Check if we need to start cookie prefetch
+                if (this.tiles && this.tiles.some(url => url.includes('mapmetrics.org')) && !this._prefetchCompleted) {
+                    this._startCookiePrefetch();
+                }
 
                 // `content` is included here to prevent a race condition where `Style#_updateSources` is called
                 // before the TileJSON arrives. this makes sure the tiles needed are loaded once TileJSON arrives
@@ -183,6 +270,11 @@ export class VectorTileSource extends Evented implements Source {
      * @param tiles - An array of one or more tile source URLs, as in the TileJSON spec.
      */
     setTiles(tiles: Array<string>): this {
+        // Check if we need to start prefetch for MapMetrics domains
+        if (tiles.some(url => url.includes('mapmetrics.org'))) {
+            this._startCookiePrefetch();
+        }
+        
         this.setSourceProperty(() => {
             this._options.tiles = tiles;
         });
@@ -216,21 +308,40 @@ export class VectorTileSource extends Evented implements Source {
     }
 
     async loadTile(tile: Tile): Promise<void> {
+        // For MapMetrics domains, wait for cookie prefetch to complete
+        if (!this._prefetchCompleted && this.tiles && this.tiles.some(url => url.includes('mapmetrics.org'))) {
+            console.log(`🍪 Waiting for cookie prefetch to complete before loading tile ${tile.tileID.canonical.z}/${tile.tileID.canonical.x}/${tile.tileID.canonical.y}`);
+            try {
+                // Wait for global prefetch to complete
+                await ensureGlobalCookiePrefetch();
+                this._prefetchCompleted = true;
+            } catch (e) {
+                // Continue even if prefetch failed
+                console.warn(`🍪 Error waiting for cookie prefetch, proceeding with tile load anyway:`, e);
+                this._prefetchCompleted = true;
+            }
+        }
+        
         const url = tile.tileID.canonical.url(
             this.tiles,
             this.map.getPixelRatio(),
             this.scheme
         );
         
-        // Create request with transformRequest
         const request = this.map._requestManager.transformRequest(
             url,
             ResourceType.Tile
         );
         
-        // Ensure credentials are included for gateway.mapmetrics.org
-        if (url.includes('gateway.mapmetrics.org') && !request.credentials) {
+        // Ensure credentials and headers are set correctly for MapMetrics domains
+        if (url.includes('mapmetrics.org') || url.includes('gateway.mapmetrics.org')) {
             request.credentials = 'include';
+            request.headers = {
+                ...request.headers,
+                'Accept': 'application/x-protobuf',
+                'Origin': 'https://localhost:8000'
+            };
+            console.log(`🍪 Setting credentials and headers for tile request: ${url.substring(0, 50)}...`);
         }
         
         const params: WorkerTileParameters = {

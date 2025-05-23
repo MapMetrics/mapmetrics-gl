@@ -304,6 +304,18 @@ export const makeRequest = function (
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
+    // Always set credentials and headers for MapMetrics domains
+    if (requestParameters.url && 
+        (requestParameters.url.includes('mapmetrics.org') || requestParameters.url.includes('gateway.mapmetrics.org'))) {
+        requestParameters.credentials = 'include';
+        requestParameters.headers = {
+            ...requestParameters.headers,
+            'Accept': 'application/x-protobuf',
+            'Origin': 'https://localhost:8000'
+        };
+        console.log(`🍪 Setting credentials and headers for request: ${requestParameters.url.substring(0, 50)}...`);
+    }
+
     if (
         /:\/\//.test(requestParameters.url) &&
         !/^https?:|^file:/.test(requestParameters.url)
