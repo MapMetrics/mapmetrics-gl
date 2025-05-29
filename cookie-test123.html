@@ -345,52 +345,11 @@
                 
                 map = new mapmetricsgl.Map({
                     container: 'map',
-                    style: "https://gateway.mapmetrics.org/styles/?fileName=34f5df91-bf05-4557-aa40-96a03ce131f5/jimstyle2.json&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzNGY1ZGY5MS1iZjA1LTQ1NTctYWE0MC05NmEwM2NlMTMxZjUiLCJzY29wZSI6WyJtYXBzIiwiYXV0b2NvbXBsZXRlIiwiZ2VvY29kaW5nIl0sImlhdCI6MTc0NDk2ODI0NX0.9PAc6wS6-GsGZMsI6fq5eTRCszhPM8kkQufRq_KOdbQ",
-                    center: [2.3210938, 48.7965913],
-                    zoom: 2,
-                    transformRequest: (url, resourceType) => {
-                        // Handle all gateway.mapmetrics.org requests
-                        if (url.includes('gateway.mapmetrics.org')) {
-                            log(`Making request to: ${url}`, false, true);
-                            
-                            const headers = {
-                                'Accept': '*/*',
-                                'Origin': 'https://localhost:8000'
-                            };
-                            
-                            // Set specific headers based on resource type
-                            if (resourceType === 'Style') {
-                                headers['Accept'] = 'application/json';
-                                log(`Loading style from: ${url}`, false, true);
-                                return {
-                                    url: url,
-                                    credentials: 'omit',
-                                    headers: headers
-                                };
-                            } else if (resourceType === 'Tile') {
-                                headers['Accept'] = 'application/x-protobuf';
-                                return {
-                                    url: url,
-                                    credentials: 'include',
-                                    headers: headers
-                                };
-                            } else if (url.includes('/fonts/') || url.includes('/basemaps-assets/fonts/')) {
-                                headers['Accept'] = 'application/x-protobuf';
-                                log(`Loading font from: ${url}`, false, true);
-                                return {
-                                    url: url,
-                                    credentials: 'omit',
-                                    headers: headers
-                                };
-                            }
-                            
-                            return {
-                                url: url,
-                                credentials: 'include',
-                                headers: headers
-                            };
-                        }
-                    }
+                    style: styleJson,
+                    center: [4.9041, 52.3676],
+                    zoom: 12,
+                    mapmetricsLogo: true,
+                    logoPosition: 'bottom-left'
                 });
                 
                 // Set up event handlers before loading the style

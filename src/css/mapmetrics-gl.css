@@ -556,18 +556,21 @@
 }
 
 a.mapmetricsgl-ctrl-logo {
-    width: 88px;
-    height: 23px;
-    margin: 0 0 -4px -4px;
     display: block;
+    width: 180px;
+    height: 50px;
+    margin: 0 0 -30px -5px;
     background-repeat: no-repeat;
     cursor: pointer;
-    overflow: hidden;
+    overflow: visible;
     background-image: svg-load("svg/mapmetricsgl-ctrl-logo.svg");
+    position: absolute;
+    bottom: 0;
+    left: 0;
 }
 
 a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
-    width: 14px;
+    width: 100px;
 }
 
 @media (forced-colors: active) {

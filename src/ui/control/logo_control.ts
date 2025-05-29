@@ -46,6 +46,8 @@ export class LogoControl implements IControl {
         this._map = map;
         this._compact = this.options && this.options.compact;
         this._container = DOM.create('div', 'mapmetricsgl-ctrl');
+        
+        // Always add the logo
         const anchor = DOM.create('a', 'mapmetricsgl-ctrl-logo');
         anchor.target = '_blank';
         anchor.rel = 'noopener nofollow';
@@ -53,6 +55,7 @@ export class LogoControl implements IControl {
         anchor.setAttribute('aria-label', this._map._getUIString('LogoControl.Title'));
         anchor.setAttribute('rel', 'noopener nofollow');
         this._container.appendChild(anchor);
+        
         this._container.style.display = 'block';
 
         this._map.on('resize', this._updateCompact);
