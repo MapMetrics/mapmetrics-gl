@@ -112,6 +112,14 @@ export namespace ImageRequest {
                 }
                 requestParameters.headers.accept = 'image/webp,*/*';
             }
+
+            // Don't require credentials for sprite requests
+            if (requestParameters.url && 
+                (requestParameters.url.includes('mapmetrics.org') || requestParameters.url.includes('gateway.mapmetrics.org')) &&
+                requestParameters.url.includes('/sprites/')) {
+                requestParameters.credentials = undefined;
+            }
+
             extend(requestParameters, {type: 'image'});
             const request: ImageRequestQueueItem = {
                 abortController,

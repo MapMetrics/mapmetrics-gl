@@ -149,11 +149,13 @@ async function makeFetchRequest(
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
-    // Always include credentials for gateway.mapmetrics.org requests, except for font requests
+    // Always include credentials for gateway.mapmetrics.org requests, except for font, style, and sprite requests
     if (requestParameters.url.includes('gateway.mapmetrics.org') && 
         !requestParameters.credentials && 
         !requestParameters.url.includes('/fonts/') &&
-        !requestParameters.url.includes('/basemaps-assets/fonts/')) {
+        !requestParameters.url.includes('/basemaps-assets/fonts/') &&
+        !requestParameters.url.includes('/styles/') &&
+        !requestParameters.url.includes('/sprites/')) {
         requestParameters.credentials = 'include';
     }
     
@@ -217,11 +219,13 @@ function makeXMLHttpRequest(
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
-    // Always include credentials for gateway.mapmetrics.org requests, except for font requests
+    // Always include credentials for gateway.mapmetrics.org requests, except for font, style, and sprite requests
     if (requestParameters.url.includes('gateway.mapmetrics.org') && 
         !requestParameters.credentials && 
         !requestParameters.url.includes('/fonts/') &&
-        !requestParameters.url.includes('/basemaps-assets/fonts/')) {
+        !requestParameters.url.includes('/basemaps-assets/fonts/') &&
+        !requestParameters.url.includes('/styles/') &&
+        !requestParameters.url.includes('/sprites/')) {
         requestParameters.credentials = 'include';
     }
     
@@ -310,12 +314,28 @@ export const makeRequest = function (
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
-    // Always set credentials and headers for MapMetrics domains, except for font requests
+    const url = requestParameters.url;
+    const shouldIncludeCredentials = url.includes('gateway.mapmetrics.org') && 
+        !url.includes('/fonts/') && 
+        !url.includes('/basemaps-assets/fonts/') && 
+        !url.includes('/sprites/') && 
+        !url.includes('/basemaps-assets/sprites/') &&
+        !url.includes('/styles/') &&
+        !url.includes('/basemaps-assets/styles/');
+
+    if (shouldIncludeCredentials) {
+        requestParameters.credentials = 'include';
+    } else {
+        requestParameters.credentials = undefined;
+    }
+
+    // Always set credentials and headers for MapMetrics domains, except for font, style, and sprite requests
     if (requestParameters.url && 
         (requestParameters.url.includes('mapmetrics.org') || requestParameters.url.includes('gateway.mapmetrics.org')) &&
         !requestParameters.url.includes('/fonts/') &&
-        !requestParameters.url.includes('/basemaps-assets/fonts/')) {
-        requestParameters.credentials = 'include';
+        !requestParameters.url.includes('/basemaps-assets/fonts/') &&
+        !requestParameters.url.includes('/styles/') &&
+        !requestParameters.url.includes('/sprites/')) {
         requestParameters.headers = {
             ...requestParameters.headers,
             'Accept': 'application/x-protobuf',
