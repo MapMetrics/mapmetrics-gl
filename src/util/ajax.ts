@@ -149,8 +149,11 @@ async function makeFetchRequest(
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
-    // Always include credentials for gateway.mapmetrics.org requests
-    if (requestParameters.url.includes('gateway.mapmetrics.org') && !requestParameters.credentials) {
+    // Always include credentials for gateway.mapmetrics.org requests, except for font requests
+    if (requestParameters.url.includes('gateway.mapmetrics.org') && 
+        !requestParameters.credentials && 
+        !requestParameters.url.includes('/fonts/') &&
+        !requestParameters.url.includes('/basemaps-assets/fonts/')) {
         requestParameters.credentials = 'include';
     }
     
@@ -214,8 +217,11 @@ function makeXMLHttpRequest(
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
-    // Always include credentials for gateway.mapmetrics.org requests
-    if (requestParameters.url.includes('gateway.mapmetrics.org') && !requestParameters.credentials) {
+    // Always include credentials for gateway.mapmetrics.org requests, except for font requests
+    if (requestParameters.url.includes('gateway.mapmetrics.org') && 
+        !requestParameters.credentials && 
+        !requestParameters.url.includes('/fonts/') &&
+        !requestParameters.url.includes('/basemaps-assets/fonts/')) {
         requestParameters.credentials = 'include';
     }
     
@@ -304,9 +310,11 @@ export const makeRequest = function (
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
-    // Always set credentials and headers for MapMetrics domains
+    // Always set credentials and headers for MapMetrics domains, except for font requests
     if (requestParameters.url && 
-        (requestParameters.url.includes('mapmetrics.org') || requestParameters.url.includes('gateway.mapmetrics.org'))) {
+        (requestParameters.url.includes('mapmetrics.org') || requestParameters.url.includes('gateway.mapmetrics.org')) &&
+        !requestParameters.url.includes('/fonts/') &&
+        !requestParameters.url.includes('/basemaps-assets/fonts/')) {
         requestParameters.credentials = 'include';
         requestParameters.headers = {
             ...requestParameters.headers,

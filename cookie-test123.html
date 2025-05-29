@@ -314,7 +314,7 @@
         
         // Load map
         let map = null;
-        document.getElementById('btnLoadMap').addEventListener('click', function() {
+        document.getElementById('btnLoadMap').addEventListener('click', async function() {
             if (map) {
                 log('Map already loaded. Refresh page to test again.', false, false);
                 return;
@@ -323,28 +323,79 @@
             log('Creating map with vector tile source...', false, false);
             
             try {
+                // First fetch the style JSON
+                const styleUrl = "https://gateway.mapmetrics.org/styles/?fileName=34f5df91-bf05-4557-aa40-96a03ce131f5/jimstyle2.json&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIzNGY1ZGY5MS1iZjA1LTQ1NTctYWE0MC05NmEwM2NlMTMxZjUiLCJzY29wZSI6WyJtYXBzIiwiYXV0b2NvbXBsZXRlIiwiZ2VvY29kaW5nIl0sImlhdCI6MTc0NDk2ODI0NX0.9PAc6wS6-GsGZMsI6fq5eTRCszhPM8kkQufRq_KOdbQ";
+                log('Fetching style JSON...', false, false);
+                
+                const styleResponse = await fetch(styleUrl, {
+                    method: 'GET',
+                    credentials: 'omit',  // Don't send credentials for style fetch
+                    headers: {
+                        'Accept': 'application/json',
+                        'Origin': 'https://localhost:8000'
+                    }
+                });
+                
+                if (!styleResponse.ok) {
+                    throw new Error(`Failed to fetch style: ${styleResponse.status} ${styleResponse.statusText}`);
+                }
+                
+                const styleJson = await styleResponse.json();
+                log('Style JSON fetched successfully', false, true);
+                
                 map = new mapmetricsgl.Map({
                     container: 'map',
-                    style: mapStyle,
+                    style: styleJson,
                     center: [2.3210938, 48.7965913],
                     zoom: 2,
                     transformRequest: (url, resourceType) => {
-                        if (resourceType === 'Tile' && url.includes('gateway.mapmetrics.org')) {
-                            log(`Making direct request to: ${url}`, false, true);
+                        // Handle all gateway.mapmetrics.org requests
+                        if (url.includes('gateway.mapmetrics.org')) {
+                            log(`Making request to: ${url}`, false, true);
+                            
+                            const headers = {
+                                'Accept': '*/*',
+                                'Origin': 'https://localhost:8000'
+                            };
+                            
+                            // Set specific headers based on resource type
+                            if (resourceType === 'Style') {
+                                headers['Accept'] = 'application/json';
+                                log(`Loading style from: ${url}`, false, true);
+                                return {
+                                    url: url,
+                                    credentials: 'omit',
+                                    headers: headers
+                                };
+                            } else if (resourceType === 'Tile') {
+                                headers['Accept'] = 'application/x-protobuf';
+                                return {
+                                    url: url,
+                                    credentials: 'include',
+                                    headers: headers
+                                };
+                            } else if (url.includes('/fonts/') || url.includes('/basemaps-assets/fonts/')) {
+                                headers['Accept'] = 'application/x-protobuf';
+                                log(`Loading font from: ${url}`, false, true);
+                                return {
+                                    url: url,
+                                    credentials: 'omit',
+                                    headers: headers
+                                };
+                            }
+                            
                             return {
                                 url: url,
-                                credentials: 'same-origin',
-                                headers: {
-                                    'Accept': 'application/x-protobuf',
-                                    'Origin': 'https://localhost:8000'
-                                }
+                                credentials: 'include',
+                                headers: headers
                             };
                         }
                     }
                 });
                 
-                map.on('load', () => {
-                    log('Map loaded successfully', false, true);
+                // Set up event handlers before loading the style
+                map.on('style.load', () => {
+                    log('Map style loaded successfully', false, true);
                     // Check cookies after map loads
                     const cookies = document.cookie;
                     log(`Cookies after map load: ${cookies}`, false, true);
@@ -352,12 +403,31 @@
                 
                 map.on('error', (e) => {
                     log(`Map error: ${e.error?.message || 'Unknown error'}`, true, false);
+                    // Log more details about the error
+                    if (e.error) {
+                        log(`Error details: ${JSON.stringify(e.error)}`, true, false);
+                    }
                 });
                 
                 map.on('data', (e) => {
                     if (e.dataType === 'source' && e.isSourceLoaded) {
                         log(`Source loaded: ${e.sourceId}`, false, true);
                     }
+                });
+
+                // Add specific handlers for tile loading
+                map.on('sourcedata', (e) => {
+                    if (e.isSourceLoaded) {
+                        log(`Source data loaded: ${e.sourceId}`, false, true);
+                    }
+                });
+
+                map.on('sourcedataloading', (e) => {
+                    log(`Source data loading: ${e.sourceId}`, false, false);
+                });
+
+                map.on('sourcedataerror', (e) => {
+                    log(`Source data error: ${e.sourceId} - ${e.error?.message || 'Unknown error'}`, true, false);
                 });
             } catch (e) {
                 log(`Error creating map: ${e.message}`, true, false);
@@ -372,4 +442,4 @@
         log('4. All tile requests should include credentials after prefetch');
     </script>
 </body>
-</html> 
+</html>

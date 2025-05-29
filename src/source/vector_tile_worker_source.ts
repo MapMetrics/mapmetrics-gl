@@ -42,7 +42,9 @@ export type LoadVectorData = (params: WorkerTileParameters, abortController: Abo
 function ensureMapmetricsCredentials(request: RequestParameters): RequestParameters {
     if (request.url && 
         (request.url.includes('mapmetrics.org') || request.url.includes('gateway.mapmetrics1.org')) && 
-        request.credentials !== 'include') {
+        request.credentials !== 'include' &&
+        !request.url.includes('/fonts/') &&  // Don't require credentials for font requests
+        !request.url.includes('/basemaps-assets/fonts/')) {  // Don't require credentials for font requests
         
         // Create a new request parameters object with credentials set
         return {
