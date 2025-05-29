@@ -3,18 +3,54 @@
     <head>
         <meta charset="UTF-8" />
         <link href="dist/mapmetrics-gl.css" rel="stylesheet" />
-        <script src="dist/mapmetrics-gl.js"></script>
+        <script src="dist/mapmetrics-gl.js" defer></script>
         <script>
             // Debug utility to monitor fetch and XHR requests
             function setupRequestDebugging() {
+                // Capture console.log, console.warn, console.error
+                const originalConsoleLog = console.log;
+                const originalConsoleWarn = console.warn;
+                const originalConsoleError = console.error;
+                
+                console.log = function() {
+                    // Check if it's a cookie prefetch log
+                    const message = arguments[0];
+                    if (typeof message === 'string' && message.includes('🍪')) {
+                        logDebug(message, false, true);
+                    }
+                    originalConsoleLog.apply(this, arguments);
+                };
+                
+                console.warn = function() {
+                    // Check if it's a cookie prefetch warning
+                    const message = arguments[0];
+                    if (typeof message === 'string' && message.includes('🍪')) {
+                        logDebug(message, true, false);
+                    }
+                    originalConsoleWarn.apply(this, arguments);
+                };
+                
+                console.error = function() {
+                    // Check if it's a cookie prefetch error
+                    const message = arguments[0];
+                    if (typeof message === 'string' && message.includes('🍪')) {
+                        logDebug(message, true, false);
+                    }
+                    originalConsoleError.apply(this, arguments);
+                };
+                
                 // Monitor fetch calls
                 const originalFetch = window.fetch;
                 window.fetch = function(input, init) {
                     const url = typeof input === 'string' ? input : input.url;
                     const credentials = init ? init.credentials : 'not set';
                     
+                    // Check if it's a cookie prefetch
+                    if (url.includes('gateway.mapmetrics.org') && init?.method === 'HEAD') {
+                        logDebug(`🍪 Prefetch request to: ${url} (credentials: ${credentials})`, false, true);
+                    }
                     // Check if it's a tile request
-                    if (url.includes('gateway.mapmetrics.org') && (url.includes('.mvt') || url.includes('.pbf'))) {
+                    else if (url.includes('gateway.mapmetrics.org') && (url.includes('.mvt') || url.includes('.pbf'))) {
                         console.log('🌐 TILE REQUEST:', {
                             url,
                             credentials,
@@ -78,6 +114,8 @@
             // Debug function to log into the debug panel
             function logDebug(message, isError = false, isSuccess = false) {
                 const debugEl = document.getElementById('debug');
+                if (!debugEl) return; // Guard against window not being defined
+                
                 const timestamp = new Date().toISOString().substring(11, 19);
                 let className = "";
                 if (isError) className = "error";
@@ -85,6 +123,16 @@
                 
                 debugEl.innerHTML += `[${timestamp}] <span class="${className}">${message}</span><br>`;
                 debugEl.scrollTop = debugEl.scrollHeight;
+            }
+
+            // Safe error handler that doesn't depend on window
+            function safeErrorHandler(error) {
+                try {
+                    logDebug(`Error: ${error.message}`, true);
+                } catch (e) {
+                    // If we can't log to the debug panel, at least log to console
+                    console.error('Error:', error);
+                }
             }
         </script>
         <style>
@@ -137,20 +185,35 @@
                 color: red;
                 font-weight: bold;
             }
+            .cookieInfo {
+                margin-bottom: 10px;
+                font-weight: bold;
+                color: #0066cc;
+            }
         </style>
     </head>
     <body>
         <div id="map"></div>
-        <div id="debug"></div>
+        <div id="debug">
+            <div class="cookieInfo">🍪 Cookie Prefetch System Active - Look for cookie prefetch logs below</div>
+        </div>
         <div id="actions">
+            <button id="loadMap">Load Map</button>
             <button id="testFetch">Test Direct Tile Fetch</button>
             <button id="clearDebug">Clear Log</button>
         </div>
         <script>
+            // Wait for both DOM and library to be loaded
+            window.addEventListener('load', function() {
+                if (typeof mapmetricsgl === 'undefined') {
+                    safeErrorHandler(new Error('mapmetricsgl library not loaded'));
+                    return;
+                }
+
             setupRequestDebugging();
 
             // Test URL for a tile
-            const testTileUrl = "https://gateway.mapmetrics.org/20250110/1/1/1.mvt?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI4MjQ5NGNjNy04YTUzLTQwNGUtODNlOS1hZjA5OWY1MGE0Y2IiLCJzY29wZSI6WyJtYXBzIiwic2VhcmNoIl0sImlhdCI6MTc0NDY5NTgxOH0.3oDQzbcD72gIvtd4lkKi96aMFF3-d-i7UnIdc9iADeA";
+            const testTileUrl = "https://gateway.mapmetrics.org/20250110/1/1/1.mvt?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5MWNmNTBmNS1lM2NiLTQ1ZDMtYTFhYi1mMmY1NzVmNmM5YjIiLCJzY29wZSI6WyJtYXBzIiwiYXV0b2NvbXBsZXRlIiwiZ2VvY29kZSJdLCJpYXQiOjE3NDcxNDE5OTB9.mAtqzwAPCcQhyEr45AgPaCFor4hePZu7tpoUrJUGwGs";
 
             // Full MapMetrics style
             const mapMetricsStyle = {
@@ -414,30 +477,46 @@
                 ]
             };
             
-            // Initialize the map with the full style
-            const map = new mapmetricsgl.Map({
-                container: "map",
-                style: mapMetricsStyle,
-                zoom: 2,
-                center: [2.3210938, 48.7965913]
-            }).addControl(new mapmetricsgl.NavigationControl(), "top-right");
-
-            // Monitor events for debugging
-            map.on('data', (e) => {
-                if (e.dataType === 'source' && e.isSourceLoaded) {
-                    logDebug(`Source loaded: ${e.sourceId}`, false, true);
+            // Don't load the map immediately to demonstrate cookie prefetch
+            let map = null;
+            
+            // Initialize the map when the user clicks the button
+            document.getElementById('loadMap').addEventListener('click', function() {
+                if (map) {
+                    logDebug('Map already loaded', false, false);
+                    return;
                 }
+                
+                logDebug('Initializing map...', false, false);
+                
+                    try {
+                // Initialize the map with the full style
+                map = new mapmetricsgl.Map({
+                    container: "map",
+                    style: mapMetricsStyle,
+                    zoom: 2,
+                    center: [2.3210938, 48.7965913]
+                }).addControl(new mapmetricsgl.NavigationControl(), "top-right");
+
+                // Monitor events for debugging
+                map.on('data', (e) => {
+                    if (e.dataType === 'source' && e.isSourceLoaded) {
+                        logDebug(`Source loaded: ${e.sourceId}`, false, true);
+                    }
+                });
+                
+                map.on('style.load', () => {
+                    logDebug('Map style loaded successfully!', false, true);
+                });
+                
+                map.on('error', (e) => {
+                            safeErrorHandler(e.error);
+                        });
+                    } catch (error) {
+                        safeErrorHandler(error);
+                    }
             });
-            
-            map.on('style.load', () => {
-                logDebug('Map style loaded successfully!', false, true);
-            });
-            
-            map.on('error', (e) => {
-                console.error('Map error:', e.error);
-                logDebug(`Error: ${e.error.message}`, true);
-            });
-            
+
             // Add button event handlers
             document.getElementById('testFetch').addEventListener('click', function() {
                 logDebug('Testing direct tile fetch with credentials...');
@@ -449,16 +528,27 @@
                     return response.blob(); 
                 })
                 .then(() => logDebug('Manual fetch completed successfully', false, true))
-                .catch(err => logDebug(`Manual fetch failed: ${err.message}`, true));
+                    .catch(err => safeErrorHandler(err));
             });
             
             document.getElementById('clearDebug').addEventListener('click', function() {
-                document.getElementById('debug').innerHTML = '';
+                document.getElementById('debug').innerHTML = '<div class="cookieInfo">🍪 Cookie Prefetch System Active - Look for cookie prefetch logs below</div>';
             });
 
             // Log initial startup
-            logDebug('Testing MapMetrics full style with credentials handling.', false, true);
-            logDebug('Inspect network requests to verify that credentials are being sent.', false, true);
+            logDebug('📡 Library loaded. Click "Load Map" to test the cookie prefetch system.', false, true);
+            logDebug('The cookie prefetch should happen BEFORE any tile requests, preventing 401/403 errors.', false, true);
+
+            // Load the style configuration
+            fetch('src/style/mapmetrics-style.json')
+                .then(response => response.json())
+                .then(style => {
+                    map.setStyle(style);
+                })
+                .catch(error => {
+                    console.error('Error loading style:', error);
+                });
+            });
         </script>
     </body>
 </html> 
