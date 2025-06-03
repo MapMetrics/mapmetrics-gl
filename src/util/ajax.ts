@@ -145,28 +145,103 @@ export const getReferrer = () =>
 const isFileURL = (url) =>
     /^file:/.test(url) || (/^file:/.test(getReferrer()) && !/^\w+:/.test(url));
 
+function makeXMLHttpRequest(
+    requestParameters: RequestParameters,
+    abortController: AbortController
+): Promise<GetResourceResponse<any>> {
+    return new Promise((resolve, reject) => {
+        const xhr: XMLHttpRequest = new XMLHttpRequest();
+
+        xhr.open(
+            requestParameters.method || "GET",
+            requestParameters.url,
+            true
+        );
+        if (
+            requestParameters.type === "arrayBuffer" ||
+            requestParameters.type === "image"
+        ) {
+            xhr.responseType = "arraybuffer";
+        }
+        for (const k in requestParameters.headers) {
+            xhr.setRequestHeader(k, requestParameters.headers[k]);
+        }
+        if (requestParameters.type === "json") {
+            xhr.responseType = "text";
+            // Do not overwrite the user-provided Accept header
+            if (!requestParameters.headers?.Accept) {
+                xhr.setRequestHeader("Accept", "application/json");
+            }
+        }
+        // Enable credentials for MapMetrics domains to allow cookie setting
+        xhr.withCredentials = requestParameters.url.includes('gateway.mapmetrics-atlas.net');
+        xhr.onerror = () => {
+            console.error(`🍪 XHR error for ${requestParameters.url.substring(0, 50)}...`, xhr.status, xhr.statusText);
+            reject(new Error(xhr.statusText));
+        };
+        xhr.onload = () => {
+            if (abortController.signal.aborted) {
+                return;
+            }
+            if (
+                ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 0) &&
+                xhr.response !== null
+            ) {
+                let data: unknown = xhr.response;
+                if (requestParameters.type === "json") {
+                    // We're manually parsing JSON here to get better error messages.
+                    try {
+                        data = JSON.parse(xhr.response);
+                    } catch (err) {
+                        reject(err);
+                        return;
+                    }
+                }
+                // Log cookie information
+                if (typeof document !== 'undefined') {
+                    console.log(`🍪 Current cookies: ${document.cookie}`);
+                }
+                resolve({
+                    data,
+                    cacheControl: xhr.getResponseHeader("Cache-Control"),
+                    expires: xhr.getResponseHeader("Expires"),
+                });
+            } else {
+                const body = new Blob([xhr.response], {
+                    type: xhr.getResponseHeader("Content-Type"),
+                });
+                console.error(`🍪 XHR failed for ${requestParameters.url.substring(0, 50)}...`, xhr.status, xhr.statusText);
+                reject(
+                    new AJAXError(
+                        xhr.status,
+                        xhr.statusText,
+                        requestParameters.url,
+                        body
+                    )
+                );
+            }
+        };
+        abortController.signal.addEventListener("abort", () => {
+            xhr.abort();
+            reject(createAbortError());
+        });
+        xhr.send(requestParameters.body);
+    });
+}
+
 async function makeFetchRequest(
     requestParameters: RequestParameters,
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
-    // Always include credentials for gateway.mapmetrics.org requests, except for font, style, and sprite requests
-    if (requestParameters.url.includes('gateway.mapmetrics.org') && 
-        !requestParameters.credentials && 
-        !requestParameters.url.includes('/fonts/') &&
-        !requestParameters.url.includes('/basemaps-assets/fonts/') &&
-        !requestParameters.url.includes('/styles/') &&
-        !requestParameters.url.includes('/sprites/')) {
-        requestParameters.credentials = 'include';
-    }
-    
     const request = new Request(requestParameters.url, {
         method: requestParameters.method || "GET",
         body: requestParameters.body,
-        credentials: requestParameters.credentials,
+        credentials: requestParameters.url.includes('gateway.mapmetrics-atlas.net') ? 'include' : undefined,
         headers: requestParameters.headers,
         cache: requestParameters.cache,
         referrer: getReferrer(),
         signal: abortController.signal,
+        mode: 'cors'  // Explicitly set CORS mode
     });
 
     // If the user has already set an Accept header, do not overwrite it here
@@ -193,6 +268,12 @@ async function makeFetchRequest(
             body
         );
     }
+
+    // Log cookie information
+    if (typeof document !== 'undefined') {
+        console.log(`🍪 Current cookies: ${document.cookie}`);
+    }
+
     let parsePromise: Promise<any>;
     if (
         requestParameters.type === "arrayBuffer" ||
@@ -215,93 +296,6 @@ async function makeFetchRequest(
     };
 }
 
-function makeXMLHttpRequest(
-    requestParameters: RequestParameters,
-    abortController: AbortController
-): Promise<GetResourceResponse<any>> {
-    // Always include credentials for gateway.mapmetrics.org requests, except for font, style, and sprite requests
-    if (requestParameters.url.includes('gateway.mapmetrics.org') && 
-        !requestParameters.credentials && 
-        !requestParameters.url.includes('/fonts/') &&
-        !requestParameters.url.includes('/basemaps-assets/fonts/') &&
-        !requestParameters.url.includes('/styles/') &&
-        !requestParameters.url.includes('/sprites/')) {
-        requestParameters.credentials = 'include';
-    }
-    
-    return new Promise((resolve, reject) => {
-        const xhr: XMLHttpRequest = new XMLHttpRequest();
-
-        xhr.open(
-            requestParameters.method || "GET",
-            requestParameters.url,
-            true
-        );
-        if (
-            requestParameters.type === "arrayBuffer" ||
-            requestParameters.type === "image"
-        ) {
-            xhr.responseType = "arraybuffer";
-        }
-        for (const k in requestParameters.headers) {
-            xhr.setRequestHeader(k, requestParameters.headers[k]);
-        }
-        if (requestParameters.type === "json") {
-            xhr.responseType = "text";
-            // Do not overwrite the user-provided Accept header
-            if (!requestParameters.headers?.Accept) {
-                xhr.setRequestHeader("Accept", "application/json");
-            }
-        }
-        xhr.withCredentials = requestParameters.credentials === "include";
-        xhr.onerror = () => {
-            reject(new Error(xhr.statusText));
-        };
-        xhr.onload = () => {
-            if (abortController.signal.aborted) {
-                return;
-            }
-            if (
-                ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 0) &&
-                xhr.response !== null
-            ) {
-                let data: unknown = xhr.response;
-                if (requestParameters.type === "json") {
-                    // We're manually parsing JSON here to get better error messages.
-                    try {
-                        data = JSON.parse(xhr.response);
-                    } catch (err) {
-                        reject(err);
-                        return;
-                    }
-                }
-                resolve({
-                    data,
-                    cacheControl: xhr.getResponseHeader("Cache-Control"),
-                    expires: xhr.getResponseHeader("Expires"),
-                });
-            } else {
-                const body = new Blob([xhr.response], {
-                    type: xhr.getResponseHeader("Content-Type"),
-                });
-                reject(
-                    new AJAXError(
-                        xhr.status,
-                        xhr.statusText,
-                        requestParameters.url,
-                        body
-                    )
-                );
-            }
-        };
-        abortController.signal.addEventListener("abort", () => {
-            xhr.abort();
-            reject(createAbortError());
-        });
-        xhr.send(requestParameters.body);
-    });
-}
-
 /**
  * We're trying to use the Fetch API if possible. However, requests for resources with the file:// URI scheme don't work with the Fetch API.
  * In this case we unconditionally use XHR on the current thread since referrers don't matter.
@@ -315,33 +309,28 @@ export const makeRequest = function (
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
     const url = requestParameters.url;
-    const shouldIncludeCredentials = url.includes('gateway.mapmetrics.org') && 
-        !url.includes('/fonts/') && 
-        !url.includes('/basemaps-assets/fonts/') && 
-        !url.includes('/sprites/') && 
-        !url.includes('/basemaps-assets/sprites/') &&
+    const isMapMetricsRequest = url.includes('gateway.mapmetrics.org') || 
+                               url.includes('gateway.mapmetrics-atlas.net') ||
+                               url.includes('/rtile/') ||
+                               url.includes('/vector-tile/');
+    
+    // Always set headers for MapMetrics domains, rtile and vector tile requests, except for font, style, and sprite requests
+    if (isMapMetricsRequest &&
+        !url.includes('/fonts/') &&
+        !url.includes('/basemaps-assets/fonts/') &&
         !url.includes('/styles/') &&
-        !url.includes('/basemaps-assets/styles/');
-
-    if (shouldIncludeCredentials) {
-        requestParameters.credentials = 'include';
-    } else {
-        requestParameters.credentials = undefined;
-    }
-
-    // Always set credentials and headers for MapMetrics domains, except for font, style, and sprite requests
-    if (requestParameters.url && 
-        (requestParameters.url.includes('mapmetrics.org') || requestParameters.url.includes('gateway.mapmetrics.org')) &&
-        !requestParameters.url.includes('/fonts/') &&
-        !requestParameters.url.includes('/basemaps-assets/fonts/') &&
-        !requestParameters.url.includes('/styles/') &&
-        !requestParameters.url.includes('/sprites/')) {
+        !url.includes('/sprites/')) {
         requestParameters.headers = {
             ...requestParameters.headers,
-            'Accept': 'application/x-protobuf',
-            'Origin': 'https://localhost:8000'
+            'Accept': 'application/x-protobuf'
         };
-        console.log(`🍪 Setting credentials and headers for request: ${requestParameters.url.substring(0, 50)}...`);
+        console.log(`🍪 Setting headers for request: ${url}`);
+    }
+
+    // For MapMetrics domains, rtile and vector tile requests, always use XMLHttpRequest
+    if (isMapMetricsRequest) {
+        console.log(`🍪 Using XMLHttpRequest for MapMetrics domain, rtile or vector tile: ${url.substring(0, 50)}...`);
+        return makeXMLHttpRequest(requestParameters, abortController);
     }
 
     if (

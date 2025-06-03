@@ -26,36 +26,32 @@ export type VectorTileSourceOptions = VectorSourceSpecification & {
 let globalCookiePrefetchPromise: Promise<void> | null = null;
 const cookiePrefetchDomains = new Set<string>();
 
-// Use a valid tile URL pattern for MapMetrics to ensure the proper cookie is set
 /**
  * Performs a single cookie prefetch request for a domain
  */
-async function prefetchSingleDomain(domain: string): Promise<void> {
-    if (cookiePrefetchDomains.has(domain)) return;
+async function prefetchSingleDomain(url: string): Promise<void> {
+    if (cookiePrefetchDomains.has(url)) return;
     
-    console.log(`🍪 Starting prefetch for domain: ${domain}`);
+    console.log(`🍪 Starting prefetch for URL: ${url}`);
     
     try {
-        // Use the same URL pattern as the working example
-        const prefetchUrl = `https://twilight-bush-94ef.jim9710.workers.dev/20250110/1/1/0.mvt?token=`;
+        console.log(`🍪 Prefetching URL: ${url}`);
         
-        console.log(`🍪 Prefetching URL: ${prefetchUrl}`);
-        
-        const prefetchResponse = await fetch(prefetchUrl, {
+        const prefetchResponse = await fetch(url, {
             method: 'GET',
             credentials: 'include',
             headers: {
-                'Accept': 'application/x-protobuf',
-                'Origin': 'https://localhost:8000'
+                'Accept': 'application/x-protobuf'
             },
             cache: 'no-store'
         });
         
-        console.log(`🍪 Prefetch completed for ${domain} with status: ${prefetchResponse.status}`);
-        cookiePrefetchDomains.add(domain);
+        console.log(`🍪 Prefetch completed for ${url} with status: ${prefetchResponse.status}`);
+        console.log(`🍪 Cookie after prefetch: ${document.cookie}`);
+        cookiePrefetchDomains.add(url);
     } catch (e) {
-        console.warn(`🍪 Cookie prefetch failed for ${domain}:`, e);
-        cookiePrefetchDomains.add(domain);
+        console.warn(`🍪 Cookie prefetch failed for ${url}:`, e);
+        cookiePrefetchDomains.add(url);
     }
 }
 
@@ -63,14 +59,15 @@ async function prefetchSingleDomain(domain: string): Promise<void> {
  * Ensures cookies are fetched for any MapMetrics domains
  * @returns Promise that resolves when all prefetches are complete
  */
-function ensureGlobalCookiePrefetch(): Promise<void> {
+async function ensureGlobalCookiePrefetch(url: string): Promise<void> {
     if (globalCookiePrefetchPromise) {
-        return globalCookiePrefetchPromise;
+        await globalCookiePrefetchPromise;
+        return;
     }
     
-    console.log(`🍪 Starting global cookie prefetch`);
+    console.log(`🍪 Starting global cookie prefetch for ${url}`);
     
-    globalCookiePrefetchPromise = prefetchSingleDomain('twilight-bush-94ef.jim9710.workers.dev')
+    globalCookiePrefetchPromise = prefetchSingleDomain(url)
         .then(() => {
             console.log('🍪 Global cookie prefetch completed');
         })
@@ -78,7 +75,7 @@ function ensureGlobalCookiePrefetch(): Promise<void> {
             console.warn('🍪 Global cookie prefetch failed:', err);
         });
     
-    return globalCookiePrefetchPromise;
+    await globalCookiePrefetchPromise;
 }
 
 /**
@@ -181,7 +178,7 @@ export class VectorTileSource extends Evented implements Source {
      */
     private _startCookiePrefetch(): void {
         // Start global prefetch
-        ensureGlobalCookiePrefetch()
+        ensureGlobalCookiePrefetch(this.url)
             .then(() => {
                 this._prefetchCompleted = true;
                 console.log(`🍪 Cookie prefetch completed for source ${this.id}`);
@@ -308,20 +305,6 @@ export class VectorTileSource extends Evented implements Source {
     }
 
     async loadTile(tile: Tile): Promise<void> {
-        // For MapMetrics domains, wait for cookie prefetch to complete
-        if (!this._prefetchCompleted && this.tiles && this.tiles.some(url => url.includes('mapmetrics.org'))) {
-            console.log(`🍪 Waiting for cookie prefetch to complete before loading tile ${tile.tileID.canonical.z}/${tile.tileID.canonical.x}/${tile.tileID.canonical.y}`);
-            try {
-                // Wait for global prefetch to complete
-                await ensureGlobalCookiePrefetch();
-                this._prefetchCompleted = true;
-            } catch (e) {
-                // Continue even if prefetch failed
-                console.warn(`🍪 Error waiting for cookie prefetch, proceeding with tile load anyway:`, e);
-                this._prefetchCompleted = true;
-            }
-        }
-        
         const url = tile.tileID.canonical.url(
             this.tiles,
             this.map.getPixelRatio(),
@@ -334,14 +317,23 @@ export class VectorTileSource extends Evented implements Source {
         );
         
         // Ensure credentials and headers are set correctly for MapMetrics domains
-        if (url.includes('mapmetrics.org') || url.includes('gateway.mapmetrics.org')) {
+        if (url.includes('mapmetrics.org') || url.includes('gateway.mapmetrics-atlas.net')) {
+            // Wait for cookie prefetch to complete before making the request
+            await ensureGlobalCookiePrefetch(url);
+            
             request.credentials = 'include';
             request.headers = {
                 ...request.headers,
-                'Accept': 'application/x-protobuf',
-                'Origin': 'https://localhost:8000'
+                'Accept': 'application/x-protobuf'
             };
-            console.log(`🍪 Setting credentials and headers for tile request: ${url.substring(0, 50)}...`);
+            console.log(`🍪 Setting headers for request: ${url}`);
+            console.log(`🍪 Cookie before request: ${document.cookie}`);
+            
+            // For the first request to a MapMetrics domain, ensure we're using XMLHttpRequest
+            if (!this._loaded) {
+                console.log(`🍪 First request to MapMetrics domain, ensuring XMLHttpRequest is used`);
+                request.type = 'arrayBuffer';  // Force XMLHttpRequest
+            }
         }
         
         const params: WorkerTileParameters = {

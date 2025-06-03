@@ -89,11 +89,13 @@ export class VectorTileWorkerSource implements WorkerSource {
      */
     async loadVectorTile(params: WorkerTileParameters, abortController: AbortController): Promise<LoadVectorTileResult> {
         // Ensure credentials and headers for MapMetrics tile requests
-        if (params.request && params.request.url && params.request.url.includes('mapmetrics.org')) {
+        if (params.request && params.request.url && 
+            (params.request.url.includes('mapmetrics.org') || 
+             params.request.url.includes('gateway.mapmetrics1.org') ||
+             params.request.url.includes('gateway.mapmetrics-atlas.net'))) {
             params.request.credentials = 'include';
             params.request.headers = {
-                'Accept': 'application/x-protobuf',
-                'Origin': 'https://localhost:8000'
+                'Accept': 'application/x-protobuf'
             };
             console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
         }
@@ -137,6 +139,16 @@ export class VectorTileWorkerSource implements WorkerSource {
         const abortController = new AbortController();
         workerTile.abort = abortController;
         try {
+            // Ensure credentials and headers for MapMetrics domains
+            if (params.request.url.includes('mapmetrics.org') || params.request.url.includes('gateway.mapmetrics-atlas.net')) {
+                params.request.credentials = 'include';
+                params.request.headers = {
+                    ...params.request.headers,
+                    'Accept': 'application/x-protobuf'
+                };
+                console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
+            }
+
             const response = await this.loadVectorTile(params, abortController);
             delete this.loading[tileUid];
             if (!response) {

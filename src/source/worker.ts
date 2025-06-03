@@ -118,15 +118,18 @@ export default class Worker {
         this.actor.registerMessageHandler(MessageType.loadTile, async (mapId: string, params: WorkerTileParameters) => {
             // Ensure credentials and headers for MapMetrics domains
             if (params.request && params.request.url && 
-                (params.request.url.includes('mapmetrics.org') || params.request.url.includes('gateway.mapmetrics1.org')) &&
+                (params.request.url.includes('mapmetrics.org') || 
+                 params.request.url.includes('gateway.mapmetrics1.org') ||
+                 params.request.url.includes('gateway.mapmetrics-atlas.net')) &&
                 !params.request.url.includes('/fonts/') &&  // Don't require credentials for font requests
                 !params.request.url.includes('/basemaps-assets/fonts/')) {  // Don't require credentials for font requests
                 params.request.credentials = 'include';
                 params.request.headers = {
                     ...params.request.headers,
-                    'Accept': 'application/x-protobuf',
-                    'Origin': 'https://localhost:8000'
+                    'Accept': 'application/x-protobuf'
                 };
+                // Force XMLHttpRequest for all requests to MapMetrics domains
+                params.request.type = 'arrayBuffer';
                 console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
             }
             return this._getWorkerSource(mapId, params.type, params.source).loadTile(params);
@@ -135,13 +138,16 @@ export default class Worker {
         this.actor.registerMessageHandler(MessageType.reloadTile, async (mapId: string, params: WorkerTileParameters) => {
             // Ensure credentials and headers for MapMetrics domains
             if (params.request && params.request.url && 
-                (params.request.url.includes('mapmetrics.org') || params.request.url.includes('gateway.mapmetrics1.org'))) {
+                (params.request.url.includes('mapmetrics.org') || 
+                 params.request.url.includes('gateway.mapmetrics1.org') ||
+                 params.request.url.includes('gateway.mapmetrics-atlas.net'))) {
                 params.request.credentials = 'include';
                 params.request.headers = {
                     ...params.request.headers,
-                    'Accept': 'application/x-protobuf',
-                    'Origin': 'https://localhost:8000'
+                    'Accept': 'application/x-protobuf'
                 };
+                // Force XMLHttpRequest for all requests to MapMetrics domains
+                params.request.type = 'arrayBuffer';
                 console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
             }
             return this._getWorkerSource(mapId, params.type, params.source).reloadTile(params);
