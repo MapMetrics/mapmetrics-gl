@@ -1,8 +1,18 @@
 {
     "name": "@mapmetrics/mapmetrics-gl",
     "description": "BSD licensed community fork of mapmetrics-gl, a WebGL interactive maps library",
-    "version": "0.3.8",
-    "main": "dist/mapmetrics-gl.js",
+    "version": "0.4.8",
+    "main": "./dist/mapmetrics-gl.js",
+    "module": "./dist/mapmetrics-gl.js",
+    "exports": {
+        ".": {
+            "types": "./dist/mapmetrics-gl.d.ts",
+            "import": "./dist/mapmetrics-gl.js",
+            "require": "./dist/mapmetrics-gl.js",
+            "default": "./dist/mapmetrics-gl.js"
+        },
+        "./dist/mapmetrics-gl.css": "./dist/mapmetrics-gl.css"
+    },
     "style": "dist/mapmetrics-gl.css",
     "license": "BSD-3-Clause",
     "homepage": "https://mapmetrics.org/",
@@ -142,7 +152,7 @@
         "generate-typings": "dts-bundle-generator --export-referenced-types --umd-module-name=mapmetricsgl -o ./dist/mapmetrics-gl.d.ts ./src/index.ts",
         "generate-docs": "typedoc && node --no-warnings --loader ts-node/esm build/generate-docs.ts",
         "generate-images": "node --no-warnings --loader ts-node/esm build/generate-doc-images.ts",
-        "build-dist": "npm run build-css && npm run generate-typings && npm run generate-shaders && npm run build-dev && npm run build-csp-dev && npm run build-prod && npm run build-csp",
+        "build-dist": "npm run build-css && npm run generate-typings && npm run generate-shaders && npm run build-dev && npm run build-csp-dev && npm run build-prod && npm run build-csp && cp dist/mapmetrics-gl-dev.js dist/mapmetrics-gl.js",
         "build-dev": "rollup --configPlugin @rollup/plugin-typescript -c --environment BUILD:dev",
         "watch-dev": "rollup --configPlugin @rollup/plugin-typescript -c --environment BUILD:dev --watch",
         "build-prod": "rollup --configPlugin @rollup/plugin-typescript -c --environment BUILD:production",

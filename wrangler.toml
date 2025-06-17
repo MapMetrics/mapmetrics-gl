@@ -1,0 +1,19 @@
+name = "mapmetrics-cdn"
+compatibility_date = "2024-01-01"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "mapmetrics-cdn"
+
+# CORS configuration
+[[r2_buckets.cors]]
+allowed_origins = ["*"]
+allowed_methods = ["GET", "HEAD"]
+allowed_headers = ["*"]
+max_age_seconds = 3600
+
+# Cache configuration
+[[r2_buckets.cache]]
+max_age = 31536000
+s_maxage = 31536000
+stale_while_revalidate = 86400

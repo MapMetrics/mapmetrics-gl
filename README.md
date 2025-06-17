@@ -14,10 +14,10 @@ Include the JavaScript and CSS files in the `<head>` of your HTML file.
 
 ```html
 <link
-    href="https://gateway.mapmetrics.org/assets/css/mapmetrics-gl.css"
+    href="https://cdn.mapmetrics-atlas.net/dist/mapmetrics-gl.css"
     rel="stylesheet"
 />
-<script src="https://gateway.mapmetrics.org/assets/js/mapmetrics-gl.js"></script>
+<script src="https://cdn.mapmetrics-atlas.net/dist/mapmetrics-gl.js"></script>
 ```
 
 Include the following code in the `<body>` of your HTML file.

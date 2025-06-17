@@ -27,13 +27,19 @@ const plugins = (production) => [
         sourceMap: true,
         functions: ['PerformanceUtils.*']
     }),
+    // production && terser({
+    //     compress: {
+    //         pure_getters: true,
+    //         passes: 3
+    //     },
+    //     sourceMap: true
+    // }),
     nodeResolve,
     typescript(),
     commonjs({
         ignoreGlobal: true
     })
 ].filter(Boolean);
-
 const watchStagingPlugin = {
     name: 'watch-external',
     buildStart() {
@@ -48,16 +54,18 @@ const production = BUILD === "production";
 const outputFile = production
     ? "dist/mapmetrics-gl.js"
     : "dist/mapmetrics-gl-dev.js";
-
 const config = [
     {
         input: ["src/index.ts", "src/source/worker.ts"],
         output: {
             dir: "staging/mapmetricsgl",
-            format: "es",
+            format: "amd",
             sourcemap: "inline",
             indent: false,
             chunkFileNames: "shared.js",
+            amd: {
+                autoId: true,
+            },
             minifyInternalExports: production,
         },
         onwarn: (message) => {
@@ -69,24 +77,15 @@ const config = [
     },
     {
         input: "build/rollup/mapmetricsgl.js",
-        output: [
-            {
-                name: "mapmetricsgl",
-                file: outputFile,
-                format: "es",
-                sourcemap: true,
-                indent: false,
-                intro: fs.readFileSync("build/rollup/bundle_prelude.js", "utf8"),
-            },
-            {
-                name: "mapmetricsgl",
-                file: outputFile.replace('.js', '.cjs'),
-                format: "cjs",
-                sourcemap: true,
-                indent: false,
-                intro: fs.readFileSync("build/rollup/bundle_prelude.js", "utf8"),
-            }
-        ],
+        output: {
+            name: "mapmetricsgl",
+            file: outputFile,
+            format: "umd",
+            sourcemap: true,
+            indent: false,
+            intro: fs.readFileSync("build/rollup/bundle_prelude.js", "utf8"),
+            // banner,
+        },
         watch: {
             buildDelay: 1000,
         },
