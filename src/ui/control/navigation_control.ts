@@ -71,7 +71,7 @@ export class NavigationControl implements IControl {
         if (this.options.showZoom) {
             this._zoomInButton = this._createButton('mapmetricsgl-ctrl-zoom-in', (e) => this._map.zoomIn({}, {originalEvent: e}));
             DOM.create('span', 'mapmetricsgl-ctrl-icon', this._zoomInButton).setAttribute('aria-hidden', 'true');
-            this._zoomOutButton = this._createButton('mapmetricsgl-ctrl-zoom-out', (e) => this._map.zoomOut({}, {originalEvent: e}));
+            this._zoomOutButton = this._createButton('mapmetricsgl-ctrl-zoom-out', (e) => this._handleZoomOut(e));
             DOM.create('span', 'mapmetricsgl-ctrl-icon', this._zoomOutButton).setAttribute('aria-hidden', 'true');
         }
         if (this.options.showCompass) {
@@ -170,6 +170,61 @@ export class NavigationControl implements IControl {
         button.title = str;
         button.setAttribute('aria-label', str);
     };
+
+    _handleZoomOut = (e: MouseEvent) => {
+        const targetZoom = this._map.getZoom() - 1;
+        
+        // Check if we have a tile loading manager and tiles are ready
+        if (this._map.tileLoadingManager) {
+            // Disable the button temporarily to prevent multiple clicks
+            this._zoomOutButton.disabled = true;
+            
+            this._map.tileLoadingManager.waitForZoomOutTiles(targetZoom, 300).then((tilesLoaded) => {
+                if (tilesLoaded) {
+                    // Tiles are ready, use normal zoom out animation
+                    this._map.zoomOut({}, {originalEvent: e});
+                } else {
+                    // Tiles not ready, add delay before zoom out
+                    setTimeout(() => {
+                        this._map.zoomOut({}, {originalEvent: e});
+                    }, 500); // 300ms delay when tiles aren't ready
+                }
+                
+                // Re-enable the button
+                this._zoomOutButton.disabled = false;
+            }).catch(() => {
+                // If there's an error, fall back to normal zoom out
+                this._map.zoomOut({}, {originalEvent: e});
+                this._zoomOutButton.disabled = false;
+            });
+        } else {
+            // No tile loading manager, use smooth easeTo
+            this._map.easeTo({
+                zoom: targetZoom,
+                duration: 300,
+                easing: (t) => t * (2 - t)
+            }, {originalEvent: e});
+        }
+    };
+
+    _stepZoomOut(currentZoom: number, targetZoom: number, zoomStep: number, stepTimeout: number) {
+        const stepZoom = (targetZoom > currentZoom) ? zoomStep : -zoomStep;
+        const nextZoom = Math.min(this._map.getMaxZoom(), Math.max(this._map.getMinZoom(), currentZoom + stepZoom));
+        
+        // Use setZoom for immediate zoom without animation
+        this._map.setZoom(nextZoom);
+        
+        // Check if we've reached the target or need to continue
+        if ((stepZoom > 0 && nextZoom >= targetZoom) || (stepZoom < 0 && nextZoom <= targetZoom)) {
+            // We've reached or passed the target, set to exact target
+            this._map.setZoom(targetZoom);
+        } else {
+            // Continue to next step after timeout
+            setTimeout(() => {
+                this._stepZoomOut(nextZoom, targetZoom, zoomStep, stepTimeout);
+            }, stepTimeout);
+        }
+    }
 }
 
 class MouseRotateWrapper {

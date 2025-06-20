@@ -34,7 +34,7 @@ export class LogoControl implements IControl {
      * @param options - the control's options
      */
     constructor(options: LogoControlOptions = {}) {
-        this.options = options;
+        this.options = {compact: false, ...options};
     }
 
     getDefaultPosition(): ControlPosition {
@@ -76,10 +76,10 @@ export class LogoControl implements IControl {
         const containerChildren = this._container.children;
         if (containerChildren.length) {
             const anchor = containerChildren[0];
-            if (this._map.getCanvasContainer().offsetWidth <= 640 || this._compact) {
-                if (this._compact !== false) {
-                    anchor.classList.add('mapmetricsgl-compact');
-                }
+            // Only show compact mode if explicitly requested (compact: true)
+            // or if the screen is very small (less than 400px) for better UX
+            if (this._compact === true || this._map.getCanvasContainer().offsetWidth <= 400) {
+                anchor.classList.add('mapmetricsgl-compact');
             } else {
                 anchor.classList.remove('mapmetricsgl-compact');
             }

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Navigation Control with Tile Waiting Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 500px; border: 1px solid #ccc; }
+        .info { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .status { background: #e8f5e8; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .controls { margin: 20px 0; }
+        button { margin: 5px; padding: 10px 15px; }
+    </style>
+</head>
+<body>
+    <h1>Navigation Control with Tile Waiting Test</h1>
+    <div class="info">
+        <p><strong>Updated Navigation Control Behavior:</strong></p>
+        <ul>
+            <li><strong>Zoom In Button:</strong> Works normally (no tile waiting needed)</li>
+            <li><strong>Zoom Out Button:</strong> Now waits for tiles to load before completing zoom</li>
+            <li><strong>When Tiles Ready:</strong> Normal smooth zoom out animation</li>
+            <li><strong>When Tiles Not Ready:</strong> Step-by-step zoom out (0.3 zoom steps, 1000ms intervals)</li>
+            <li><strong>Button State:</strong> Temporarily disabled during tile checking to prevent multiple clicks</li>
+        </ul>
+        <p>This ensures that zoom out operations wait for tiles to be available, providing a better user experience.</p>
+    </div>
+    
+    <div class="controls">
+        <button onclick="addNavigationControl()">Add Navigation Control</button>
+        <button onclick="removeNavigationControl()">Remove Navigation Control</button>
+        <button onclick="testZoomOut()">Test Zoom Out Programmatically</button>
+        <button onclick="resetZoom()">Reset Zoom</button>
+    </div>
+    
+    <div class="status">
+        <p><strong>Current Zoom:</strong> <span id="currentZoom">-</span></p>
+        <p><strong>Navigation Control:</strong> <span id="navControlStatus">Not Added</span></p>
+        <p><strong>Last Action:</strong> <span id="lastAction">-</span></p>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="info">
+        <p><strong>Instructions:</strong></p>
+        <ul>
+            <li>Add the navigation control using the button above</li>
+            <li>Try clicking the zoom out button in the navigation control</li>
+            <li>Notice how it waits for tiles before completing the zoom</li>
+            <li>Compare with zoom in which works immediately</li>
+            <li>Try the programmatic zoom out test to see the behavior</li>
+        </ul>
+    </div>
+
+    <script src="../dist/mapmetrics-gl-dev.js"></script>
+    <script>
+        const map = new mapmetricsgl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'osm': {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors'
+                    }
+                },
+                layers: [{
+                    id: 'osm-tiles',
+                    type: 'raster',
+                    source: 'osm',
+                    minzoom: 0,
+                    maxzoom: 19
+                }]
+            },
+            center: [-74.006, 40.7128], // New York
+            zoom: 10
+        });
+
+        let navigationControl = null;
+
+        function updateZoomDisplay() {
+            document.getElementById('currentZoom').textContent = map.getZoom().toFixed(2);
+        }
+
+        function updateStatus(status, action = '') {
+            document.getElementById('navControlStatus').textContent = status;
+            if (action) {
+                document.getElementById('lastAction').textContent = action;
+            }
+        }
+
+        function addNavigationControl() {
+            if (!navigationControl) {
+                navigationControl = new mapmetricsgl.NavigationControl({
+                    showZoom: true,
+                    showCompass: true
+                });
+                map.addControl(navigationControl, 'top-right');
+                updateStatus('Added', 'Navigation control added');
+            }
+        }
+
+        function removeNavigationControl() {
+            if (navigationControl) {
+                map.removeControl(navigationControl);
+                navigationControl = null;
+                updateStatus('Removed', 'Navigation control removed');
+            }
+        }
+
+        function testZoomOut() {
+            updateStatus('Testing', 'Programmatic zoom out test');
+            
+            // Simulate the same logic as the navigation control
+            const targetZoom = map.getZoom() - 1;
+            
+            if (map.tileLoadingManager) {
+                map.tileLoadingManager.waitForZoomOutTiles(targetZoom, 500).then((tilesLoaded) => {
+                    if (tilesLoaded) {
+                        map.zoomOut({}, {originalEvent: null});
+                        updateStatus('Added', 'Zoom out completed (tiles ready)');
+                    } else {
+                        stepZoomOut(map.getZoom(), targetZoom, 0.3, 1000);
+                        updateStatus('Added', 'Zoom out started (tiles not ready)');
+                    }
+                }).catch(() => {
+                    map.zoomOut({}, {originalEvent: null});
+                    updateStatus('Added', 'Zoom out completed (fallback)');
+                });
+            } else {
+                map.zoomOut({}, {originalEvent: null});
+                updateStatus('Added', 'Zoom out completed (no tile manager)');
+            }
+        }
+
+        function stepZoomOut(currentZoom, targetZoom, zoomStep, stepTimeout) {
+            const stepZoom = (targetZoom > currentZoom) ? zoomStep : -zoomStep;
+            const nextZoom = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), currentZoom + stepZoom));
+            
+            map.setZoom(nextZoom);
+            
+            if ((stepZoom > 0 && nextZoom >= targetZoom) || (stepZoom < 0 && nextZoom <= targetZoom)) {
+                map.setZoom(targetZoom);
+                updateStatus('Added', 'Step zoom out completed');
+            } else {
+                setTimeout(() => {
+                    stepZoomOut(nextZoom, targetZoom, zoomStep, stepTimeout);
+                }, stepTimeout);
+            }
+        }
+
+        function resetZoom() {
+            map.setZoom(10);
+            map.setCenter([-74.006, 40.7128]);
+            updateStatus('Added', 'Zoom reset');
+        }
+
+        // Update zoom display when map loads and when zoom changes
+        map.on('load', updateZoomDisplay);
+        map.on('zoom', updateZoomDisplay);
+    </script>
+</body>
+</html> 

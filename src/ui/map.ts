@@ -387,7 +387,7 @@ const defaultOptions: Readonly<Partial<MapOptions>> = {
     interactive: true,
     bearingSnap: 7,
     attributionControl: defaultAttributionControlOptions,
-    mapmetricsLogo: false,
+    mapmetricsLogo: true,
     refreshExpiredTiles: true,
 
     canvasContextAttributes: {

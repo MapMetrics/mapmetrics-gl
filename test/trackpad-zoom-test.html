@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Trackpad Zoom Test - Original Implementation</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+            max-width: 300px;
+        }
+        .zoom-info {
+            font-weight: bold;
+            color: #333;
+        }
+        .instructions {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="info">
+        <div class="zoom-info">Current Zoom: <span id="zoom-level">0</span></div>
+        <div class="instructions">
+            <strong>Original Trackpad Zoom Test:</strong><br>
+            1. Use trackpad to zoom in and out<br>
+            2. Verify both zoom-in and zoom-out work smoothly<br>
+            3. Check that zoom level updates correctly<br>
+            4. Try rapid zoom gestures<br>
+            5. Compare with mouse wheel zoom behavior
+        </div>
+    </div>
+
+    <script src="../dist/mapmetrics-gl-dev.js"></script>
+    <script>
+        const map = new mapmetricsgl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'osm': {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors'
+                    }
+                },
+                layers: [{
+                    id: 'osm-tiles',
+                    type: 'raster',
+                    source: 'osm',
+                    minzoom: 0,
+                    maxzoom: 19
+                }]
+            },
+            center: [-74.5, 40], // New York
+            zoom: 9
+        });
+
+        // Update zoom level display
+        function updateZoomDisplay() {
+            document.getElementById('zoom-level').textContent = map.getZoom().toFixed(2);
+        }
+
+        // Listen for zoom events
+        map.on('zoom', updateZoomDisplay);
+        map.on('load', updateZoomDisplay);
+
+        // Log zoom events for debugging
+        map.on('zoomstart', () => {
+            console.log('Zoom started');
+        });
+
+        map.on('zoomend', () => {
+            console.log('Zoom ended at level:', map.getZoom());
+        });
+
+        // Add some markers to make zooming more visible
+        map.on('load', () => {
+            // Add a marker at the center
+            const centerMarker = document.createElement('div');
+            centerMarker.style.width = '20px';
+            centerMarker.style.height = '20px';
+            centerMarker.style.backgroundColor = 'red';
+            centerMarker.style.borderRadius = '50%';
+            centerMarker.style.border = '2px solid white';
+            
+            new mapmetricsgl.Marker(centerMarker)
+                .setLngLat([-74.5, 40])
+                .addTo(map);
+
+            // Add some additional markers
+            const markers = [
+                [-74.6, 40.1],
+                [-74.4, 39.9],
+                [-74.7, 40.2],
+                [-74.3, 39.8]
+            ];
+
+            markers.forEach(coords => {
+                const marker = document.createElement('div');
+                marker.style.width = '15px';
+                marker.style.height = '15px';
+                marker.style.backgroundColor = 'blue';
+                marker.style.borderRadius = '50%';
+                marker.style.border = '2px solid white';
+                
+                new mapmetricsgl.Marker(marker)
+                    .setLngLat(coords)
+                    .addTo(map);
+            });
+        });
+    </script>
+</body>
+</html> 

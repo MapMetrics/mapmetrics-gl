@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Logo Control Test - Full Size by Default</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+            max-width: 350px;
+        }
+        .logo-info {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .instructions {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.4;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 8px;
+            background: #d4edda;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .logo-example {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="info">
+        <div class="logo-info">Logo Control - Full Size by Default</div>
+        <div class="instructions">
+            <strong>Logo Control Status:</strong><br><br>
+            
+            <div class="status">
+                ✅ Logo control is now enabled by default<br>
+                ✅ Shows in FULL SIZE by default (compact: false)<br>
+                ✅ Appears in bottom-left corner<br>
+                ✅ Links to https://mapmetrics.org/<br>
+                ✅ Only goes compact on very small screens (< 400px)
+            </div>
+            
+            <div class="logo-example">
+                <strong>Default Behavior:</strong><br>
+                • Logo shows in full size automatically<br>
+                • No need to set compact: false<br>
+                • Can be forced compact with compact: true<br>
+                • Only goes compact on screens < 400px for UX
+            </div>
+            
+            <div class="status">
+                <strong>Test Instructions:</strong><br>
+                1. Look for the full MapMetrics logo in bottom-left<br>
+                2. Click the logo to visit mapmetrics.org<br>
+                3. Resize browser window to see responsive behavior<br>
+                4. Logo should stay full size until screen is very small
+            </div>
+        </div>
+    </div>
+
+    <script src="../dist/mapmetrics-gl-dev.js"></script>
+    <script>
+        // Create map with default settings - logo should be visible
+        const map = new mapmetricsgl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'osm': {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors'
+                    }
+                },
+                layers: [{
+                    id: 'osm-tiles',
+                    type: 'raster',
+                    source: 'osm',
+                    minzoom: 0,
+                    maxzoom: 19
+                }]
+            },
+            center: [-74.5, 40], // New York
+            zoom: 9
+            // Note: No mapmetricsLogo option needed - it's true by default now
+        });
+
+        // Add navigation controls for testing
+        map.addControl(new mapmetricsgl.NavigationControl());
+
+        // Log when map loads
+        map.on('load', () => {
+            console.log('Map loaded with logo control enabled by default');
+            
+            // Check if logo control is present
+            const logoElement = document.querySelector('.mapmetricsgl-ctrl-logo');
+            if (logoElement) {
+                console.log('✅ Logo control is visible');
+            } else {
+                console.log('❌ Logo control is not visible');
+            }
+        });
+
+        // Add some markers to make the map more interesting
+        map.on('load', () => {
+            // Add a marker at the center
+            const centerMarker = document.createElement('div');
+            centerMarker.style.width = '20px';
+            centerMarker.style.height = '20px';
+            centerMarker.style.backgroundColor = 'red';
+            centerMarker.style.borderRadius = '50%';
+            centerMarker.style.border = '2px solid white';
+            
+            new mapmetricsgl.Marker(centerMarker)
+                .setLngLat([-74.5, 40])
+                .addTo(map);
+
+            // Add some additional markers
+            const markers = [
+                [-74.6, 40.1],
+                [-74.4, 39.9],
+                [-74.7, 40.2],
+                [-74.3, 39.8]
+            ];
+
+            markers.forEach(coords => {
+                const marker = document.createElement('div');
+                marker.style.width = '15px';
+                marker.style.height = '15px';
+                marker.style.backgroundColor = 'blue';
+                marker.style.borderRadius = '50%';
+                marker.style.border = '2px solid white';
+                
+                new mapmetricsgl.Marker(marker)
+                    .setLngLat(coords)
+                    .addTo(map);
+            });
+        });
+    </script>
+</body>
+</html> 

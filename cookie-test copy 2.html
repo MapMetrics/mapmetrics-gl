@@ -12,8 +12,8 @@
             font-family: Arial, sans-serif; 
         }
         #map {
-            min-height: 1500px;
-            height: 1500px;
+            min-height: 500px;
+            height: 700px;
             width: 100%;
         }
         .marker {
@@ -42,11 +42,11 @@
                 maxTileCacheZoomLevels: 10 ,
                 crossSourceCollisions: false,
                 renderWorldCopies: false,
-                
-                attributionControl: {
-                    compact: false,
-                    position: 'bottom-right'
-                }
+    
+                // attributionControl: {
+                //     compact: false,
+                //     position: 'bottom-right'
+                // }
             }).addControl(new mapmetricsgl.NavigationControl(), "top-right");
             map.on('load', () => {
             map.addSource('route', {

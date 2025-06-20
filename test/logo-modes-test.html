@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Logo Control Modes Test</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        .container { display: flex; gap: 20px; height: 100vh; }
+        .map-section { flex: 1; position: relative; }
+        .map { width: 100%; height: 100%; border: 1px solid #ccc; }
+        .info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+            max-width: 200px;
+            font-size: 12px;
+        }
+        .full-size { background: #d4edda; }
+        .compact { background: #f8d7da; }
+        .custom { background: #d1ecf1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="map-section">
+            <div id="map1" class="map"></div>
+            <div class="info full-size">
+                <strong>Default (Full Size)</strong><br>
+                • compact: false (default)<br>
+                • Full logo always shown<br>
+                • Only compact on < 400px screens
+            </div>
+        </div>
+        
+        <div class="map-section">
+            <div id="map2" class="map"></div>
+            <div class="info compact">
+                <strong>Compact Mode</strong><br>
+                • compact: true<br>
+                • Always shows compact logo<br>
+                • Smaller footprint
+            </div>
+        </div>
+        
+        <div class="map-section">
+            <div id="map3" class="map"></div>
+            <div class="info custom">
+                <strong>Custom Position</strong><br>
+                • compact: false<br>
+                • logoPosition: 'top-right'<br>
+                • Full logo in top-right
+            </div>
+        </div>
+    </div>
+
+    <script src="../dist/mapmetrics-gl-dev.js"></script>
+    <script>
+        const mapStyle = {
+            version: 8,
+            sources: {
+                'osm': {
+                    type: 'raster',
+                    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                    tileSize: 256,
+                    attribution: '© OpenStreetMap contributors'
+                }
+            },
+            layers: [{
+                id: 'osm-tiles',
+                type: 'raster',
+                source: 'osm',
+                minzoom: 0,
+                maxzoom: 19
+            }]
+        };
+
+        // Map 1: Default (Full Size)
+        const map1 = new mapmetricsgl.Map({
+            container: 'map1',
+            style: mapStyle,
+            center: [-74.5, 40],
+            zoom: 9
+            // Uses default: compact: false
+        });
+
+        // Map 2: Compact Mode
+        const map2 = new mapmetricsgl.Map({
+            container: 'map2',
+            style: mapStyle,
+            center: [-74.5, 40],
+            zoom: 9
+        });
+        map2.addControl(new mapmetricsgl.LogoControl({compact: true}));
+
+        // Map 3: Custom Position (Top-Right)
+        const map3 = new mapmetricsgl.Map({
+            container: 'map3',
+            style: mapStyle,
+            center: [-74.5, 40],
+            zoom: 9,
+            logoPosition: 'top-right'
+            // Uses default: compact: false, but in top-right position
+        });
+
+        // Add navigation controls to all maps
+        [map1, map2, map3].forEach(map => {
+            map.addControl(new mapmetricsgl.NavigationControl());
+        });
+
+        // Log logo states when maps load
+        [map1, map2, map3].forEach((map, index) => {
+            map.on('load', () => {
+                const logoElement = map.getContainer().querySelector('.mapmetricsgl-ctrl-logo');
+                if (logoElement) {
+                    const isCompact = logoElement.classList.contains('mapmetricsgl-compact');
+                    console.log(`Map ${index + 1}: Logo is ${isCompact ? 'compact' : 'full size'}`);
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

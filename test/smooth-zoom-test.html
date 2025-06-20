@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smooth Zoom Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 500px; border: 1px solid #ccc; }
+        .controls { margin: 20px 0; }
+        button { margin: 5px; padding: 10px 15px; }
+        .info { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .status { background: #e8f5e8; padding: 10px; margin: 10px 0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Smooth Zoom Test</h1>
+    <div class="info">
+        <p><strong>New Smooth Zoom Behavior:</strong></p>
+        <ul>
+            <li><strong>Immediate Zoom:</strong> Zoom happens instantly without waiting</li>
+            <li><strong>Background Tile Loading:</strong> Tiles load in the background without blocking zoom</li>
+            <li><strong>Works for All Input:</strong> Smooth for both trackpad and mouse wheel</li>
+            <li><strong>No Choppiness:</strong> No step-by-step animations that cause delays</li>
+            <li><strong>Natural Experience:</strong> Zoom feels responsive and immediate</li>
+        </ul>
+        <p>This approach prioritizes user experience over waiting for tiles to load.</p>
+    </div>
+    
+    <div class="controls">
+        <button onclick="testZoomOut()">Test Zoom Out</button>
+        <button onclick="testZoomIn()">Test Zoom In</button>
+        <button onclick="resetZoom()">Reset Zoom</button>
+    </div>
+    
+    <div class="status">
+        <p><strong>Current Zoom:</strong> <span id="currentZoom">-</span></p>
+        <p><strong>Zoom Method:</strong> <span id="zoomMethod">-</span></p>
+        <p><strong>Status:</strong> <span id="status">-</span></p>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="info">
+        <p><strong>Instructions:</strong></p>
+        <ul>
+            <li>Use your trackpad or mouse wheel to zoom - should be smooth and immediate</li>
+            <li>Try the test buttons to see the zoom behavior</li>
+            <li>Notice how zoom happens instantly without any delays</li>
+            <li>Tiles will load in the background as needed</li>
+        </ul>
+    </div>
+
+    <script src="../dist/mapmetrics-gl-dev.js"></script>
+    <script>
+        const map = new mapmetricsgl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'osm': {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors'
+                    }
+                },
+                layers: [{
+                    id: 'osm-tiles',
+                    type: 'raster',
+                    source: 'osm',
+                    minzoom: 0,
+                    maxzoom: 19
+                }]
+            },
+            center: [-74.006, 40.7128], // New York
+            zoom: 10
+        });
+
+        function updateZoomDisplay() {
+            document.getElementById('currentZoom').textContent = map.getZoom().toFixed(2);
+        }
+
+        function updateStatus(method, status) {
+            document.getElementById('zoomMethod').textContent = method;
+            document.getElementById('status').textContent = status;
+        }
+
+        function testZoomOut() {
+            updateStatus('Immediate Zoom', 'Zooming...');
+            
+            const currentZoom = map.getZoom();
+            const targetZoom = Math.max(5, currentZoom - 1);
+            
+            // Immediate zoom
+            map.setZoom(targetZoom);
+            
+            // Simulate background tile loading
+            setTimeout(() => {
+                updateStatus('Immediate Zoom', 'Complete (tiles loading in background)');
+            }, 100);
+        }
+
+        function testZoomIn() {
+            updateStatus('Immediate Zoom', 'Zooming...');
+            
+            const currentZoom = map.getZoom();
+            const targetZoom = Math.min(15, currentZoom + 1);
+            
+            // Immediate zoom
+            map.setZoom(targetZoom);
+            
+            setTimeout(() => {
+                updateStatus('Immediate Zoom', 'Complete');
+            }, 100);
+        }
+
+        function resetZoom() {
+            map.setZoom(10);
+            map.setCenter([-74.006, 40.7128]);
+            updateStatus('None', 'Reset');
+        }
+
+        // Update zoom display when map loads and when zoom changes
+        map.on('load', updateZoomDisplay);
+        map.on('zoom', updateZoomDisplay);
+    </script>
+</body>
+</html> 
