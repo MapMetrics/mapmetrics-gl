@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Adaptive Step Zoom Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 500px; border: 1px solid #ccc; }
+        .controls { margin: 20px 0; }
+        button { margin: 5px; padding: 10px 15px; }
+        .info { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .status { background: #e8f5e8; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .tiles-ready { background: #d4edda; }
+        .tiles-not-ready { background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>Adaptive Step Zoom Test</h1>
+    <div class="info">
+        <p><strong>New Adaptive Zoom-Out Behavior:</strong></p>
+        <ul>
+            <li><strong>When Tiles Are Ready:</strong> Small steps (0.1 zoom) with fast timeouts (50ms)</li>
+            <li><strong>When Tiles Aren't Ready:</strong> Bigger steps (0.3 zoom) with slower timeouts (150ms)</li>
+            <li><strong>Responsive:</strong> Adapts to tile loading status automatically</li>
+            <li><strong>Smooth:</strong> Creates appropriate zoom-out effect based on tile availability</li>
+        </ul>
+        <p>This provides better user experience by adjusting zoom behavior based on tile loading status.</p>
+    </div>
+    
+    <div class="controls">
+        <button onclick="testTilesReadyZoom()">Test Zoom (Tiles Ready)</button>
+        <button onclick="testTilesNotReadyZoom()">Test Zoom (Tiles Not Ready)</button>
+        <button onclick="resetZoom()">Reset Zoom</button>
+    </div>
+    
+    <div class="status">
+        <p><strong>Current Zoom:</strong> <span id="currentZoom">-</span></p>
+        <p><strong>Zoom Steps:</strong> <span id="zoomSteps">-</span></p>
+        <p><strong>Step Size:</strong> <span id="stepSize">-</span></p>
+        <p><strong>Step Timeout:</strong> <span id="stepTimeout">-</span></p>
+        <p><strong>Tile Status:</strong> <span id="tileStatus">-</span></p>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="info">
+        <p><strong>Instructions:</strong></p>
+        <ul>
+            <li>Use the buttons above to test different zoom behaviors</li>
+            <li>Try scrolling with your mouse wheel to see the adaptive zoom-out behavior</li>
+            <li>Notice how step size and speed change based on tile loading status</li>
+            <li>When tiles are ready: 0.1 zoom steps every 50ms (smooth)</li>
+            <li>When tiles aren't ready: 0.3 zoom steps every 150ms (faster progression)</li>
+        </ul>
+    </div>
+
+    <script src="../dist/mapmetrics-gl-dev.js"></script>
+    <script>
+        const map = new mapmetricsgl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'osm': {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors'
+                    }
+                },
+                layers: [{
+                    id: 'osm-tiles',
+                    type: 'raster',
+                    source: 'osm',
+                    minzoom: 0,
+                    maxzoom: 19
+                }]
+            },
+            center: [-74.006, 40.7128], // New York
+            zoom: 10
+        });
+
+        let stepCount = 0;
+        let currentStepSize = 0;
+        let currentStepTimeout = 0;
+        let tileStatus = 'Unknown';
+
+        function updateZoomDisplay() {
+            document.getElementById('currentZoom').textContent = map.getZoom().toFixed(2);
+        }
+
+        function updateStepCount() {
+            document.getElementById('zoomSteps').textContent = stepCount.toString();
+        }
+
+        function updateStepInfo() {
+            document.getElementById('stepSize').textContent = currentStepSize.toFixed(1);
+            document.getElementById('stepTimeout').textContent = currentStepTimeout + 'ms';
+            document.getElementById('tileStatus').textContent = tileStatus;
+        }
+
+        function stepZoomOut(currentZoom, targetZoom, zoomStep, stepTimeout, tilesReady) {
+            const stepZoom = (targetZoom > currentZoom) ? zoomStep : -zoomStep;
+            const nextZoom = currentZoom + stepZoom;
+            
+            // Set the zoom for this step
+            map.setZoom(nextZoom);
+            stepCount++;
+            currentStepSize = zoomStep;
+            currentStepTimeout = stepTimeout;
+            tileStatus = tilesReady ? 'Ready' : 'Not Ready';
+            
+            updateStepCount();
+            updateStepInfo();
+            
+            // Check if we've reached the target or need to continue
+            if ((stepZoom > 0 && nextZoom >= targetZoom) || (stepZoom < 0 && nextZoom <= targetZoom)) {
+                // We've reached or passed the target, set to exact target
+                map.setZoom(targetZoom);
+                console.log(`Step zoom completed in ${stepCount} steps (tiles: ${tilesReady ? 'ready' : 'not ready'})`);
+                stepCount = 0;
+                updateStepCount();
+            } else {
+                // Continue to next step
+                setTimeout(() => {
+                    stepZoomOut(nextZoom, targetZoom, zoomStep, stepTimeout, tilesReady);
+                }, stepTimeout);
+            }
+        }
+
+        function testTilesReadyZoom() {
+            const currentZoom = map.getZoom();
+            const targetZoom = Math.max(5, currentZoom - 2);
+            stepCount = 0;
+            
+            // Simulate tiles ready: small steps, fast timeouts
+            const zoomStep = 0.1;
+            const stepTimeout = 50;
+            const tilesReady = true;
+            
+            stepZoomOut(currentZoom, targetZoom, zoomStep, stepTimeout, tilesReady);
+        }
+
+        function testTilesNotReadyZoom() {
+            const currentZoom = map.getZoom();
+            const targetZoom = Math.max(5, currentZoom - 2);
+            stepCount = 0;
+            
+            // Simulate tiles not ready: bigger steps, slower timeouts
+            const zoomStep = 0.3;
+            const stepTimeout = 150;
+            const tilesReady = false;
+            
+            stepZoomOut(currentZoom, targetZoom, zoomStep, stepTimeout, tilesReady);
+        }
+
+        function resetZoom() {
+            map.setZoom(10);
+            map.setCenter([-74.006, 40.7128]);
+            stepCount = 0;
+            currentStepSize = 0;
+            currentStepTimeout = 0;
+            tileStatus = 'Unknown';
+            updateStepCount();
+            updateStepInfo();
+        }
+
+        // Update zoom display when map loads and when zoom changes
+        map.on('load', updateZoomDisplay);
+        map.on('zoom', updateZoomDisplay);
+    </script>
+</body>
+</html> 

@@ -25,13 +25,37 @@ export class ClickZoomHandler implements Handler {
 
     dblclick(e: MouseEvent, point: Point) {
         e.preventDefault();
+        const zoomDelta = e.shiftKey ? -1 : 1;
+        const targetZoom = this._tr.zoom + zoomDelta;
+        
         return {
-            cameraAnimation: (map: Map) => {
-                map.easeTo({
-                    duration: 300,
-                    zoom: this._tr.zoom + (e.shiftKey ? -1 : 1),
-                    around: this._tr.unproject(point)
-                }, {originalEvent: e});
+            cameraAnimation: async (map: Map) => {
+                // For zoom-out operations, wait for tiles to load before completing the animation
+                if (zoomDelta < 0 && map.tileLoadingManager) {
+                    const tilesLoaded = await map.tileLoadingManager.waitForZoomOutTiles(targetZoom, 3500);
+                    if (tilesLoaded) {
+                        // Tiles loaded successfully, proceed with animation
+                        map.easeTo({
+                            duration: 300,
+                            zoom: targetZoom,
+                            around: this._tr.unproject(point)
+                        }, {originalEvent: e});
+                    } else {
+                        // Timeout reached, proceed anyway
+                        map.easeTo({
+                            duration: 1800,
+                            zoom: targetZoom,
+                            around: this._tr.unproject(point)
+                        }, {originalEvent: e});
+                    }
+                } else {
+                    // Zoom-in or no tile loading manager, proceed normally
+                    map.easeTo({
+                        duration: 300,
+                        zoom: targetZoom,
+                        around: this._tr.unproject(point)
+                    }, {originalEvent: e});
+                }
             }
         };
     }

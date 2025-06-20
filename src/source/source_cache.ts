@@ -23,7 +23,7 @@ import type {SourceSpecification} from '@maplibre/maplibre-gl-style-spec';
 import type {MapSourceDataEvent} from '../ui/events';
 import type {Terrain} from '../render/terrain';
 import type {CanvasSourceSpecification} from './canvas_source';
-import {coveringTiles, coveringZoomLevel} from '../geo/projection/covering_tiles';
+import {coveringTiles, coveringZoomLevel, expandTileCoverage} from '../geo/projection/covering_tiles';
 
 type TileResult = {
     tile: Tile;
@@ -634,6 +634,13 @@ export class SourceCache extends Evented {
             if (this._source.hasTile) {
                 idealTileIDs = idealTileIDs.filter((coord) => (this._source.hasTile as any)(coord));
             }
+
+            // // Expand tile coverage around the bounding box for smoother panning and zooming
+            // // This adds a buffer of neighboring tiles to prevent loading delays during navigation
+            // const bufferSize = this._source.expandTileCoverage || 1; // Default to 1 tile buffer
+            // if (bufferSize > 0) {
+            //     idealTileIDs = expandTileCoverage(idealTileIDs, bufferSize);
+            // }
         }
 
         // Determine the overzooming/underzooming amounts.

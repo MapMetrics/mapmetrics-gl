@@ -338,6 +338,56 @@ export class ScrollZoomHandler implements Handler {
 
         this._active = true;
 
+        // For zoom-out operations, check if tiles are ready and adjust animation accordingly
+        if (finished && zoom < tr.zoom) {
+            // Check if we have a tile loading manager and tiles are ready
+            if (this._map.tileLoadingManager) {
+                this._map.tileLoadingManager.waitForZoomOutTiles(zoom, 500).then((tilesLoaded) => {
+                    if (tilesLoaded) {
+                        // Tiles are ready, use small steps for smooth zoom
+                        const currentZoom = tr.zoom;
+                        const targetZoom = zoom;
+                        const zoomStep = 0.1; // Small zoom step for smooth animation
+                        const stepTimeout = 50; // Fast steps when tiles are ready
+                        
+                        this._stepZoomOut(currentZoom, targetZoom, zoomStep, stepTimeout);
+                    } else {
+                        // Tiles not ready, use bigger steps and slower timeouts
+                        const currentZoom = tr.zoom;
+                        const targetZoom = zoom;
+                        const zoomStep = 0.3; // Bigger zoom step when tiles aren't ready
+                        const stepTimeout = 1000; // Slower steps when tiles aren't ready
+                        
+                        this._stepZoomOut(currentZoom, targetZoom, zoomStep, stepTimeout);
+                    }
+                    
+                    // Complete the animation
+                    this._completeZoomAnimation();
+                });
+                
+                return {
+                    noInertia: true,
+                    needsRenderFrame: true,
+                    zoomDelta: 0, // Let the promise handle the actual zoom
+                    around: this._aroundPoint,
+                    originalEvent: this._lastWheelEvent
+                };
+            } else {
+                // No tile loading manager, use normal zoom
+                this._map.setZoom(zoom);
+                
+                this._completeZoomAnimation();
+                
+                return {
+                    noInertia: true,
+                    needsRenderFrame: false,
+                    zoomDelta: zoom - tr.zoom,
+                    around: this._aroundPoint,
+                    originalEvent: this._lastWheelEvent
+                };
+            }
+        }
+
         if (finished) {
             this._active = false;
             this._finishTimeout = setTimeout(() => {
@@ -392,6 +442,38 @@ export class ScrollZoomHandler implements Handler {
         if (this._finishTimeout) {
             clearTimeout(this._finishTimeout);
             delete this._finishTimeout;
+        }
+    }
+
+    _completeZoomAnimation() {
+        this._active = false;
+        this._finishTimeout = setTimeout(() => {
+            this._zooming = false;
+            this._triggerRenderFrame();
+            delete this._targetZoom;
+            delete this._lastExpectedZoom;
+            delete this._finishTimeout;
+        }, 400);
+    }
+
+    _stepZoomOut(currentZoom: number, targetZoom: number, zoomStep: number, stepTimeout: number) {
+        const tr = this._tr.transform;
+        const stepZoom = (targetZoom > currentZoom) ? zoomStep : -zoomStep;
+        const nextZoom = Math.min(tr.maxZoom, Math.max(tr.minZoom, currentZoom + stepZoom));
+        
+        // Set the zoom for this step
+        this._map.setZoom(nextZoom);
+        
+        // Check if we've reached the target or need to continue
+        if ((stepZoom > 0 && nextZoom >= targetZoom) || (stepZoom < 0 && nextZoom <= targetZoom)) {
+            // We've reached or passed the target, set to exact target and complete
+            this._map.setZoom(targetZoom);
+            this._completeZoomAnimation();
+        } else {
+            // Continue to next step
+            setTimeout(() => {
+                this._stepZoomOut(nextZoom, targetZoom, zoomStep, stepTimeout);
+            }, stepTimeout);
         }
     }
 }

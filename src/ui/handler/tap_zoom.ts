@@ -65,12 +65,38 @@ export class TapZoomHandler implements Handler {
             this._active = true;
             e.preventDefault();
             setTimeout(() => this.reset(), 0);
+            
+            const targetZoom = tr.zoom - 1;
+            
             return {
-                cameraAnimation: (map: Map) => map.easeTo({
-                    duration: 300,
-                    zoom: tr.zoom - 1,
-                    around: tr.unproject(zoomOutPoint)
-                }, {originalEvent: e})
+                cameraAnimation: async (map: Map) => {
+                    // For zoom-out operations, wait for tiles to load before completing the animation
+                    if (map.tileLoadingManager) {
+                        const tilesLoaded = await map.tileLoadingManager.waitForZoomOutTiles(targetZoom, 4000);
+                        if (tilesLoaded) {
+                            // Tiles loaded successfully, proceed with animation
+                            map.easeTo({
+                                duration: 300,
+                                zoom: targetZoom,
+                                around: tr.unproject(zoomOutPoint)
+                            }, {originalEvent: e});
+                        } else {
+                            // Timeout reached, proceed anyway
+                            map.easeTo({
+                                duration: 300,
+                                zoom: targetZoom,
+                                around: tr.unproject(zoomOutPoint)
+                            }, {originalEvent: e});
+                        }
+                    } else {
+                        // No tile loading manager, proceed normally
+                        map.easeTo({
+                            duration: 300,
+                            zoom: targetZoom,
+                            around: tr.unproject(zoomOutPoint)
+                        }, {originalEvent: e});
+                    }
+                }
             };
         }
     }

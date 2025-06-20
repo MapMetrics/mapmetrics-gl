@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Zoom Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 500px; border: 1px solid #ccc; }
+        .controls { margin: 20px 0; }
+        button { margin: 5px; padding: 10px 15px; }
+        .info { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Direct Zoom Test</h1>
+    <div class="info">
+        <p><strong>Direct Zoom vs Animated Zoom:</strong></p>
+        <ul>
+            <li><strong>Direct Zoom (setZoom):</strong> Instantly jumps to the target zoom level without animation</li>
+            <li><strong>Animated Zoom (easeTo):</strong> Smoothly animates to the target zoom level over time</li>
+        </ul>
+        <p>In the scroll zoom handler, we now use <code>setZoom()</code> for immediate zoom changes instead of <code>easeTo()</code>.</p>
+    </div>
+    
+    <div class="controls">
+        <button onclick="directZoomIn()">Direct Zoom In</button>
+        <button onclick="directZoomOut()">Direct Zoom Out</button>
+        <button onclick="animatedZoomIn()">Animated Zoom In</button>
+        <button onclick="animatedZoomOut()">Animated Zoom Out</button>
+        <button onclick="resetZoom()">Reset Zoom</button>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="info">
+        <p><strong>Current Zoom:</strong> <span id="currentZoom">-</span></p>
+        <p><strong>Instructions:</strong></p>
+        <ul>
+            <li>Use the buttons above to test direct vs animated zoom</li>
+            <li>Try scrolling with your mouse wheel to see the new direct zoom behavior</li>
+            <li>Notice how direct zoom is instant while animated zoom is smooth</li>
+        </ul>
+    </div>
+
+    <script src="../dist/mapmetrics-gl-dev.js"></script>
+    <script>
+        const map = new mapmetricsgl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'osm': {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors'
+                    }
+                },
+                layers: [{
+                    id: 'osm-tiles',
+                    type: 'raster',
+                    source: 'osm',
+                    minzoom: 0,
+                    maxzoom: 19
+                }]
+            },
+            center: [-74.006, 40.7128], // New York
+            zoom: 10
+        });
+
+        function updateZoomDisplay() {
+            document.getElementById('currentZoom').textContent = map.getZoom().toFixed(2);
+        }
+
+        function directZoomIn() {
+            const currentZoom = map.getZoom();
+            map.setZoom(currentZoom + 1);
+            updateZoomDisplay();
+        }
+
+        function directZoomOut() {
+            const currentZoom = map.getZoom();
+            map.setZoom(currentZoom - 1);
+            updateZoomDisplay();
+        }
+
+        function animatedZoomIn() {
+            const currentZoom = map.getZoom();
+            map.easeTo({
+                zoom: currentZoom + 1,
+                duration: 1000,
+                easing: (t) => t * (2 - t)
+            });
+            updateZoomDisplay();
+        }
+
+        function animatedZoomOut() {
+            const currentZoom = map.getZoom();
+            map.easeTo({
+                zoom: currentZoom - 1,
+                duration: 1000,
+                easing: (t) => t * (2 - t)
+            });
+            updateZoomDisplay();
+        }
+
+        function resetZoom() {
+            map.setZoom(10);
+            map.setCenter([-74.006, 40.7128]);
+            updateZoomDisplay();
+        }
+
+        // Update zoom display when map loads and when zoom changes
+        map.on('load', updateZoomDisplay);
+        map.on('zoom', updateZoomDisplay);
+    </script>
+</body>
+</html> 

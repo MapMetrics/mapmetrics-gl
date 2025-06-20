@@ -66,6 +66,7 @@ import {type ICameraHelper} from '../geo/projection/camera_helper';
 import {MercatorCameraHelper} from '../geo/projection/mercator_camera_helper';
 import {isAbortError} from '../util/abort_error';
 import {isFramebufferNotCompleteError} from '../util/framebuffer_error';
+import {TileLoadingManager} from './handler/tile_loading_manager';
 
 const version = packageJSON.version;
 
@@ -584,6 +585,12 @@ export class Map extends Camera {
     cooperativeGestures: CooperativeGesturesHandler;
 
     /**
+     * The map's {@link TileLoadingManager}, which manages tile loading states and provides utilities
+     * to wait for tiles to load before completing zoom animations.
+     */
+    tileLoadingManager: TileLoadingManager;
+
+    /**
      * The map's property which determines whether to cancel, or retain, tiles from the current viewport which are still loading but which belong to a farther (smaller) zoom level than the current one.
      * * If `true`, when zooming in, tiles which didn't manage to load for previous zoom levels will become canceled. This might save some computing resources for slower devices, but the map details might appear more abruptly at the end of the zoom.
      * * If `false`, when zooming in, the previous zoom level(s) tiles will progressively appear, giving a smoother map details experience. However, more tiles will be rendered in a short period of time.
@@ -707,6 +714,9 @@ export class Map extends Camera {
         }
 
         this.handlers = new HandlerManager(this, resolvedOptions);
+
+        // Initialize the tile loading manager
+        this.tileLoadingManager = new TileLoadingManager(this);
 
         const hashName = (typeof resolvedOptions.hash === 'string' && resolvedOptions.hash) || undefined;
         this._hash = resolvedOptions.hash && (new Hash(hashName)).addTo(this);

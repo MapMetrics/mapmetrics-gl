@@ -261,3 +261,97 @@ export function coveringTiles(transform: IReadonlyTransform, options: CoveringTi
 
     return result.sort((a, b) => a.distanceSq - b.distanceSq).map(a => a.tileID);
 }
+
+/**
+ * Expands tile coverage by adding neighboring tiles around the bounding box.
+ * This function takes the original covering tiles and adds a buffer of additional tiles
+ * around the perimeter to ensure smooth panning and zooming.
+ * @param originalTiles - The original list of covering tiles
+ * @param bufferSize - Number of tile rows/columns to add around the perimeter (default: 1)
+ * @returns Expanded list of tiles including the buffer
+ */
+export function expandTileCoverage(originalTiles: OverscaledTileID[], bufferSize: number = 1): OverscaledTileID[] {
+    if (bufferSize <= 0 || originalTiles.length === 0) {
+        return originalTiles;
+    }
+
+    const expandedTiles = new Map<string, OverscaledTileID>();
+    
+    // Add original tiles to the result
+    for (const tile of originalTiles) {
+        expandedTiles.set(tile.key, tile);
+    }
+
+    // Group tiles by zoom level and wrap
+    const tilesByZoom = new Map<string, OverscaledTileID[]>();
+    for (const tile of originalTiles) {
+        const key = `${tile.canonical.z}-${tile.wrap}`;
+        if (!tilesByZoom.has(key)) {
+            tilesByZoom.set(key, []);
+        }
+        tilesByZoom.get(key).push(tile);
+    }
+
+    // For each zoom level, expand the coverage
+    for (const [zoomKey, tiles] of tilesByZoom) {
+        const [zoomStr, wrapStr] = zoomKey.split('-');
+        const zoom = parseInt(zoomStr);
+        const wrap = parseInt(wrapStr);
+
+        // Find the bounding box of tiles at this zoom level
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const tile of tiles) {
+            minX = Math.min(minX, tile.canonical.x);
+            maxX = Math.max(maxX, tile.canonical.x);
+            minY = Math.min(minY, tile.canonical.y);
+            maxY = Math.max(maxY, tile.canonical.y);
+        }
+
+        // Add buffer tiles around the perimeter
+        for (let dx = -bufferSize; dx <= bufferSize; dx++) {
+            for (let dy = -bufferSize; dy <= bufferSize; dy++) {
+                // Skip the original tiles (dx=0, dy=0 when within bounds)
+                if (dx === 0 && dy === 0 && 
+                    minX <= tiles[0].canonical.x && tiles[0].canonical.x <= maxX &&
+                    minY <= tiles[0].canonical.y && tiles[0].canonical.y <= maxY) {
+                    continue;
+                }
+
+                // Add tiles in the buffer area
+                for (let x = minX + dx; x <= maxX + dx; x++) {
+                    for (let y = minY + dy; y <= maxY + dy; y++) {
+                        // Handle world wrapping
+                        let adjustedX = x;
+                        let adjustedWrap = wrap;
+                        
+                        const worldSize = Math.pow(2, zoom);
+                        if (x < 0) {
+                            adjustedX = x + worldSize;
+                            adjustedWrap = wrap - 1;
+                        } else if (x >= worldSize) {
+                            adjustedX = x - worldSize;
+                            adjustedWrap = wrap + 1;
+                        }
+
+                        // Clamp Y coordinates
+                        if (y < 0 || y >= worldSize) {
+                            continue;
+                        }
+
+                        const expandedTile = new OverscaledTileID(
+                            tiles[0].overscaledZ || zoom,
+                            adjustedWrap,
+                            zoom,
+                            adjustedX,
+                            y
+                        );
+                        
+                        expandedTiles.set(expandedTile.key, expandedTile);
+                    }
+                }
+            }
+        }
+    }
+
+    return Array.from(expandedTiles.values());
+}

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>MapMetrics GL - Expanded Tile Coverage Test</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 400px; margin-bottom: 20px; }
+        .controls { margin-bottom: 20px; }
+        .info { background: #f0f0f0; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+        button { margin: 5px; padding: 8px 16px; cursor: pointer; }
+        .active { background: #007cbf; color: white; }
+    </style>
+</head>
+<body>
+    <h1>MapMetrics GL - Expanded Tile Coverage Test</h1>
+    
+    <div class="info">
+        <h3>About Expanded Tile Coverage</h3>
+        <p>This feature loads additional tiles around the current viewport to provide smoother panning and zooming experience. 
+        The buffer size determines how many tile rows/columns are loaded beyond the visible area.</p>
+        <ul>
+            <li><strong>Buffer 0:</strong> Only visible tiles (default behavior)</li>
+            <li><strong>Buffer 1:</strong> One tile row/column around the perimeter</li>
+            <li><strong>Buffer 2:</strong> Two tile rows/columns around the perimeter</li>
+        </ul>
+        <p>Try panning and zooming to see the difference in loading behavior!</p>
+    </div>
+
+    <div class="controls">
+        <h3>Tile Coverage Buffer Size:</h3>
+        <button id="buffer0" class="active">Buffer 0 (Default)</button>
+        <button id="buffer1">Buffer 1</button>
+        <button id="buffer2">Buffer 2</button>
+        <button id="buffer3">Buffer 3</button>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="info">
+        <h3>Current Status:</h3>
+        <p id="status">Loading map...</p>
+        <p id="tileCount">Tiles loaded: 0</p>
+    </div>
+
+    <script>
+        // Initialize the map
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'osm': {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors',
+                        expandTileCoverage: 0 // Start with no expansion
+                    }
+                },
+                layers: [{
+                    id: 'osm-tiles',
+                    type: 'raster',
+                    source: 'osm',
+                    minzoom: 0,
+                    maxzoom: 22
+                }]
+            },
+            center: [-74.006, 40.7128], // New York
+            zoom: 10
+        });
+
+        let tileCount = 0;
+        let currentBuffer = 0;
+
+        // Update status display
+        function updateStatus() {
+            document.getElementById('status').textContent = `Map loaded with buffer size: ${currentBuffer}`;
+            document.getElementById('tileCount').textContent = `Tiles loaded: ${tileCount}`;
+        }
+
+        // Count tiles when they load
+        map.on('sourcedata', (e) => {
+            if (e.sourceId === 'osm' && e.isSourceLoaded) {
+                const source = map.getSource('osm');
+                if (source && source._tiles) {
+                    tileCount = Object.keys(source._tiles).length;
+                    updateStatus();
+                }
+            }
+        });
+
+        // Handle buffer size changes
+        function setBufferSize(size) {
+            currentBuffer = size;
+            
+            // Update the source with new buffer size
+            const source = map.getSource('osm');
+            if (source) {
+                source.expandTileCoverage = size;
+                
+                // Force a reload to apply the new buffer size
+                map.getStyle().sourceCaches['osm'].clearTiles();
+                map.triggerRepaint();
+            }
+
+            // Update button states
+            document.querySelectorAll('.controls button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`buffer${size}`).classList.add('active');
+            
+            updateStatus();
+        }
+
+        // Add event listeners to buttons
+        document.getElementById('buffer0').addEventListener('click', () => setBufferSize(0));
+        document.getElementById('buffer1').addEventListener('click', () => setBufferSize(1));
+        document.getElementById('buffer2').addEventListener('click', () => setBufferSize(2));
+        document.getElementById('buffer3').addEventListener('click', () => setBufferSize(3));
+
+        // Map load event
+        map.on('load', () => {
+            updateStatus();
+            console.log('Map loaded with expanded tile coverage feature');
+        });
+
+        // Add some helpful instructions
+        map.on('load', () => {
+            // Add a popup with instructions
+            const popup = new mapboxgl.Popup()
+                .setLngLat([-74.006, 40.7128])
+                .setHTML(`
+                    <h4>Try this:</h4>
+                    <ol>
+                        <li>Change the buffer size using the buttons above</li>
+                        <li>Pan the map quickly in different directions</li>
+                        <li>Notice how larger buffers provide smoother panning</li>
+                        <li>Watch the tile count change as you navigate</li>
+                    </ol>
+                `)
+                .addTo(map);
+
+            // Auto-close popup after 10 seconds
+            setTimeout(() => popup.remove(), 10000);
+        });
+    </script>
+</body>
+</html> 

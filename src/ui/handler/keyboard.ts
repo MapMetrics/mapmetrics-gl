@@ -116,19 +116,51 @@ export class KeyboardHandler implements Handler {
         }
 
         return {
-            cameraAnimation: (map: Map) => {
+            cameraAnimation: async (map: Map) => {
                 const tr = this._tr;
-                map.easeTo({
-                    duration: 300,
-                    easeId: 'keyboardHandler',
-                    easing: easeOut,
-
-                    zoom: zoomDir ? Math.round(tr.zoom) + zoomDir * (e.shiftKey ? 2 : 1) : tr.zoom,
-                    bearing: tr.bearing + bearingDir * this._bearingStep,
-                    pitch: tr.pitch + pitchDir * this._pitchStep,
-                    offset: [-xDir * this._panStep, -yDir * this._panStep],
-                    center: tr.center
-                }, {originalEvent: e});
+                const targetZoom = zoomDir ? Math.round(tr.zoom) + zoomDir * (e.shiftKey ? 2 : 1) : tr.zoom;
+                
+                // For zoom-out operations, wait for tiles to load before completing the animation
+                if (targetZoom < tr.zoom && map.tileLoadingManager) {
+                    const tilesLoaded = await map.tileLoadingManager.waitForZoomOutTiles(targetZoom, 4000);
+                    if (tilesLoaded) {
+                        // Tiles loaded successfully, proceed with animation
+                        map.easeTo({
+                            duration: 300,
+                            easeId: 'keyboardHandler',
+                            easing: easeOut,
+                            zoom: targetZoom,
+                            bearing: tr.bearing + bearingDir * this._bearingStep,
+                            pitch: tr.pitch + pitchDir * this._pitchStep,
+                            offset: [-xDir * this._panStep, -yDir * this._panStep],
+                            center: tr.center
+                        }, {originalEvent: e});
+                    } else {
+                        // Timeout reached, proceed anyway
+                        map.easeTo({
+                            duration: 300,
+                            easeId: 'keyboardHandler',
+                            easing: easeOut,
+                            zoom: targetZoom,
+                            bearing: tr.bearing + bearingDir * this._bearingStep,
+                            pitch: tr.pitch + pitchDir * this._pitchStep,
+                            offset: [-xDir * this._panStep, -yDir * this._panStep],
+                            center: tr.center
+                        }, {originalEvent: e});
+                    }
+                } else {
+                    // Zoom-in or no tile loading manager, proceed normally
+                    map.easeTo({
+                        duration: 300,
+                        easeId: 'keyboardHandler',
+                        easing: easeOut,
+                        zoom: targetZoom,
+                        bearing: tr.bearing + bearingDir * this._bearingStep,
+                        pitch: tr.pitch + pitchDir * this._pitchStep,
+                        offset: [-xDir * this._panStep, -yDir * this._panStep],
+                        center: tr.center
+                    }, {originalEvent: e});
+                }
             }
         };
     }

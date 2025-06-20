@@ -121,6 +121,12 @@ export interface Source {
      * Optional function to redefine how tiles are loaded at high pitch angles.
      */
     calculateTileZoom?: CalculateTileZoomFunction;
+    /**
+     * Number of tile rows/columns to add around the perimeter for expanded coverage.
+     * This helps prevent loading delays during panning and zooming by pre-loading neighboring tiles.
+     * Default is 1, set to 0 to disable expansion.
+     */
+    expandTileCoverage?: number;
 }
 
 /**
