@@ -480,6 +480,9 @@ export class Map extends Camera {
     _container: HTMLElement;
     _canvasContainer: HTMLElement;
     _controlContainer: HTMLElement;
+    _tileGridContainer: HTMLElement;
+    _tileLoadingStates: Record<string, HTMLElement>;
+    _tileGridUpdateTimeout: any;
     _controlPositions: Record<string, HTMLElement>;
     _interactive: boolean;
     _showTileBoundaries: boolean;
@@ -685,9 +688,21 @@ export class Map extends Camera {
         this._setupContainer();
         this._setupPainter();
 
-        this.on('move', () => this._update(false));
-        this.on('moveend', () => this._update(false));
-        this.on('zoom', () => this._update(true));
+        this.on('move', () => {
+            this._update(false);
+            // Update positions of existing grids as map moves
+            this._updateAllTileGridPositions();
+        });
+        this.on('moveend', () => {
+            this._update(false);
+            // Update grid overlays
+            this._updateTileGridOverlays();
+        });
+        this.on('zoom', () => {
+            this._update(true);
+            // Update grid overlays for new zoom level
+            this._updateTileGridOverlays();
+        });
         this.on('terrain', () => {
             this.painter.terrainFacilitator.dirty = true;
             this._update(true);
@@ -761,10 +776,17 @@ export class Map extends Camera {
                 const coercedOptions = pick(this.style.stylesheet, ['center', 'zoom', 'bearing', 'pitch', 'roll']) as CameraOptions;
                 this.jumpTo(coercedOptions);
             }
+            // Show grid overlays when style loads
+            this._updateTileGridOverlays();
         });
         this.on('data', (event: MapDataEvent) => {
             this._update(event.dataType === 'style');
             this.fire(new Event(`${event.dataType}data`, event));
+            // Update grid overlays when source data changes
+            if (event.dataType === 'source' && event.sourceDataType !== 'metadata') {
+                // Update immediately to remove grids as soon as tiles start rendering
+                this._updateTileGridOverlays();
+            }
         });
         this.on('dataloading', (event: MapDataEvent) => {
             this.fire(new Event(`${event.dataType}dataloading`, event));
@@ -3040,6 +3062,22 @@ export class Map extends Camera {
         this._resizeCanvas(dimensions[0], dimensions[1], clampedPixelRatio);
 
         const controlContainer = this._controlContainer = DOM.create('div', 'mapmetricsgl-control-container', container);
+        
+        // Add container for tile grid overlays
+        this._tileGridContainer = DOM.create('div', 'mapmetricsgl-tile-grid-container', container);
+        if (!this._tileLoadingStates) {
+            this._tileLoadingStates = {};
+        }
+        // Apply container styles
+        this._tileGridContainer.style.position = 'absolute';
+        this._tileGridContainer.style.left = '0';
+        this._tileGridContainer.style.top = '0';
+        this._tileGridContainer.style.right = '0';
+        this._tileGridContainer.style.bottom = '0';
+        this._tileGridContainer.style.pointerEvents = 'none';
+        this._tileGridContainer.style.zIndex = '1000';
+        this._tileGridContainer.style.overflow = 'hidden';
+        console.log('Tile grid container initialized');
         const positions = this._controlPositions = {};
         ['top-left', 'top-right', 'bottom-left', 'bottom-right'].forEach((positionName) => {
             positions[positionName] = DOM.create('div', `mapmetricsgl-ctrl-${positionName} `, controlContainer);
@@ -3124,6 +3162,211 @@ export class Map extends Camera {
         this._update();
         this.fire(new Event('webglcontextrestored', {originalEvent: event}));
     };
+
+    _getTileKey(tile: any): string {
+        if (!tile || !tile.tileID) return '';
+        return `${tile.tileID.canonical.z}-${tile.tileID.canonical.x}-${tile.tileID.canonical.y}`;
+    }
+
+    _addTileGrid(tile: any) {
+        if (!this._tileGridContainer || !tile || !tile.tileID) return;
+        
+        const tileKey = this._getTileKey(tile);
+        
+        // Don't add if already exists
+        if (this._tileLoadingStates[tileKey]) return;
+        
+        // Create grid overlay for this tile
+        const gridOverlay = document.createElement('div');
+        gridOverlay.className = 'mapmetricsgl-tile-grid';
+        gridOverlay.setAttribute('data-tile-key', tileKey);
+        
+        this._tileGridContainer.appendChild(gridOverlay);
+        this._tileLoadingStates[tileKey] = gridOverlay;
+        
+        // Update position
+        this._updateTileGridPosition(tile, gridOverlay);
+        
+        // Auto-remove quickly if tile detection fails
+        setTimeout(() => {
+            if (this._tileLoadingStates[tileKey] === gridOverlay) {
+                console.log(`Auto-removing grid for tile: ${tileKey}`);
+                this._removeTileGrid(tileKey);
+            }
+        }, 300);
+    }
+    
+    _updateTileGridPosition(tile: any, gridOverlay: HTMLElement) {
+        if (!tile || !tile.tileID || !gridOverlay) return;
+        
+        const tileSize = 512; // Rendered tile size
+        const z = tile.tileID.canonical.z;
+        const scale = Math.pow(2, this.transform.zoom - z);
+        const tileScale = tileSize * scale;
+        
+        // Get the current map center in mercator coordinates
+        const centerLng = this.transform.center.lng;
+        const centerLat = this.transform.center.lat;
+        
+        // Convert center to mercator coordinates (0-1 range)
+        const centerX = (centerLng + 180) / 360;
+        const centerY = 0.5 - Math.log(Math.tan(Math.PI / 4 + centerLat * Math.PI / 360)) / (2 * Math.PI);
+        
+        // Get tile position in mercator coordinates (0-1 range)
+        const numTiles = Math.pow(2, z);
+        const tileX = tile.tileID.canonical.x / numTiles;
+        const tileY = tile.tileID.canonical.y / numTiles;
+        
+        // Calculate offset from center
+        let deltaX = tileX - centerX;
+        const deltaY = tileY - centerY;
+        
+        // Handle world wrapping
+        if (this.transform.renderWorldCopies) {
+            // Wrap to closest instance
+            while (deltaX > 0.5) deltaX -= 1;
+            while (deltaX < -0.5) deltaX += 1;
+        }
+        
+        // Convert to screen pixels
+        const worldSize = tileSize * Math.pow(2, z) * scale;
+        const pixelX = deltaX * worldSize + this.transform.width / 2;
+        const pixelY = deltaY * worldSize + this.transform.height / 2;
+        
+        // Apply transform
+        gridOverlay.style.transform = `translate(${pixelX}px, ${pixelY}px)`;
+        gridOverlay.style.width = `${tileScale}px`;
+        gridOverlay.style.height = `${tileScale}px`;
+    }
+    
+    _updateAllTileGridPositions() {
+        if (!this._tileLoadingStates || !this._tileGridContainer) return;
+        
+        // Update position of each grid overlay
+        for (const tileKey in this._tileLoadingStates) {
+            const gridOverlay = this._tileLoadingStates[tileKey];
+            if (!gridOverlay) continue;
+            
+            // Parse tile coordinates from key
+            const [z, x, y] = tileKey.split('-').map(Number);
+            
+            // Create tile object for position calculation
+            const tile = {
+                tileID: {
+                    canonical: { z, x, y }
+                }
+            };
+            
+            this._updateTileGridPosition(tile, gridOverlay);
+        }
+    }
+    
+    _removeTileGrid(tileKey: string) {
+        const gridOverlay = this._tileLoadingStates[tileKey];
+        if (gridOverlay && gridOverlay.parentNode) {
+            // Mark as fading to prevent re-adding
+            gridOverlay.setAttribute('data-fading', 'true');
+            gridOverlay.classList.add('fade-out');
+            
+            // Remove from tracking immediately to prevent re-adding
+            delete this._tileLoadingStates[tileKey];
+            
+            // Remove from DOM after fade completes
+            setTimeout(() => {
+                if (gridOverlay.parentNode) {
+                    gridOverlay.parentNode.removeChild(gridOverlay);
+                }
+            }, 50);
+        }
+    }
+    
+    _clearTileGrids() {
+        for (const key in this._tileLoadingStates) {
+            const overlay = this._tileLoadingStates[key];
+            if (overlay && overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+        }
+        this._tileLoadingStates = {};
+    }
+    
+    _updateTileGridOverlays() {
+        if (!this.style || !this.style.sourceCaches || !this._tileGridContainer) return;
+        
+        const downloadedTiles = new Set<string>();
+        let tilesLoaded = 0;
+        
+        // Identify tiles that have been DOWNLOADED (have texture or are in 'loaded' state)
+        for (const sourceCache of Object.values(this.style.sourceCaches)) {
+            const source = sourceCache as any;
+            if (!source._tiles) continue;
+            
+            for (const tileKey in source._tiles) {
+                const tile = source._tiles[tileKey];
+                // Check if tile has been downloaded (has texture or is loaded)
+                if (tile && (tile.texture || tile.state === 'loaded' || (tile.hasData && tile.hasData()))) {
+                    downloadedTiles.add(tileKey);
+                    tilesLoaded++;
+                }
+            }
+        }
+        
+        console.log(`Found ${tilesLoaded} downloaded tiles, ${Object.keys(this._tileLoadingStates).length} grids active`);
+        
+        // First, remove grids for any tiles that have been downloaded
+        for (const tileKey in this._tileLoadingStates) {
+            if (downloadedTiles.has(tileKey)) {
+                console.log(`Removing grid for downloaded tile: ${tileKey}`);
+                this._removeTileGrid(tileKey);
+            }
+        }
+        
+        // Calculate which tiles should be visible in viewport
+        const transform = this.transform;
+        const tileSize = 512;
+        const zoom = Math.floor(transform.zoom);
+        const scale = Math.pow(2, zoom);
+        
+        // Get viewport bounds in tile coordinates
+        const bounds = transform.getBounds();
+        const minX = Math.floor((bounds.getWest() + 180) / 360 * scale);
+        const maxX = Math.ceil((bounds.getEast() + 180) / 360 * scale);
+        const minY = Math.floor((1 - Math.log(Math.tan(bounds.getNorth() * Math.PI / 180) + 1 / Math.cos(bounds.getNorth() * Math.PI / 180)) / Math.PI) / 2 * scale);
+        const maxY = Math.ceil((1 - Math.log(Math.tan(bounds.getSouth() * Math.PI / 180) + 1 / Math.cos(bounds.getSouth() * Math.PI / 180)) / Math.PI) / 2 * scale);
+        
+        // Track which grids should exist
+        const shouldExist = new Set<string>();
+        
+        // Add grids ONLY for tiles that haven't been downloaded yet
+        for (let x = minX; x <= maxX; x++) {
+            for (let y = Math.max(0, minY); y <= Math.min(scale - 1, maxY); y++) {
+                const tileKey = `${zoom}-${x}-${y}`;
+                
+                // Only show grid if this tile hasn't been downloaded
+                if (!downloadedTiles.has(tileKey)) {
+                    shouldExist.add(tileKey);
+                    
+                    // Only add if it doesn't already exist
+                    if (!this._tileLoadingStates[tileKey]) {
+                        // Create a pseudo-tile for the not-yet-downloaded area
+                        const pseudoTile = {
+                            tileID: {
+                                canonical: { z: zoom, x: x % scale, y: y }
+                            }
+                        };
+                        this._addTileGrid(pseudoTile);
+                    }
+                }
+            }
+        }
+        
+        // Remove grids that are out of viewport or at wrong zoom level
+        for (const tileKey in this._tileLoadingStates) {
+            if (!shouldExist.has(tileKey)) {
+                this._removeTileGrid(tileKey);
+            }
+        }
+    }
 
     _onMapScroll = (event: any) => {
         if (event.target !== this._container) return;
@@ -3277,6 +3520,8 @@ export class Map extends Camera {
             this._loaded = true;
             PerformanceUtils.mark(PerformanceMarkers.load);
             this.fire(new Event('load'));
+            // Show grid overlays for initial tiles
+            this._updateTileGridOverlays();
         }
 
         if (this.style && (this.style.hasTransitions() || crossFading)) {

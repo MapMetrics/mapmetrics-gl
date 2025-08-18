@@ -16,12 +16,12 @@ const wheelZoomDelta = 4.000244140625;
 
 // These magic numbers control the rate of zoom. Trackpad events fire at a greater
 // frequency than mouse scroll wheel, so reduce the zoom rate per wheel tick
-const defaultZoomRate = 1 / 1200;
-const wheelZoomRate = 1 / 1200;
+const defaultZoomRate = 1 / 1000;  // Was 1/1200, now 1.2x faster
+const wheelZoomRate = 1 / 1000;    // Was 1/1200, now 1.2x faster
 
 // upper bound on how much we scale the map in any single render frame; this
 // is used to limit zoom rate in the case of very fast scrolling
-const maxScalePerFrame = 2;
+const maxScalePerFrame = 2.2;  // Was 2, now 1.1x faster
 
 // Minimum time difference value to be used for calculating zoom easing in renderFrame();
 // this is used to normalise very fast (typically 0 to 0.3ms) repeating lastWheelEventTimeDiff
