@@ -607,7 +607,7 @@ a.mapmetricsgl-ctrl-logo {
 }
 
 a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
-    width: 100px;
+    width: 180px;
 }
 
 @media (forced-colors: active) {
