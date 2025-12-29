@@ -21,8 +21,7 @@ export type AttributionControlOptions = {
 };
 
 export const defaultAttributionControlOptions: AttributionControlOptions = {
-    compact: true,
-    customAttribution: '<a href="https://mapmetrics.org/" target="_blank">MapMetrics</a>'
+    compact: true
 };
 
 /**
@@ -160,8 +159,15 @@ export class AttributionControl implements IControl {
         // first sort by length so that substrings come first
         attributions.sort((a, b) => a.length - b.length);
         attributions = attributions.filter((attrib, i) => {
+            // Strip HTML tags for comparison to handle cases where one has HTML and one doesn't
+            const attribText = attrib.replace(/<[^>]*>/g, '').trim();
             for (let j = i + 1; j < attributions.length; j++) {
-                if (attributions[j].indexOf(attrib) >= 0) { return false; }
+                const otherText = attributions[j].replace(/<[^>]*>/g, '').trim();
+                // Check if this attribution text is contained in another (longer) one
+                // or if they're the same after stripping HTML
+                if (otherText.indexOf(attribText) >= 0 || attribText === otherText) {
+                    return false;
+                }
             }
             return true;
         });

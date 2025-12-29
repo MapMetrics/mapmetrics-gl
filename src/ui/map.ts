@@ -763,8 +763,12 @@ export class Map extends Camera {
 
         if (resolvedOptions.style) this.setStyle(resolvedOptions.style, {localIdeographFontFamily: resolvedOptions.localIdeographFontFamily});
 
-        if (resolvedOptions.attributionControl)
-            this.addControl(new AttributionControl(typeof resolvedOptions.attributionControl === 'boolean' ? undefined : resolvedOptions.attributionControl));
+        // Attribution control is now mandatory to ensure proper OpenStreetMap attribution
+        // Users can still customize it, but cannot disable it entirely
+        const attributionOptions = (resolvedOptions.attributionControl === false || typeof resolvedOptions.attributionControl === 'boolean')
+            ? defaultAttributionControlOptions
+            : {...defaultAttributionControlOptions, ...resolvedOptions.attributionControl};
+        this.addControl(new AttributionControl(attributionOptions));
 
         if (resolvedOptions.mapmetricsLogo)
             this.addControl(new LogoControl(), resolvedOptions.logoPosition);
