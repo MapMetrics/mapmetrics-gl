@@ -3066,22 +3066,21 @@ export class Map extends Camera {
         this._resizeCanvas(dimensions[0], dimensions[1], clampedPixelRatio);
 
         const controlContainer = this._controlContainer = DOM.create('div', 'mapmetricsgl-control-container', container);
-        
-        // Add container for tile grid overlays
+
+        // Add container for tile grid overlays (below UI controls)
         this._tileGridContainer = DOM.create('div', 'mapmetricsgl-tile-grid-container', container);
         if (!this._tileLoadingStates) {
             this._tileLoadingStates = {};
         }
-        // Apply container styles
+        // Apply container styles (z-index set in CSS to be below controls)
         this._tileGridContainer.style.position = 'absolute';
         this._tileGridContainer.style.left = '0';
         this._tileGridContainer.style.top = '0';
         this._tileGridContainer.style.right = '0';
         this._tileGridContainer.style.bottom = '0';
         this._tileGridContainer.style.pointerEvents = 'none';
-        this._tileGridContainer.style.zIndex = '1000';
         this._tileGridContainer.style.overflow = 'hidden';
-        console.log('Tile grid container initialized');
+        console.log('Tile grid container initialized (below UI controls)');
         const positions = this._controlPositions = {};
         ['top-left', 'top-right', 'bottom-left', 'bottom-right'].forEach((positionName) => {
             positions[positionName] = DOM.create('div', `mapmetricsgl-ctrl-${positionName} `, controlContainer);
