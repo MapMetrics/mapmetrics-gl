@@ -11,10 +11,19 @@
     top: 0;
 }
 
+.mapmetricsgl-canvas-container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    z-index: 0;
+    background-color: #e5e3df; /* Neutral light tan - typical map background color */
+}
+
 /* Container for tile grid overlays */
-/* NOTE: z-index set to -1 to ensure grid lines stay BELOW ALL UI components */
-/* Grid lines will ONLY appear on the map canvas, never on positioned elements */
-/* Exception: Components with z-index < -1 will have grids on top (very rare) */
+/* Grid z-index: 1 shows on map tiles (canvas z-index: 0) */
+/* IMPORTANT: User UI components MUST use z-index: 2+ to avoid grid lines */
 .mapmetricsgl-tile-grid-container {
     position: absolute !important;
     left: 0 !important;
@@ -22,7 +31,7 @@
     right: 0 !important;
     bottom: 0 !important;
     pointer-events: none !important;
-    z-index: -1 !important;
+    z-index: 1 !important;
     overflow: hidden !important;
 }
 
@@ -32,18 +41,19 @@
     left: 0 !important;
     top: 0 !important;
     pointer-events: none !important;
-    opacity: 0.25 !important;
+    opacity: 0.5 !important;
     transition: opacity 0.05s ease-out !important;
     transform-origin: top left !important;
-    /* Very subtle small grid pattern for empty tiles */
-    background-image: 
-        linear-gradient(rgba(0, 0, 0, 0.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 0, 0, 0.08) 1px, transparent 1px) !important;
+    /* Grid pattern for empty tiles */
+    background-color: rgba(200, 200, 255, 0.1) !important;
+    background-image:
+        linear-gradient(rgba(0, 0, 0, 0.15) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.15) 1px, transparent 1px) !important;
     background-size: 16px 16px !important;
     background-position: 0 0 !important;
     background-repeat: repeat !important;
-    /* Very subtle border */
-    border: 1px solid rgba(0, 0, 0, 0.05) !important;
+    /* Border */
+    border: 2px solid rgba(0, 0, 255, 0.2) !important;
     box-sizing: border-box !important;
 }
 

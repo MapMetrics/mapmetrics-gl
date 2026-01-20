@@ -92,6 +92,11 @@ export type MapOptions = {
      */
     interactive?: boolean;
     /**
+     * If `true`, shows tile grid overlays while map tiles are loading.
+     * @defaultValue false
+     */
+    showTileGrids?: boolean;
+    /**
      * The HTML element in which Mapmetrics GL JS will render the map, or the element's string `id`. The specified element must have no children.
      */
     container: HTMLElement | string;
@@ -483,6 +488,7 @@ export class Map extends Camera {
     _tileGridContainer: HTMLElement;
     _tileLoadingStates: Record<string, HTMLElement>;
     _tileGridUpdateTimeout: any;
+    _initialLoadComplete: boolean;
     _controlPositions: Record<string, HTMLElement>;
     _interactive: boolean;
     _showTileBoundaries: boolean;
@@ -648,6 +654,7 @@ export class Map extends Camera {
 
         super(transform, cameraHelper, {bearingSnap: resolvedOptions.bearingSnap});
 
+        this._initialLoadComplete = false;
         this._interactive = resolvedOptions.interactive;
         this._maxTileCacheSize = resolvedOptions.maxTileCacheSize;
         this._maxTileCacheZoomLevels = resolvedOptions.maxTileCacheZoomLevels;
@@ -3067,12 +3074,12 @@ export class Map extends Camera {
 
         const controlContainer = this._controlContainer = DOM.create('div', 'mapmetricsgl-control-container', container);
 
-        // Add container for tile grid overlays (below UI controls)
-        this._tileGridContainer = DOM.create('div', 'mapmetricsgl-tile-grid-container', container);
+        // Add tile grid container INSIDE canvas container
+        // This ensures grids only show on map, never on user UI components
+        this._tileGridContainer = DOM.create('div', 'mapmetricsgl-tile-grid-container', canvasContainer);
         if (!this._tileLoadingStates) {
             this._tileLoadingStates = {};
         }
-        // Apply container styles (z-index set in CSS to be below controls)
         this._tileGridContainer.style.position = 'absolute';
         this._tileGridContainer.style.left = '0';
         this._tileGridContainer.style.top = '0';
@@ -3080,7 +3087,7 @@ export class Map extends Camera {
         this._tileGridContainer.style.bottom = '0';
         this._tileGridContainer.style.pointerEvents = 'none';
         this._tileGridContainer.style.overflow = 'hidden';
-        console.log('Tile grid container initialized (below UI controls)');
+        this._tileGridContainer.style.zIndex = '10'; // Above canvas within container
         const positions = this._controlPositions = {};
         ['top-left', 'top-right', 'bottom-left', 'bottom-right'].forEach((positionName) => {
             positions[positionName] = DOM.create('div', `mapmetricsgl-ctrl-${positionName} `, controlContainer);
@@ -3292,18 +3299,92 @@ export class Map extends Camera {
         }
         this._tileLoadingStates = {};
     }
-    
+
+    /**
+     * Preload tiles at multiple zoom levels around the current view.
+     * This prevents grey areas during zoom in/out by ensuring tiles are already cached.
+     *
+     * Improved version: Preloads more zoom levels faster and more efficiently.
+     */
+    _preloadTilesAtMultipleZoomLevels() {
+        if (!this.style || !this.style.sourceCaches) return;
+
+        const currentZoom = Math.floor(this.transform.zoom);
+        const center = this.getCenter();
+
+        // Preload 5 levels up and 5 levels down from current zoom (total: 11 levels)
+        // This covers most common zoom in/out operations
+        const minZoom = Math.max(0, currentZoom - 5);
+        const maxZoom = Math.min(22, currentZoom + 5);
+
+        console.log(`[Tile Preload] Starting: zoom ${minZoom} to ${maxZoom} (current: ${currentZoom})`);
+
+        // Preload each zoom level sequentially with minimal delay
+        let zoomLevel = minZoom;
+        let tilesRequested = 0;
+
+        const preloadNextZoomLevel = () => {
+            if (zoomLevel > maxZoom || !this.style) {
+                console.log(`[Tile Preload] Complete: ${tilesRequested} tile requests queued`);
+                return;
+            }
+
+            // Temporarily change zoom to trigger tile loading at this level
+            const originalZoom = this.transform.zoom;
+            const originalCenter = this.getCenter();
+
+            try {
+                // Use jumpTo to load tiles at this zoom level
+                this.jumpTo({
+                    center: center,
+                    zoom: zoomLevel
+                });
+
+                // Force render to queue tile requests
+                this._update(false);
+
+                // Count tiles (rough estimate)
+                tilesRequested += Math.pow(2, Math.max(0, zoomLevel - currentZoom + 2));
+
+                // Restore original zoom immediately
+                this.jumpTo({
+                    center: originalCenter,
+                    zoom: originalZoom
+                });
+
+                console.log(`[Tile Preload] Level ${zoomLevel} queued`);
+
+            } catch (e) {
+                console.warn(`[Tile Preload] Error at level ${zoomLevel}:`, e);
+            }
+
+            // Move to next zoom level
+            zoomLevel++;
+            // Reduced delay to 100ms for faster preloading
+            setTimeout(preloadNextZoomLevel, 100);
+        };
+
+        // Start preloading after initial grids clear
+        setTimeout(preloadNextZoomLevel, 1200);
+    }
+
     _updateTileGridOverlays() {
         if (!this.style || !this.style.sourceCaches || !this._tileGridContainer) return;
-        
+
+        // If initial load is complete, don't create new grids
+        if (this._initialLoadComplete) {
+            this._clearTileGrids();
+            return;
+        }
+
         const downloadedTiles = new Set<string>();
         let tilesLoaded = 0;
-        
+
         // Identify tiles that have been DOWNLOADED (have texture or are in 'loaded' state)
         for (const sourceCache of Object.values(this.style.sourceCaches)) {
             const source = sourceCache as any;
             if (!source._tiles) continue;
-            
+
             for (const tileKey in source._tiles) {
                 const tile = source._tiles[tileKey];
                 // Check if tile has been downloaded (has texture or is loaded)
@@ -3313,9 +3394,9 @@ export class Map extends Camera {
                 }
             }
         }
-        
+
         console.log(`Found ${tilesLoaded} downloaded tiles, ${Object.keys(this._tileLoadingStates).length} grids active`);
-        
+
         // First, remove grids for any tiles that have been downloaded
         for (const tileKey in this._tileLoadingStates) {
             if (downloadedTiles.has(tileKey)) {
@@ -3525,6 +3606,16 @@ export class Map extends Camera {
             this.fire(new Event('load'));
             // Show grid overlays for initial tiles
             this._updateTileGridOverlays();
+
+            // Mark initial load as complete after a delay
+            // After this, grid lines won't show on subsequent zoom/pan
+            setTimeout(() => {
+                this._initialLoadComplete = true;
+                this._clearTileGrids();
+
+                // Start aggressive tile preloading to prevent grey areas during zoom
+                this._preloadTilesAtMultipleZoomLevels();
+            }, 1000);
         }
 
         if (this.style && (this.style.hasTransitions() || crossFading)) {
