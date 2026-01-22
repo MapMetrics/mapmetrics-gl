@@ -3368,6 +3368,73 @@ export class Map extends Camera {
         setTimeout(preloadNextZoomLevel, 1200);
     }
 
+    /**
+     * @internal
+     * Creates a default background pattern image for the map.
+     * This pattern will be used automatically if no other background is specified.
+     */
+    _createDefaultBackgroundPattern() {
+        if (!this.style) return;
+
+        // Check if background layer exists and doesn't already have a pattern
+        const backgroundLayer = this.style.getLayer('background');
+        if (!backgroundLayer) return;
+
+        // Create a simple grid pattern using ImageData
+        const size = 64;
+        const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+        if (!canvas) return;
+
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Draw a grid pattern - light blue background with blue grid lines
+        ctx.fillStyle = '#E0E0FF'; // Light blue background
+        ctx.fillRect(0, 0, size, size);
+
+        ctx.strokeStyle = '#0000FF'; // Blue lines
+        ctx.lineWidth = 2;
+
+        // Horizontal line
+        ctx.beginPath();
+        ctx.moveTo(0, size / 2);
+        ctx.lineTo(size, size / 2);
+        ctx.stroke();
+
+        // Vertical line
+        ctx.beginPath();
+        ctx.moveTo(size / 2, 0);
+        ctx.lineTo(size / 2, size);
+        ctx.stroke();
+
+        // Diagonal lines for visual interest
+        ctx.strokeStyle = '#CCCCFF';
+        ctx.lineWidth = 1;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(size, size);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(size, 0);
+        ctx.lineTo(0, size);
+        ctx.stroke();
+
+        // Get image data and add it to the map
+        const imageData = ctx.getImageData(0, 0, size, size);
+
+        // Add the pattern image if it doesn't already exist
+        if (!this.hasImage('default-background-pattern')) {
+            this.addImage('default-background-pattern', imageData);
+
+            // Set the background layer to use this pattern
+            this.setPaintProperty('background', 'background-pattern', 'default-background-pattern');
+        }
+    }
+
     _updateTileGridOverlays() {
         if (!this.style || !this.style.sourceCaches || !this._tileGridContainer) return;
 
@@ -3606,6 +3673,9 @@ export class Map extends Camera {
             this.fire(new Event('load'));
             // Show grid overlays for initial tiles
             this._updateTileGridOverlays();
+
+            // Add default background pattern
+            this._createDefaultBackgroundPattern();
 
             // Mark initial load as complete after a delay
             // After this, grid lines won't show on subsequent zoom/pan
