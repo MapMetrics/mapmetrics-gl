@@ -3,11 +3,10 @@
     <head>
         <meta charset="UTF-8" />
         <link
-            href="https://gateway.mapmetrics.org/assets/css/mapmetrics-gl.css"
+            href="../../dist/mapmetrics-gl.css"
             rel="stylesheet"
         />
-        <script src="https://gateway.mapmetrics.org/assets/js/mapmetrics-gl.js"></script>
-        <script src="https://gateway.mapmetrics.org/assets/js/pmtiles.js"></script>
+        <script src="../../dist/mapmetrics-gl-dev.js"></script>
         <style>
             html,
             body {
@@ -25,21 +24,12 @@
     <body>
         <div id="map"></div>
         <script>
-            // Don't forget to replace <YOUR_ACCESS_TOKEN> by your own access token
-            const accessToken = "<YOUR_ACCESS_TOKEN>";
-            const protocol = new pmtiles.Protocol();
-            mapmetrics.addProtocol("pmtiles", protocol.tile);
-
-            const map = new mapmetrics.Map({
+            const map = new mapmetricsgl.Map({
                 container: "map",
-                style: `https://gateway.mapmetrics.org/styles/dark.json?token=${accessToken}`,
+                style: 'https://gateway.mapmetrics-atlas.net/styles/?fileName=fe60a384-0e5a-4960-bf04-b6ca740bc20c/NightGrid.json&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJmZTYwYTM4NC0wZTVhLTQ5NjAtYmYwNC1iNmNhNzQwYmMyMGMiLCJzY29wZSI6WyJtYXBzIl0sImlhdCI6MTc1MDIzMzYzOX0.dwE2OTT0PclUQcZQdFgOC6_DP_VrMTlf06KaXJ2Whow',
                 zoom: 11,
                 center: [2.349902, 48.852966],
-            }).addControl(new mapmetrics.NavigationControl(), "top-right");
-            // This plugin is used for right to left languages
-            mapmetrics.setRTLTextPlugin(
-                "https://gateway.mapmetrics.org/assets/js/mapmetrics-gl-rtl-text.min.js"
-            );
+            }).addControl(new mapmetricsgl.NavigationControl(), "top-right");
         </script>
     </body>
 </html>

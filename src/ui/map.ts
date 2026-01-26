@@ -3372,6 +3372,7 @@ export class Map extends Camera {
      * @internal
      * Creates a default background pattern image for the map.
      * This pattern will be used automatically if no other background is specified.
+     * The pattern colors automatically adapt to match the style's color scheme.
      */
     _createDefaultBackgroundPattern() {
         if (!this.style) return;
@@ -3380,8 +3381,16 @@ export class Map extends Camera {
         const backgroundLayer = this.style.getLayer('background');
         if (!backgroundLayer) return;
 
+        // Extract colors from the actual style layers
+        const styleColors = this._extractStyleLayerColors();
+        console.log('[MapMetrics] Style colors extracted:', styleColors);
+
+        // Create grid colors based on the extracted style colors
+        const colors = this._createGridColorsFromStyle(styleColors);
+        console.log('[MapMetrics] Grid pattern colors:', colors);
+
         // Create a simple grid pattern using ImageData
-        const size = 64;
+        const size = 20; // Even smaller size for finer grid
         const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
         if (!canvas) return;
 
@@ -3390,11 +3399,15 @@ export class Map extends Camera {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Draw a grid pattern - light blue background with blue grid lines
-        ctx.fillStyle = '#E0E0FF'; // Light blue background
+        // Use the derived colors from the style's background color
+        const backgroundColor = colors.background;
+        const mainGridColor = colors.mainGrid;
+
+        // Draw a grid pattern with theme-appropriate colors
+        ctx.fillStyle = backgroundColor;
         ctx.fillRect(0, 0, size, size);
 
-        ctx.strokeStyle = '#0000FF'; // Blue lines
+        ctx.strokeStyle = mainGridColor;
         ctx.lineWidth = 2;
 
         // Horizontal line
@@ -3409,20 +3422,6 @@ export class Map extends Camera {
         ctx.lineTo(size / 2, size);
         ctx.stroke();
 
-        // Diagonal lines for visual interest
-        ctx.strokeStyle = '#CCCCFF';
-        ctx.lineWidth = 1;
-
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(size, size);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(size, 0);
-        ctx.lineTo(0, size);
-        ctx.stroke();
-
         // Get image data and add it to the map
         const imageData = ctx.getImageData(0, 0, size, size);
 
@@ -3433,6 +3432,178 @@ export class Map extends Camera {
             // Set the background layer to use this pattern
             this.setPaintProperty('background', 'background-pattern', 'default-background-pattern');
         }
+    }
+
+    /**
+     * @internal
+     * Parses a color string and returns RGB values
+     */
+    _parseColor(color: string): { r: number; g: number; b: number } {
+        let r: number = 200;
+        let g: number = 200;
+        let b: number = 200;
+
+        if (!color) return { r, g, b };
+
+        if (color.startsWith('#')) {
+            const hex = color.replace('#', '');
+            r = parseInt(hex.substring(0, 2), 16);
+            g = parseInt(hex.substring(2, 4), 16);
+            b = parseInt(hex.substring(4, 6), 16);
+        } else if (color.startsWith('rgb')) {
+            const match = color.match(/\d+/g);
+            if (match) {
+                r = parseInt(match[0]);
+                g = parseInt(match[1]);
+                b = parseInt(match[2]);
+            }
+        }
+
+        return { r, g, b };
+    }
+
+    /**
+     * @internal
+     * Helper method to determine if a color is dark or light
+     */
+    _isDarkColor(color: string): boolean {
+        if (!color) return false;
+
+        const rgb = this._parseColor(color);
+
+        // Calculate relative luminance (perceived brightness)
+        // Using formula: (0.299*R + 0.587*G + 0.114*B)
+        const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b);
+
+        // If luminance is less than 128 (out of 255), it's a dark color
+        return luminance < 128;
+    }
+
+    /**
+     * @internal
+     * Extracts colors from the loaded style layers (background, water, earth, etc.)
+     */
+    _extractStyleLayerColors(): { background: string; water?: string; earth?: string; parks?: string } {
+        const colors: { background: string; water?: string; earth?: string; parks?: string } = {
+            background: '#CCCCCC'
+        };
+
+        if (!this.style) return colors;
+
+        // Get background color
+        const bgColor = this.getPaintProperty('background', 'background-color') as string;
+        if (bgColor) {
+            colors.background = bgColor;
+        }
+
+        // Try to get water color from common water layer names
+        const waterLayers = ['water', 'water-fill', 'water_fill'];
+        for (const layerName of waterLayers) {
+            const layer = this.style.getLayer(layerName);
+            if (layer) {
+                const waterColor = this.getPaintProperty(layerName, 'fill-color') as string;
+                if (waterColor) {
+                    colors.water = waterColor;
+                    break;
+                }
+            }
+        }
+
+        // Try to get earth/land color
+        const earthLayers = ['earth', 'land', 'landcover', 'earth-fill'];
+        for (const layerName of earthLayers) {
+            const layer = this.style.getLayer(layerName);
+            if (layer) {
+                const earthColor = this.getPaintProperty(layerName, 'fill-color') as string;
+                if (earthColor) {
+                    colors.earth = earthColor;
+                    break;
+                }
+            }
+        }
+
+        // Try to get parks/green space color
+        const parkLayers = ['park', 'parks', 'landuse-park', 'landuse_park', 'natural'];
+        for (const layerName of parkLayers) {
+            const layer = this.style.getLayer(layerName);
+            if (layer) {
+                const parkColor = this.getPaintProperty(layerName, 'fill-color') as string;
+                if (parkColor) {
+                    colors.parks = parkColor;
+                    break;
+                }
+            }
+        }
+
+        return colors;
+    }
+
+    /**
+     * @internal
+     * Creates grid pattern colors based on extracted style colors
+     */
+    _createGridColorsFromStyle(styleColors: { background: string; water?: string; earth?: string; parks?: string }): { background: string; mainGrid: string; diagonal: string } {
+        // Use earth/land color for background, water for grid lines (more harmonious)
+        const earthColor = styleColors.earth || styleColors.background;
+        const waterColor = styleColors.water || styleColors.earth || styleColors.background;
+
+        // Parse earth color for background
+        const earthRgb = this._parseColor(earthColor);
+        const waterRgb = this._parseColor(waterColor);
+
+        // Calculate luminance to determine if it's a dark or light style
+        const earthLuminance = (0.299 * earthRgb.r + 0.587 * earthRgb.g + 0.114 * earthRgb.b);
+        const isDark = earthLuminance < 128;
+
+        let backgroundColor: string;
+        let mainGridColor: string;
+        let diagonalColor: string;
+
+        if (isDark) {
+            // Dark style
+            // Background: Use earth color directly (slightly adjusted)
+            const bgR = Math.max(0, earthRgb.r - 5);
+            const bgG = Math.max(0, earthRgb.g - 5);
+            const bgB = Math.max(0, earthRgb.b - 5);
+            backgroundColor = `rgb(${bgR}, ${bgG}, ${bgB})`;
+
+            // Main grid: Use water color (lighter for visibility)
+            const gridR = Math.min(255, waterRgb.r + 35);
+            const gridG = Math.min(255, waterRgb.g + 35);
+            const gridB = Math.min(255, waterRgb.b + 35);
+            mainGridColor = `rgb(${gridR}, ${gridG}, ${gridB})`;
+
+            // Diagonal: Blend of earth and water
+            const diagR = Math.min(255, Math.floor((earthRgb.r + waterRgb.r) / 2) + 10);
+            const diagG = Math.min(255, Math.floor((earthRgb.g + waterRgb.g) / 2) + 10);
+            const diagB = Math.min(255, Math.floor((earthRgb.b + waterRgb.b) / 2) + 10);
+            diagonalColor = `rgb(${diagR}, ${diagG}, ${diagB})`;
+        } else {
+            // Light style
+            // Background: Use earth color (slightly lighter)
+            const bgR = Math.min(255, Math.floor(earthRgb.r * 1.03));
+            const bgG = Math.min(255, Math.floor(earthRgb.g * 1.03));
+            const bgB = Math.min(255, Math.floor(earthRgb.b * 1.03));
+            backgroundColor = `rgb(${bgR}, ${bgG}, ${bgB})`;
+
+            // Main grid: Use water color (darker for visibility)
+            const gridR = Math.max(0, Math.floor(waterRgb.r * 0.65));
+            const gridG = Math.max(0, Math.floor(waterRgb.g * 0.65));
+            const gridB = Math.max(0, Math.floor(waterRgb.b * 0.65));
+            mainGridColor = `rgb(${gridR}, ${gridG}, ${gridB})`;
+
+            // Diagonal: Lighter version of water color
+            const diagR = Math.min(255, Math.floor(waterRgb.r * 0.85));
+            const diagG = Math.min(255, Math.floor(waterRgb.g * 0.85));
+            const diagB = Math.min(255, Math.floor(waterRgb.b * 0.85));
+            diagonalColor = `rgb(${diagR}, ${diagG}, ${diagB})`;
+        }
+
+        return {
+            background: backgroundColor,
+            mainGrid: mainGridColor,
+            diagonal: diagonalColor
+        };
     }
 
     _updateTileGridOverlays() {
