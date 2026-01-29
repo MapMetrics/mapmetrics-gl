@@ -3389,48 +3389,142 @@ export class Map extends Camera {
         const colors = this._createGridColorsFromStyle(styleColors);
         console.log('[MapMetrics] Grid pattern colors:', colors);
 
-        // Create a simple grid pattern using ImageData
-        const size = 20; // Even smaller size for finer grid
-        const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-        if (!canvas) return;
+        // Create two grid patterns for pulsing effect (large and small) - dramatic difference
+        const largeSizeGrid = 28;
+        const smallSizeGrid = 14;
 
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        const createGridPattern = (size: number, patternName: string) => {
+            const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+            if (!canvas) return;
 
-        // Use the derived colors from the style's background color
-        const backgroundColor = colors.background;
-        const mainGridColor = colors.mainGrid;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
 
-        // Draw a grid pattern with theme-appropriate colors
-        ctx.fillStyle = backgroundColor;
-        ctx.fillRect(0, 0, size, size);
+            // Use the derived colors from the style's background color
+            const backgroundColor = colors.background;
+            const mainGridColor = colors.mainGrid;
 
-        ctx.strokeStyle = mainGridColor;
-        ctx.lineWidth = 2;
+            // Draw a grid pattern with theme-appropriate colors
+            ctx.fillStyle = backgroundColor;
+            ctx.fillRect(0, 0, size, size);
 
-        // Horizontal line
-        ctx.beginPath();
-        ctx.moveTo(0, size / 2);
-        ctx.lineTo(size, size / 2);
-        ctx.stroke();
+            ctx.strokeStyle = mainGridColor;
+            ctx.lineWidth = size === largeSizeGrid ? 2 : 1;
 
-        // Vertical line
-        ctx.beginPath();
-        ctx.moveTo(size / 2, 0);
-        ctx.lineTo(size / 2, size);
-        ctx.stroke();
+            // Horizontal line
+            ctx.beginPath();
+            ctx.moveTo(0, size / 2);
+            ctx.lineTo(size, size / 2);
+            ctx.stroke();
 
-        // Get image data and add it to the map
-        const imageData = ctx.getImageData(0, 0, size, size);
+            // Vertical line
+            ctx.beginPath();
+            ctx.moveTo(size / 2, 0);
+            ctx.lineTo(size / 2, size);
+            ctx.stroke();
 
-        // Add the pattern image if it doesn't already exist
-        if (!this.hasImage('default-background-pattern')) {
-            this.addImage('default-background-pattern', imageData);
+            // Get image data and add it to the map
+            const imageData = ctx.getImageData(0, 0, size, size);
 
-            // Set the background layer to use this pattern
-            this.setPaintProperty('background', 'background-pattern', 'default-background-pattern');
+            console.log(`[MapMetrics] Creating pattern: ${patternName}, size: ${size}x${size}`);
+
+            // Remove existing image first if it exists, then add new one
+            if (this.hasImage(patternName)) {
+                this.removeImage(patternName);
+            }
+            this.addImage(patternName, imageData);
+        };
+
+        // Create the pattern that we'll update for pulsing
+        createGridPattern(largeSizeGrid, 'grid-pulse-pattern');
+        console.log('[MapMetrics] Grid pulse pattern created');
+
+        // Store colors for pulse animation
+        this._gridColors = {
+            background: colors.background,
+            mainGrid: colors.mainGrid
+        };
+
+        // Set initial pattern
+        try {
+            this.setPaintProperty('background', 'background-pattern', 'grid-pulse-pattern');
+            console.log('[MapMetrics] Initial background pattern set');
+        } catch (e) {
+            console.log('[MapMetrics] Error setting initial pattern:', e);
+        }
+
+        // Start pulsing animation between grid sizes
+        this._startGridPulseAnimation();
+    }
+
+    _gridPulseInterval: ReturnType<typeof setInterval> | null = null;
+    _gridPulseState: boolean = false;
+    _gridColors: { background: string; mainGrid: string } | null = null;
+
+    _startGridPulseAnimation() {
+        // Clear any existing interval
+        if (this._gridPulseInterval) {
+            clearInterval(this._gridPulseInterval);
+        }
+
+        // Pulse between large and small grid every 600ms
+        this._gridPulseInterval = setInterval(() => {
+            // Stop if initial load is complete
+            if (this._initialLoadComplete) {
+                this._stopGridPulseAnimation();
+                return;
+            }
+
+            try {
+                this._gridPulseState = !this._gridPulseState;
+                const size = this._gridPulseState ? 14 : 28;
+
+                // Create new pattern with different size
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                if (!ctx || !this._gridColors) return;
+
+                ctx.fillStyle = this._gridColors.background;
+                ctx.fillRect(0, 0, size, size);
+                ctx.strokeStyle = this._gridColors.mainGrid;
+                ctx.lineWidth = this._gridPulseState ? 1 : 2;
+
+                ctx.beginPath();
+                ctx.moveTo(0, size / 2);
+                ctx.lineTo(size, size / 2);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(size / 2, 0);
+                ctx.lineTo(size / 2, size);
+                ctx.stroke();
+
+                const imageData = ctx.getImageData(0, 0, size, size);
+
+                // Update the existing pattern image
+                this.updateImage('grid-pulse-pattern', imageData);
+                console.log('[MapMetrics] Grid pulse updated to size:', size);
+                this.triggerRepaint();
+            } catch (e) {
+                console.log('[MapMetrics] Grid pulse error:', e);
+            }
+        }, 600);
+    }
+
+    _stopGridPulseAnimation() {
+        if (this._gridPulseInterval) {
+            clearInterval(this._gridPulseInterval);
+            this._gridPulseInterval = null;
+        }
+        // Keep current pattern
+        try {
+            // Pattern stays as is
+        } catch (e) {
+            // Ignore errors
         }
     }
 
@@ -3562,41 +3656,41 @@ export class Map extends Camera {
         if (isDark) {
             // Dark style
             // Background: Use earth color directly (slightly adjusted)
-            const bgR = Math.max(0, earthRgb.r - 5);
-            const bgG = Math.max(0, earthRgb.g - 5);
-            const bgB = Math.max(0, earthRgb.b - 5);
+            const bgR = Math.max(0, earthRgb.r - 3);
+            const bgG = Math.max(0, earthRgb.g - 3);
+            const bgB = Math.max(0, earthRgb.b - 3);
             backgroundColor = `rgb(${bgR}, ${bgG}, ${bgB})`;
 
-            // Main grid: Use water color (lighter for visibility)
-            const gridR = Math.min(255, waterRgb.r + 35);
-            const gridG = Math.min(255, waterRgb.g + 35);
-            const gridB = Math.min(255, waterRgb.b + 35);
-            mainGridColor = `rgb(${gridR}, ${gridG}, ${gridB})`;
+            // Main grid: Use water color (much lighter for subtle visibility)
+            const gridR = Math.min(255, waterRgb.r + 60);
+            const gridG = Math.min(255, waterRgb.g + 60);
+            const gridB = Math.min(255, waterRgb.b + 60);
+            mainGridColor = `rgba(${gridR}, ${gridG}, ${gridB}, 0.4)`;
 
-            // Diagonal: Blend of earth and water
-            const diagR = Math.min(255, Math.floor((earthRgb.r + waterRgb.r) / 2) + 10);
-            const diagG = Math.min(255, Math.floor((earthRgb.g + waterRgb.g) / 2) + 10);
-            const diagB = Math.min(255, Math.floor((earthRgb.b + waterRgb.b) / 2) + 10);
-            diagonalColor = `rgb(${diagR}, ${diagG}, ${diagB})`;
+            // Diagonal: Blend of earth and water (lighter)
+            const diagR = Math.min(255, Math.floor((earthRgb.r + waterRgb.r) / 2) + 20);
+            const diagG = Math.min(255, Math.floor((earthRgb.g + waterRgb.g) / 2) + 20);
+            const diagB = Math.min(255, Math.floor((earthRgb.b + waterRgb.b) / 2) + 20);
+            diagonalColor = `rgba(${diagR}, ${diagG}, ${diagB}, 0.3)`;
         } else {
             // Light style
             // Background: Use earth color (slightly lighter)
-            const bgR = Math.min(255, Math.floor(earthRgb.r * 1.03));
-            const bgG = Math.min(255, Math.floor(earthRgb.g * 1.03));
-            const bgB = Math.min(255, Math.floor(earthRgb.b * 1.03));
+            const bgR = Math.min(255, Math.floor(earthRgb.r * 1.02));
+            const bgG = Math.min(255, Math.floor(earthRgb.g * 1.02));
+            const bgB = Math.min(255, Math.floor(earthRgb.b * 1.02));
             backgroundColor = `rgb(${bgR}, ${bgG}, ${bgB})`;
 
-            // Main grid: Use water color (darker for visibility)
-            const gridR = Math.max(0, Math.floor(waterRgb.r * 0.65));
-            const gridG = Math.max(0, Math.floor(waterRgb.g * 0.65));
-            const gridB = Math.max(0, Math.floor(waterRgb.b * 0.65));
-            mainGridColor = `rgb(${gridR}, ${gridG}, ${gridB})`;
+            // Main grid: Use water color (much lighter/more subtle)
+            const gridR = Math.max(0, Math.floor(waterRgb.r * 0.85));
+            const gridG = Math.max(0, Math.floor(waterRgb.g * 0.85));
+            const gridB = Math.max(0, Math.floor(waterRgb.b * 0.85));
+            mainGridColor = `rgba(${gridR}, ${gridG}, ${gridB}, 0.25)`;
 
-            // Diagonal: Lighter version of water color
-            const diagR = Math.min(255, Math.floor(waterRgb.r * 0.85));
-            const diagG = Math.min(255, Math.floor(waterRgb.g * 0.85));
-            const diagB = Math.min(255, Math.floor(waterRgb.b * 0.85));
-            diagonalColor = `rgb(${diagR}, ${diagG}, ${diagB})`;
+            // Diagonal: Very light version of water color
+            const diagR = Math.min(255, Math.floor(waterRgb.r * 0.92));
+            const diagG = Math.min(255, Math.floor(waterRgb.g * 0.92));
+            const diagB = Math.min(255, Math.floor(waterRgb.b * 0.92));
+            diagonalColor = `rgba(${diagR}, ${diagG}, ${diagB}, 0.2)`;
         }
 
         return {
@@ -3853,6 +3947,7 @@ export class Map extends Camera {
             setTimeout(() => {
                 this._initialLoadComplete = true;
                 this._clearTileGrids();
+                this._stopGridPulseAnimation();
 
                 // Start aggressive tile preloading to prevent grey areas during zoom
                 this._preloadTilesAtMultipleZoomLevels();
