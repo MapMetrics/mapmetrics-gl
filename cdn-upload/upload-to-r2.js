@@ -13,7 +13,7 @@ const __dirname = dirname(__filename);
 
 const BUCKET_NAME = 'mapmetrics-cdn';
 const DIST_DIR = join(__dirname, '../dist');
-const VERSION = process.env.npm_package_version || '0.5.1'; // Get version from package.json or default
+const VERSION = process.env.npm_package_version || '0.5.8'; // Get version from package.json or default
 
 const s3Client = new S3Client({
     region: 'auto',
