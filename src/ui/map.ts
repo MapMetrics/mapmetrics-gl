@@ -770,8 +770,8 @@ export class Map extends Camera {
 
         if (resolvedOptions.style) this.setStyle(resolvedOptions.style, {localIdeographFontFamily: resolvedOptions.localIdeographFontFamily});
 
-        // Attribution control is now mandatory to ensure proper OpenStreetMap attribution
-        // Users can still customize it, but cannot disable it entirely
+        // Attribution control is mandatory to ensure proper OpenStreetMap attribution
+        // Users can customize it, but cannot disable it entirely
         const attributionOptions = (resolvedOptions.attributionControl === false || typeof resolvedOptions.attributionControl === 'boolean')
             ? defaultAttributionControlOptions
             : {...defaultAttributionControlOptions, ...resolvedOptions.attributionControl};

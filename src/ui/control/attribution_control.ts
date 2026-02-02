@@ -194,8 +194,9 @@ export class AttributionControl implements IControl {
             if (this._compact === false) {
                 this._container.setAttribute('open', '');
             } else if (!this._container.classList.contains('mapmetricsgl-compact') && !this._container.classList.contains('mapmetricsgl-attrib-empty')) {
-                this._container.setAttribute('open', '');
-                this._container.classList.add('mapmetricsgl-compact', 'mapmetricsgl-compact-show');
+                // Start collapsed - don't set 'open' attribute initially
+                this._container.classList.add('mapmetricsgl-compact');
+                this._container.removeAttribute('open');
             }
         } else {
             this._container.setAttribute('open', '');

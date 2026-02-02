@@ -611,6 +611,8 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
     padding: 0 5px;
     background-color: rgb(255 255 255 / 50%);
     margin: 0;
+    display: flex;
+    align-items: center;
 }
 
 @media screen {
@@ -623,11 +625,15 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
         color: #000;
         border-radius: 12px;
         box-sizing: content-box;
+        display: flex;
+        align-items: center;
     }
 
     .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact-show {
         padding: 2px 28px 2px 8px;
         visibility: visible;
+        display: flex;
+        align-items: center;
     }
 
     .mapmetricsgl-ctrl-top-left
@@ -652,7 +658,7 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
         width: 24px;
         height: 24px;
         background-size: 16px 16px;
-        background-position: center;
+        background-position: center center;
         background-repeat: no-repeat;
         box-sizing: border-box;
         border-radius: 12px;
@@ -660,6 +666,9 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
         top: 0;
         right: 0;
         border: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .mapmetricsgl-ctrl-attrib summary.mapmetricsgl-ctrl-attrib-button {
@@ -678,7 +687,12 @@ a.mapmetricsgl-ctrl-logo.mapmetricsgl-compact {
     }
 
     .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact
-        .mapmetricsgl-ctrl-attrib-button,
+        .mapmetricsgl-ctrl-attrib-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     .mapmetricsgl-ctrl-attrib.mapmetricsgl-compact-show
         .mapmetricsgl-ctrl-attrib-inner {
         display: block;

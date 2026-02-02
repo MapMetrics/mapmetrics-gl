@@ -41,8 +41,10 @@
                 cancelPendingTileRequestsWhileZooming: false,
                 maxTileCacheZoomLevels: 10,
                 crossSourceCollisions: false,
-                renderWorldCopies: true // Enable world copies for flat map
-                // Note: No setProjection call - defaults to Mercator (flat map)
+                attributionControl: true, // Hide attribution control          
+attributionControl: {
+                    customAttribution: 'My Custom App Name'
+                }  
             }).addControl(new mapmetricsgl.NavigationControl(), "top-right");
 
             // Add car marker
