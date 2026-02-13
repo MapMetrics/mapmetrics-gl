@@ -13,7 +13,7 @@ const __dirname = dirname(__filename);
 
 const BUCKET_NAME = 'mapmetrics-cdn';
 const DIST_DIR = join(__dirname, '../dist');
-const VERSION = process.env.npm_package_version || '0.5.8'; // Get version from package.json or default
+const VERSION = process.env.npm_package_version || '0.5.9'; // Get version from package.json or default
 
 const s3Client = new S3Client({
     region: 'auto',
@@ -24,15 +24,21 @@ const s3Client = new S3Client({
     },
 });
 
-async function uploadFile(filePath, key) {
+async function uploadFile(filePath, key, isLatest = false) {
     const fileContent = readFileSync(filePath);
-    
+
+    // Use short cache for "latest" so updates are seen immediately
+    // Use long cache for versioned files (immutable)
+    const cacheControl = isLatest
+        ? 'public, max-age=60, s-maxage=60, must-revalidate'
+        : 'public, max-age=31536000, immutable';
+
     const command = new PutObjectCommand({
         Bucket: BUCKET_NAME,
         Key: key,
         Body: fileContent,
         ContentType: getContentType(filePath),
-        CacheControl: 'public, max-age=31536000, immutable',
+        CacheControl: cacheControl,
     });
 
     try {
@@ -68,13 +74,13 @@ async function uploadDirectory(dir, prefix = '') {
             await uploadDirectory(filePath, key);
         } else {
             // Upload to dist directory
-            await uploadFile(filePath, `dist/${key}`);
-            
-            // Upload to version-specific directory
-            await uploadFile(filePath, `versions/${VERSION}/${key}`);
-            
-            // Upload to latest directory
-            await uploadFile(filePath, `versions/latest/${key}`);
+            await uploadFile(filePath, `dist/${key}`, false);
+
+            // Upload to version-specific directory (immutable cache)
+            await uploadFile(filePath, `versions/${VERSION}/${key}`, false);
+
+            // Upload to latest directory (short cache for immediate updates)
+            await uploadFile(filePath, `versions/latest/${key}`, true);
         }
     }
 }
