@@ -67,6 +67,8 @@ import {MercatorCameraHelper} from '../geo/projection/mercator_camera_helper';
 import {isAbortError} from '../util/abort_error';
 import {isFramebufferNotCompleteError} from '../util/framebuffer_error';
 import {TileLoadingManager} from './handler/tile_loading_manager';
+import {SeoManager} from '../seo/client/seo-manager';
+import type {SeoConfig} from '../seo/shared/types';
 
 const version = packageJSON.version;
 
@@ -360,6 +362,13 @@ export type MapOptions = {
      * keep the camera above ground when pitch \> 90 degrees.
      */
     centerClampedToGround?: boolean;
+    /**
+     * If `true`, enables the SEO/AEO layer with default settings. If an `SeoConfig` object is provided,
+     * enables the SEO/AEO layer with the specified configuration. The SEO layer generates structured
+     * data (JSON-LD, meta tags) for map content to improve search engine and AI engine discoverability.
+     * @defaultValue undefined
+     */
+    seo?: boolean | SeoConfig;
 };
 
 export type AddImageOptions = {
@@ -531,6 +540,7 @@ export class Map extends Camera {
     _overridePixelRatio: number | null | undefined;
     _maxCanvasSize: [number, number];
     _terrainDataCallback: (e: MapStyleDataEvent | MapSourceDataEvent) => void;
+    _seoManager?: SeoManager;
 
     /**
      * @internal
@@ -805,6 +815,16 @@ export class Map extends Camera {
         this.on('dataabort', (event: MapDataEvent) => {
             this.fire(new Event('sourcedataabort', event));
         });
+
+        // SEO layer
+        if (options.seo) {
+            const seoConfig: SeoConfig = typeof options.seo === 'boolean'
+                ? {enabled: options.seo}
+                : options.seo;
+            if (seoConfig.enabled) {
+                this._seoManager = new SeoManager(this, seoConfig);
+            }
+        }
     }
 
     /**
@@ -4014,6 +4034,11 @@ export class Map extends Camera {
      * methods on the map.
      */
     remove() {
+        if (this._seoManager) {
+            this._seoManager.destroy();
+            this._seoManager = undefined;
+        }
+
         if (this._hash) this._hash.remove();
 
         for (const control of this._controls) control.onRemove(this);
