@@ -541,6 +541,7 @@ export class Map extends Camera {
     _maxCanvasSize: [number, number];
     _terrainDataCallback: (e: MapStyleDataEvent | MapSourceDataEvent) => void;
     _seoManager?: SeoManager;
+    _markers: Set<import('./marker').Marker>;
 
     /**
      * @internal
@@ -683,6 +684,7 @@ export class Map extends Camera {
         this.transformCameraUpdate = resolvedOptions.transformCameraUpdate;
         this.cancelPendingTileRequestsWhileZooming = resolvedOptions.cancelPendingTileRequestsWhileZooming === true;
 
+        this._markers = new Set();
         this._imageQueueHandle = ImageRequest.addThrottleControl(() => this.isMoving());
 
         this._requestManager = new RequestManager(resolvedOptions.transformRequest);
@@ -3030,6 +3032,30 @@ export class Map extends Camera {
      */
     getContainer(): HTMLElement {
         return this._container;
+    }
+
+    /**
+     * @internal
+     * Registers a marker with the map for tracking (used by SEO layer).
+     */
+    _addMarker(marker: import('./marker').Marker): void {
+        this._markers.add(marker);
+    }
+
+    /**
+     * @internal
+     * Unregisters a marker from the map (used by SEO layer).
+     */
+    _removeMarker(marker: import('./marker').Marker): void {
+        this._markers.delete(marker);
+    }
+
+    /**
+     * Returns all markers currently added to the map.
+     * @returns A Set of all active Marker instances.
+     */
+    getMarkers(): Set<import('./marker').Marker> {
+        return this._markers;
     }
 
     /**

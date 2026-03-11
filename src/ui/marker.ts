@@ -382,6 +382,9 @@ export class Marker extends Evented {
         // `Popup#_onClickClose` listener.
         this._map.on("click", this._onMapClick);
 
+        // Register marker for SEO tracking
+        map._addMarker(this);
+
         return this;
     }
 
@@ -399,6 +402,7 @@ export class Marker extends Evented {
             delete this._opacityTimeout;
         }
         if (this._map) {
+            this._map._removeMarker(this);
             this._map.off("click", this._onMapClick);
             this._map.off("move", this._update);
             this._map.off("moveend", this._update);

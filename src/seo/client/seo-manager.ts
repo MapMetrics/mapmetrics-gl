@@ -133,8 +133,8 @@ export class SeoManager {
     }
 
     /**
-     * Collects features from all configured source IDs using the map's
-     * querySourceFeatures method.
+     * Collects features from all configured source IDs and map markers
+     * using the map's querySourceFeatures method and getMarkers().
      */
     private _collectSourceData(): {
         geojson: FeatureCollection;
@@ -156,6 +156,19 @@ export class SeoManager {
             }
         }
 
+        // Collect markers as GeoJSON Point features (merged into existing features)
+        const markerFeatures = this._collectMarkerFeatures();
+        if (markerFeatures.length > 0) {
+            allFeatures.push(...markerFeatures);
+            // Only add a source entry if no other sources exist
+            if (sources.length === 0) {
+                sources.push({
+                    id: '_markers',
+                    schemaType: 'poi',
+                });
+            }
+        }
+
         const geojson: FeatureCollection = {
             type: 'FeatureCollection',
             features: allFeatures,
@@ -168,6 +181,45 @@ export class SeoManager {
         })));
 
         return {geojson, sources, dataString};
+    }
+
+    /**
+     * Converts map Marker instances into GeoJSON Point features
+     * for inclusion in SEO structured data.
+     */
+    private _collectMarkerFeatures(): any[] {
+        const markers = this._map.getMarkers?.();
+        if (!markers || markers.size === 0) {
+            return [];
+        }
+
+        const features: any[] = [];
+        for (const marker of markers) {
+            const lngLat = marker.getLngLat?.();
+            if (!lngLat) continue;
+
+            // Extract popup text as the feature name if available
+            const popup = marker.getPopup?.();
+            const properties: Record<string, any> = {};
+            if (popup) {
+                const content = popup.getText?.() || popup.getHTML?.();
+                if (content) {
+                    // Strip HTML tags for plain text name
+                    properties.name = content.replace(/<[^>]*>/g, '').trim();
+                }
+            }
+
+            features.push({
+                type: 'Feature',
+                geometry: {
+                    type: 'Point',
+                    coordinates: [lngLat.lng, lngLat.lat],
+                },
+                properties,
+            });
+        }
+
+        return features;
     }
 
     /**
