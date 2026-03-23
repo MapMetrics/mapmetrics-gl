@@ -42,7 +42,29 @@ npm-debug.log
 .*.swp
 junit.xml
 
+# Secrets and environment files
+.env
+.env.local
+.env.*.local
+
+# CDN upload tooling (contains credentials)
+cdn-upload/
+
 # Test HTML files
 seo-example-*.html
 cookie-test*.html
 cookie-test\ copy*.html
+test.html
+mapmetrics-style-test.html
+local-example.html
+
+# Internal dev/planning docs
+CHECKLIST.md
+system.md
+docs/plans/
+docs/seo-documentation.md
+src/seo/demo.ts
+
+# Certificates (localhost dev)
+localhost.crt
+localhost.key
