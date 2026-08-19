@@ -149,7 +149,7 @@ describe('AttributionControl', () => {
      * `_updateCompact` adds both `mapmetricsgl-compact` and `mapmetricsgl-compact-show` plus
      * `open=""` on first render (i.e. expanded); the fork adds only `mapmetricsgl-compact`
      * and removes `open` ("Start collapsed", commit 932a7cf). The toggle sequence is
-     * therefore collapsed -> shown -> collapsed, the inverse of upstream's.
+     * therefore collapsed, then shown, then collapsed again - the inverse of upstream's.
      */
     test('compact mode control toggles attribution', () => {
         map.addControl(new AttributionControl({

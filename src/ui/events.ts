@@ -1,16 +1,16 @@
-import { Event } from "../util/evented";
+import {Event} from '../util/evented';
 
-import { DOM } from "../util/dom";
-import Point from "@mapbox/point-geometry";
-import { extend } from "../util/util";
-import type { MapGeoJSONFeature } from "../util/vectortile_to_geojson";
+import {DOM} from '../util/dom';
+import Point from '@mapbox/point-geometry';
+import {extend} from '../util/util';
+import type {MapGeoJSONFeature} from '../util/vectortile_to_geojson';
 
-import type { Map } from "./map";
-import type { LngLat } from "../geo/lng_lat";
+import type {Map} from './map';
+import type {LngLat} from '../geo/lng_lat';
 import type {
     ProjectionSpecification,
     SourceSpecification,
-} from "@maplibre/maplibre-gl-style-spec";
+} from '@maplibre/maplibre-gl-style-spec';
 
 /**
  * An event from the mouse relevant to a specific layer.
@@ -33,7 +33,7 @@ export type MapLayerTouchEvent = MapTouchEvent & {
 /**
  * The source event data type
  */
-export type MapSourceDataType = "content" | "metadata" | "visibility" | "idle";
+export type MapSourceDataType = 'content' | 'metadata' | 'visibility' | 'idle';
 export type MapLayerEventType = {
     click: MapLayerMouseEvent;
     dblclick: MapLayerMouseEvent;
@@ -100,7 +100,7 @@ export type MapEventType = {
     wheel: MapWheelEvent;
     terrain: MapTerrainEvent;
     cooperativegestureprevented: MapmetricsEvent<WheelEvent | TouchEvent> & {
-        gestureType: "wheel_zoom" | "touch_pan";
+        gestureType: 'wheel_zoom' | 'touch_pan';
     };
     projectiontransition: MapProjectionEvent;
 };
@@ -117,7 +117,7 @@ export type MapmetricsEvent<TOrig = unknown> = {
  * @group Event Related
  */
 export type MapStyleDataEvent = MapmetricsEvent & {
-    dataType: "style";
+    dataType: 'style';
 };
 
 /**
@@ -126,7 +126,7 @@ export type MapStyleDataEvent = MapmetricsEvent & {
  * @group Event Related
  */
 export type MapSourceDataEvent = MapmetricsEvent & {
-    dataType: "source";
+    dataType: 'source';
     /**
      * True if the event has a `dataType` of `source` and the source has no outstanding network requests.
      */
@@ -168,16 +168,16 @@ export class MapMouseEvent
      * The event type
      */
     type:
-        | "mousedown"
-        | "mouseup"
-        | "click"
-        | "dblclick"
-        | "mousemove"
-        | "mouseover"
-        | "mouseenter"
-        | "mouseleave"
-        | "mouseout"
-        | "contextmenu";
+        | 'mousedown'
+        | 'mouseup'
+        | 'click'
+        | 'dblclick'
+        | 'mousemove'
+        | 'mouseover'
+        | 'mouseenter'
+        | 'mouseleave'
+        | 'mouseout'
+        | 'contextmenu';
 
     /**
      * The `Map` object that fired the event.
@@ -231,7 +231,7 @@ export class MapMouseEvent
     ) {
         const point = DOM.mousePos(map.getCanvas(), originalEvent);
         const lngLat = map.unproject(point);
-        super(type, extend({ point, lngLat, originalEvent }, data));
+        super(type, extend({point, lngLat, originalEvent}, data));
         this._defaultPrevented = false;
         this.target = map;
     }
@@ -249,7 +249,7 @@ export class MapTouchEvent
     /**
      * The event type.
      */
-    type: "touchstart" | "touchmove" | "touchend" | "touchcancel";
+    type: 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel';
 
     /**
      * The `Map` object that fired the event.
@@ -308,7 +308,7 @@ export class MapTouchEvent
 
     constructor(type: string, map: Map, originalEvent: TouchEvent) {
         const touches =
-            type === "touchend"
+            type === 'touchend'
                 ? originalEvent.changedTouches
                 : originalEvent.touches;
         const points = DOM.touchPos(map.getCanvasContainer(), touches);
@@ -317,7 +317,7 @@ export class MapTouchEvent
             return prev.add(curr.div(arr.length));
         }, new Point(0, 0));
         const lngLat = map.unproject(point);
-        super(type, { points, point, lngLats, lngLat, originalEvent });
+        super(type, {points, point, lngLats, lngLat, originalEvent});
         this._defaultPrevented = false;
     }
 }
@@ -331,7 +331,7 @@ export class MapWheelEvent extends Event {
     /**
      * The event type.
      */
-    type: "wheel";
+    type: 'wheel';
 
     /**
      * The `Map` object that fired the event.
@@ -363,7 +363,7 @@ export class MapWheelEvent extends Event {
 
     /** */
     constructor(type: string, map: Map, originalEvent: WheelEvent) {
-        super(type, { originalEvent });
+        super(type, {originalEvent});
         this._defaultPrevented = false;
     }
 }
@@ -377,7 +377,7 @@ export type MapmetricsZoomEvent = {
     /**
      * The type of boxzoom event. One of `boxzoomstart`, `boxzoomend` or `boxzoomcancel`
      */
-    type: "boxzoomstart" | "boxzoomend" | "boxzoomcancel";
+    type: 'boxzoomstart' | 'boxzoomend' | 'boxzoomcancel';
     /**
      * The `Map` instance that triggered the event
      */
@@ -437,7 +437,7 @@ export type MapDataEvent = {
  * @group Event Related
  */
 export type MapTerrainEvent = {
-    type: "terrain";
+    type: 'terrain';
 };
 
 /**
@@ -446,12 +446,12 @@ export type MapTerrainEvent = {
  * @group Event Related
  */
 export type MapProjectionEvent = {
-    type: "projectiontransition";
+    type: 'projectiontransition';
     /**
      * Specifies the name of the new projection.
      * Additionally includes 'globe-mercator' to describe globe that has internally switched to mercator.
      */
-    newProjection: ProjectionSpecification["type"] | "globe-mercator";
+    newProjection: ProjectionSpecification['type'] | 'globe-mercator';
 };
 
 /**
@@ -460,7 +460,7 @@ export type MapProjectionEvent = {
  * @group Event Related
  */
 export type MapContextEvent = {
-    type: "webglcontextlost" | "webglcontextrestored";
+    type: 'webglcontextlost' | 'webglcontextrestored';
     originalEvent: WebGLContextEvent;
 };
 
@@ -472,6 +472,6 @@ export type MapContextEvent = {
  * @see [Generate and add a missing icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/add-image-missing-generated/)
  */
 export type MapStyleImageMissingEvent = MapmetricsEvent & {
-    type: "styleimagemissing";
+    type: 'styleimagemissing';
     id: string;
 };

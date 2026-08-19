@@ -76,13 +76,13 @@ function renderFeature(feature: Feature, schemaType: string): string {
         const coords = feature.geometry.coordinates as number[];
         const lng = coords[0];
         const lat = coords[1];
-        li += `<span itemprop="geo" itemscope itemtype="https://schema.org/GeoCoordinates">`;
+        li += '<span itemprop="geo" itemscope itemtype="https://schema.org/GeoCoordinates">';
         li += `<meta itemprop="latitude" content="${lat}">`;
         li += `<meta itemprop="longitude" content="${lng}">`;
-        li += `</span>`;
+        li += '</span>';
     }
 
-    li += `</li>`;
+    li += '</li>';
     return li;
 }
 
@@ -95,9 +95,9 @@ export function generateNoscriptHtml(
     sources: SourceConfig[],
     options: NoscriptOptions
 ): string {
-    const header = `<noscript><div class="mapmetrics-seo" role="complementary" aria-label="Map data">` +
-        `<h2>Locations shown on this map</h2>`;
-    const footer = `</div></noscript>`;
+    const header = '<noscript><div class="mapmetrics-seo" role="complementary" aria-label="Map data">' +
+        '<h2>Locations shown on this map</h2>';
+    const footer = '</div></noscript>';
 
     let body = '';
     let currentBytes = byteLength(header) + byteLength(footer);
@@ -106,8 +106,8 @@ export function generateNoscriptHtml(
         const featureLimit = source.featureLimit ?? options.featureLimit ?? DEFAULT_FEATURE_LIMIT;
         const schemaType = resolveSchemaType(source);
 
-        const ulOpen = `<ul>`;
-        const ulClose = `</ul>`;
+        const ulOpen = '<ul>';
+        const ulClose = '</ul>';
 
         // Check if adding the ul tags would exceed the limit
         const ulOverhead = byteLength(ulOpen) + byteLength(ulClose);

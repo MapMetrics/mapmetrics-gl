@@ -1,20 +1,20 @@
-import { CanonicalTileID } from "./tile_id";
-import { Event, ErrorEvent, Evented } from "../util/evented";
-import { ImageRequest } from "../util/image_request";
-import { ResourceType } from "../util/request_manager";
-import { Texture } from "../render/texture";
-import { MercatorCoordinate } from "../geo/mercator_coordinate";
+import {CanonicalTileID} from './tile_id';
+import {Event, ErrorEvent, Evented} from '../util/evented';
+import {ImageRequest} from '../util/image_request';
+import {ResourceType} from '../util/request_manager';
+import {Texture} from '../render/texture';
+import {MercatorCoordinate} from '../geo/mercator_coordinate';
 
-import type { Source } from "./source";
-import type { CanvasSourceSpecification } from "./canvas_source";
-import type { Map } from "../ui/map";
-import type { Dispatcher } from "../util/dispatcher";
-import type { Tile } from "./tile";
+import type {Source} from './source';
+import type {CanvasSourceSpecification} from './canvas_source';
+import type {Map} from '../ui/map';
+import type {Dispatcher} from '../util/dispatcher';
+import type {Tile} from './tile';
 import type {
     ImageSourceSpecification,
     VideoSourceSpecification,
-} from "@maplibre/maplibre-gl-style-spec";
-import type Point from "@mapbox/point-geometry";
+} from '@maplibre/maplibre-gl-style-spec';
+import type Point from '@mapbox/point-geometry';
 
 /**
  * Four geographical coordinates,
@@ -122,7 +122,7 @@ export class ImageSource extends Evented implements Source {
         this.dispatcher = dispatcher;
         this.coordinates = options.coordinates;
 
-        this.type = "image";
+        this.type = 'image';
         this.minzoom = 0;
         this.maxzoom = 22;
         this.tileSize = 512;
@@ -136,7 +136,7 @@ export class ImageSource extends Evented implements Source {
 
     async load(newCoordinates?: Coordinates): Promise<void> {
         this._loaded = false;
-        this.fire(new Event("dataloading", { dataType: "source" }));
+        this.fire(new Event('dataloading', {dataType: 'source'}));
 
         this.url = this.options.url;
 
@@ -197,9 +197,9 @@ export class ImageSource extends Evented implements Source {
         if (this.map) {
             this.setCoordinates(this.coordinates);
             this.fire(
-                new Event("data", {
-                    dataType: "source",
-                    sourceDataType: "metadata",
+                new Event('data', {
+                    dataType: 'source',
+                    sourceDataType: 'metadata',
                 })
             );
         }
@@ -252,7 +252,7 @@ export class ImageSource extends Evented implements Source {
         this.flippedWindingOrder = hasWrongWindingOrder(this.tileCoords);
 
         this.fire(
-            new Event("data", { dataType: "source", sourceDataType: "content" })
+            new Event('data', {dataType: 'source', sourceDataType: 'content'})
         );
         return this;
     }
@@ -273,8 +273,8 @@ export class ImageSource extends Evented implements Source {
         let newTilesLoaded = false;
         for (const w in this.tiles) {
             const tile = this.tiles[w];
-            if (tile.state !== "loaded") {
-                tile.state = "loaded";
+            if (tile.state !== 'loaded') {
+                tile.state = 'loaded';
                 tile.texture = this.texture;
                 newTilesLoaded = true;
             }
@@ -282,9 +282,9 @@ export class ImageSource extends Evented implements Source {
 
         if (newTilesLoaded) {
             this.fire(
-                new Event("data", {
-                    dataType: "source",
-                    sourceDataType: "idle",
+                new Event('data', {
+                    dataType: 'source',
+                    sourceDataType: 'idle',
                     sourceId: this.id,
                 })
             );
@@ -302,7 +302,7 @@ export class ImageSource extends Evented implements Source {
             this.tiles[String(tile.tileID.wrap)] = tile;
             tile.buckets = {};
         } else {
-            tile.state = "errored";
+            tile.state = 'errored';
         }
     }
 
@@ -311,7 +311,7 @@ export class ImageSource extends Evented implements Source {
         | VideoSourceSpecification
         | CanvasSourceSpecification {
         return {
-            type: "image",
+            type: 'image',
             url: this.options.url,
             coordinates: this.coordinates,
         };

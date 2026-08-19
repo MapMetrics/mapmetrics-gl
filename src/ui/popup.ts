@@ -1,23 +1,23 @@
-import { extend } from "../util/util";
-import { Event, Evented } from "../util/evented";
-import { type MapMouseEvent } from "./events";
-import { DOM } from "../util/dom";
-import { LngLat } from "../geo/lng_lat";
-import Point from "@mapbox/point-geometry";
-import { smartWrap } from "../util/smart_wrap";
-import { anchorTranslate, applyAnchorClass } from "./anchor";
+import {extend} from '../util/util';
+import {Event, Evented} from '../util/evented';
+import {type MapMouseEvent} from './events';
+import {DOM} from '../util/dom';
+import {LngLat} from '../geo/lng_lat';
+import Point from '@mapbox/point-geometry';
+import {smartWrap} from '../util/smart_wrap';
+import {anchorTranslate, applyAnchorClass} from './anchor';
 
-import type { PositionAnchor } from "./anchor";
-import type { Map } from "./map";
-import type { LngLatLike } from "../geo/lng_lat";
-import type { PointLike } from "./camera";
+import type {PositionAnchor} from './anchor';
+import type {Map} from './map';
+import type {LngLatLike} from '../geo/lng_lat';
+import type {PointLike} from './camera';
 
 const defaultOptions = {
     closeButton: true,
     closeOnClick: true,
     focusAfterOpen: true,
-    className: "",
-    maxWidth: "240px",
+    className: '',
+    maxWidth: '240px',
     subpixelPositioning: false,
     locationOccludedOpacity: undefined,
 };
@@ -35,8 +35,8 @@ export type Offset =
     | number
     | PointLike
     | {
-          [_ in PositionAnchor]: PointLike;
-      };
+        [_ in PositionAnchor]: PointLike;
+    };
 
 /**
  * The {@link Popup} options object
@@ -101,14 +101,14 @@ export type PopupOptions = {
 };
 
 const focusQuerySelector = [
-    "a[href]",
-    "[tabindex]:not([tabindex='-1'])",
-    "[contenteditable]:not([contenteditable='false'])",
-    "button:not([disabled])",
-    "input:not([disabled])",
-    "select:not([disabled])",
-    "textarea:not([disabled])",
-].join(", ");
+    'a[href]',
+    '[tabindex]:not([tabindex=\'-1\'])',
+    '[contenteditable]:not([contenteditable=\'false\'])',
+    'button:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+].join(', ');
 
 /**
  * A popup component.
@@ -209,33 +209,33 @@ export class Popup extends Evented {
 
         this._map = map;
         if (this.options.closeOnClick) {
-            this._map.on("click", this._onClose);
+            this._map.on('click', this._onClose);
         }
 
         if (this.options.closeOnMove) {
-            this._map.on("move", this._onClose);
+            this._map.on('move', this._onClose);
         }
 
-        this._map.on("remove", this.remove);
+        this._map.on('remove', this.remove);
         this._update();
         this._focusFirstElement();
 
         if (this._trackPointer) {
-            this._map.on("mousemove", this._onMouseMove);
-            this._map.on("mouseup", this._onMouseUp);
+            this._map.on('mousemove', this._onMouseMove);
+            this._map.on('mouseup', this._onMouseUp);
             if (this._container) {
                 this._container.classList.add(
-                    "mapmetricsgl-popup-track-pointer"
+                    'mapmetricsgl-popup-track-pointer'
                 );
             }
             this._map._canvasContainer.classList.add(
-                "mapmetricsgl-track-pointer"
+                'mapmetricsgl-track-pointer'
             );
         } else {
-            this._map.on("move", this._update);
+            this._map.on('move', this._update);
         }
 
-        this.fire(new Event("open"));
+        this.fire(new Event('open'));
 
         return this;
     }
@@ -281,22 +281,22 @@ export class Popup extends Evented {
         }
 
         if (this._closeButton) {
-            this._closeButton.removeEventListener("click", this._onClose);
+            this._closeButton.removeEventListener('click', this._onClose);
         }
 
         if (this._map) {
-            this._map.off("move", this._update);
-            this._map.off("move", this._onClose);
-            this._map.off("click", this._onClose);
-            this._map.off("remove", this.remove);
-            this._map.off("mousemove", this._onMouseMove);
-            this._map.off("mouseup", this._onMouseUp);
-            this._map.off("drag", this._onDrag);
+            this._map.off('move', this._update);
+            this._map.off('move', this._onClose);
+            this._map.off('click', this._onClose);
+            this._map.off('remove', this.remove);
+            this._map.off('mousemove', this._onMouseMove);
+            this._map.off('mouseup', this._onMouseUp);
+            this._map.off('drag', this._onDrag);
             this._map._canvasContainer.classList.remove(
-                "mapmetricsgl-track-pointer"
+                'mapmetricsgl-track-pointer'
             );
             delete this._map;
-            this.fire(new Event("close"));
+            this.fire(new Event('close'));
         }
 
         return this;
@@ -330,15 +330,15 @@ export class Popup extends Evented {
         this._update();
 
         if (this._map) {
-            this._map.on("move", this._update);
-            this._map.off("mousemove", this._onMouseMove);
+            this._map.on('move', this._update);
+            this._map.off('mousemove', this._onMouseMove);
             if (this._container) {
                 this._container.classList.remove(
-                    "mapmetricsgl-popup-track-pointer"
+                    'mapmetricsgl-popup-track-pointer'
                 );
             }
             this._map._canvasContainer.classList.remove(
-                "mapmetricsgl-track-pointer"
+                'mapmetricsgl-track-pointer'
             );
         }
 
@@ -362,16 +362,16 @@ export class Popup extends Evented {
         this._flatPos = null;
         this._update();
         if (this._map) {
-            this._map.off("move", this._update);
-            this._map.on("mousemove", this._onMouseMove);
-            this._map.on("drag", this._onDrag);
+            this._map.off('move', this._update);
+            this._map.on('mousemove', this._onMouseMove);
+            this._map.on('drag', this._onDrag);
             if (this._container) {
                 this._container.classList.add(
-                    "mapmetricsgl-popup-track-pointer"
+                    'mapmetricsgl-popup-track-pointer'
                 );
             }
             this._map._canvasContainer.classList.add(
-                "mapmetricsgl-track-pointer"
+                'mapmetricsgl-track-pointer'
             );
         }
 
@@ -438,7 +438,7 @@ export class Popup extends Evented {
      */
     setHTML(html: string): this {
         const frag = document.createDocumentFragment();
-        const temp = document.createElement("body");
+        const temp = document.createElement('body');
         let child: ChildNode;
         temp.innerHTML = html;
         while (true) {
@@ -496,8 +496,8 @@ export class Popup extends Evented {
             }
         } else {
             this._content = DOM.create(
-                "div",
-                "mapmetricsgl-popup-content",
+                'div',
+                'mapmetricsgl-popup-content',
                 this._container
             );
         }
@@ -594,13 +594,13 @@ export class Popup extends Evented {
     _createCloseButton() {
         if (this.options.closeButton) {
             this._closeButton = DOM.create(
-                "button",
-                "mapmetricsgl-popup-close-button",
+                'button',
+                'mapmetricsgl-popup-close-button',
                 this._content
             );
-            this._closeButton.type = "button";
-            this._closeButton.innerHTML = "&#215;";
-            this._closeButton.addEventListener("click", this._onClose);
+            this._closeButton.type = 'button';
+            this._closeButton.innerHTML = '&#215;';
+            this._closeButton.addEventListener('click', this._onClose);
         }
     }
 
@@ -625,32 +625,32 @@ export class Popup extends Evented {
 
         if (!this._container) {
             this._container = DOM.create(
-                "div",
-                "mapmetricsgl-popup",
+                'div',
+                'mapmetricsgl-popup',
                 this._map.getContainer()
             );
             this._tip = DOM.create(
-                "div",
-                "mapmetricsgl-popup-tip",
+                'div',
+                'mapmetricsgl-popup-tip',
                 this._container
             );
             this._container.appendChild(this._content);
             if (this.options.className) {
-                for (const name of this.options.className.split(" ")) {
+                for (const name of this.options.className.split(' ')) {
                     this._container.classList.add(name);
                 }
             }
 
             if (this._closeButton) {
                 this._closeButton.setAttribute(
-                    "aria-label",
-                    this._map._getUIString("Popup.Close")
+                    'aria-label',
+                    this._map._getUIString('Popup.Close')
                 );
             }
 
             if (this._trackPointer) {
                 this._container.classList.add(
-                    "mapmetricsgl-popup-track-pointer"
+                    'mapmetricsgl-popup-track-pointer'
                 );
             }
         }
@@ -697,23 +697,23 @@ export class Popup extends Evented {
             let anchorComponents;
 
             if (pos.y + offset.bottom.y < height) {
-                anchorComponents = ["top"];
+                anchorComponents = ['top'];
             } else if (pos.y > this._map.transform.height - height) {
-                anchorComponents = ["bottom"];
+                anchorComponents = ['bottom'];
             } else {
                 anchorComponents = [];
             }
 
             if (pos.x < width / 2) {
-                anchorComponents.push("left");
+                anchorComponents.push('left');
             } else if (pos.x > this._map.transform.width - width / 2) {
-                anchorComponents.push("right");
+                anchorComponents.push('right');
             }
 
             if (anchorComponents.length === 0) {
-                anchor = "bottom";
+                anchor = 'bottom';
             } else {
-                anchor = anchorComponents.join("-") as any;
+                anchor = anchorComponents.join('-') as any;
             }
         }
 
@@ -727,7 +727,7 @@ export class Popup extends Evented {
             this._container,
             `${anchorTranslate[anchor]} translate(${offsetedPos.x}px,${offsetedPos.y}px)`
         );
-        applyAnchorClass(this._container, anchor, "popup");
+        applyAnchorClass(this._container, anchor, 'popup');
 
         this._updateOpacity();
     };
@@ -750,17 +750,17 @@ export class Popup extends Evented {
 function normalizeOffset(offset?: Offset | null) {
     if (!offset) {
         return normalizeOffset(new Point(0, 0));
-    } else if (typeof offset === "number") {
+    } else if (typeof offset === 'number') {
         // input specifies a radius from which to calculate offsets at all positions
         const cornerOffset = Math.round(Math.abs(offset) / Math.SQRT2);
         return {
             center: new Point(0, 0),
             top: new Point(0, offset),
-            "top-left": new Point(cornerOffset, cornerOffset),
-            "top-right": new Point(-cornerOffset, cornerOffset),
+            'top-left': new Point(cornerOffset, cornerOffset),
+            'top-right': new Point(-cornerOffset, cornerOffset),
             bottom: new Point(0, -offset),
-            "bottom-left": new Point(cornerOffset, -cornerOffset),
-            "bottom-right": new Point(-cornerOffset, -cornerOffset),
+            'bottom-left': new Point(cornerOffset, -cornerOffset),
+            'bottom-right': new Point(-cornerOffset, -cornerOffset),
             left: new Point(offset, 0),
             right: new Point(-offset, 0),
         };
@@ -770,26 +770,26 @@ function normalizeOffset(offset?: Offset | null) {
         return {
             center: convertedOffset,
             top: convertedOffset,
-            "top-left": convertedOffset,
-            "top-right": convertedOffset,
+            'top-left': convertedOffset,
+            'top-right': convertedOffset,
             bottom: convertedOffset,
-            "bottom-left": convertedOffset,
-            "bottom-right": convertedOffset,
+            'bottom-left': convertedOffset,
+            'bottom-right': convertedOffset,
             left: convertedOffset,
             right: convertedOffset,
         };
     } else {
         // input specifies an offset per position
         return {
-            center: Point.convert(offset["center"] || [0, 0]),
-            top: Point.convert(offset["top"] || [0, 0]),
-            "top-left": Point.convert(offset["top-left"] || [0, 0]),
-            "top-right": Point.convert(offset["top-right"] || [0, 0]),
-            bottom: Point.convert(offset["bottom"] || [0, 0]),
-            "bottom-left": Point.convert(offset["bottom-left"] || [0, 0]),
-            "bottom-right": Point.convert(offset["bottom-right"] || [0, 0]),
-            left: Point.convert(offset["left"] || [0, 0]),
-            right: Point.convert(offset["right"] || [0, 0]),
+            center: Point.convert(offset['center'] || [0, 0]),
+            top: Point.convert(offset['top'] || [0, 0]),
+            'top-left': Point.convert(offset['top-left'] || [0, 0]),
+            'top-right': Point.convert(offset['top-right'] || [0, 0]),
+            bottom: Point.convert(offset['bottom'] || [0, 0]),
+            'bottom-left': Point.convert(offset['bottom-left'] || [0, 0]),
+            'bottom-right': Point.convert(offset['bottom-right'] || [0, 0]),
+            left: Point.convert(offset['left'] || [0, 0]),
+            right: Point.convert(offset['right'] || [0, 0]),
         };
     }
 }

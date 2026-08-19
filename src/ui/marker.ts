@@ -1,21 +1,21 @@
-import { DOM } from "../util/dom";
-import { browser } from "../util/browser";
-import { LngLat } from "../geo/lng_lat";
-import Point from "@mapbox/point-geometry";
-import { smartWrap } from "../util/smart_wrap";
-import { anchorTranslate, applyAnchorClass } from "./anchor";
-import type { PositionAnchor } from "./anchor";
-import { Event, Evented } from "../util/evented";
-import type { Map } from "./map";
-import { type Popup, type Offset } from "./popup";
-import type { LngLatLike } from "../geo/lng_lat";
-import type { MapMouseEvent, MapTouchEvent } from "./events";
-import type { PointLike } from "./camera";
+import {DOM} from '../util/dom';
+import {browser} from '../util/browser';
+import {LngLat} from '../geo/lng_lat';
+import Point from '@mapbox/point-geometry';
+import {smartWrap} from '../util/smart_wrap';
+import {anchorTranslate, applyAnchorClass} from './anchor';
+import type {PositionAnchor} from './anchor';
+import {Event, Evented} from '../util/evented';
+import type {Map} from './map';
+import {type Popup, type Offset} from './popup';
+import type {LngLatLike} from '../geo/lng_lat';
+import type {MapMouseEvent, MapTouchEvent} from './events';
+import type {PointLike} from './camera';
 
 /**
  * Alignment options of rotation and pitch
  */
-type Alignment = "map" | "viewport" | "auto";
+type Alignment = 'map' | 'viewport' | 'auto';
 
 /**
  * The {@link Marker} options object
@@ -139,7 +139,7 @@ export class Marker extends Evented {
     _draggable: boolean;
     _clickTolerance: number;
     _isDragging: boolean;
-    _state: "inactive" | "pending" | "active"; // used for handling drag events
+    _state: 'inactive' | 'pending' | 'active'; // used for handling drag events
     _positionDelta: Point;
     _pointerdownPos: Point;
     _rotation: number;
@@ -157,140 +157,140 @@ export class Marker extends Evented {
     constructor(options?: MarkerOptions) {
         super();
 
-        this._anchor = (options && options.anchor) || "center";
-        this._color = (options && options.color) || "#3FB1CE";
+        this._anchor = (options && options.anchor) || 'center';
+        this._color = (options && options.color) || '#3FB1CE';
         this._scale = (options && options.scale) || 1;
         this._draggable = (options && options.draggable) || false;
         this._clickTolerance = (options && options.clickTolerance) || 0;
         this._subpixelPositioning =
             (options && options.subpixelPositioning) || false;
         this._isDragging = false;
-        this._state = "inactive";
+        this._state = 'inactive';
         this._rotation = (options && options.rotation) || 0;
         this._rotationAlignment =
-            (options && options.rotationAlignment) || "auto";
+            (options && options.rotationAlignment) || 'auto';
         this._pitchAlignment =
             options &&
             options.pitchAlignment &&
-            options.pitchAlignment !== "auto"
+            options.pitchAlignment !== 'auto'
                 ? options.pitchAlignment
                 : this._rotationAlignment;
         this.setOpacity(options?.opacity, options?.opacityWhenCovered);
 
         if (!options || !options.element) {
             this._defaultMarker = true;
-            this._element = DOM.create("div");
+            this._element = DOM.create('div');
 
             // create default map marker SVG
-            const svg = DOM.createNS("http://www.w3.org/2000/svg", "svg");
+            const svg = DOM.createNS('http://www.w3.org/2000/svg', 'svg');
             const defaultHeight = 41;
             const defaultWidth = 27;
-            svg.setAttributeNS(null, "display", "block");
-            svg.setAttributeNS(null, "height", `${defaultHeight}px`);
-            svg.setAttributeNS(null, "width", `${defaultWidth}px`);
+            svg.setAttributeNS(null, 'display', 'block');
+            svg.setAttributeNS(null, 'height', `${defaultHeight}px`);
+            svg.setAttributeNS(null, 'width', `${defaultWidth}px`);
             svg.setAttributeNS(
                 null,
-                "viewBox",
+                'viewBox',
                 `0 0 ${defaultWidth} ${defaultHeight}`
             );
 
-            const markerLarge = DOM.createNS("http://www.w3.org/2000/svg", "g");
-            markerLarge.setAttributeNS(null, "stroke", "none");
-            markerLarge.setAttributeNS(null, "stroke-width", "1");
-            markerLarge.setAttributeNS(null, "fill", "none");
-            markerLarge.setAttributeNS(null, "fill-rule", "evenodd");
+            const markerLarge = DOM.createNS('http://www.w3.org/2000/svg', 'g');
+            markerLarge.setAttributeNS(null, 'stroke', 'none');
+            markerLarge.setAttributeNS(null, 'stroke-width', '1');
+            markerLarge.setAttributeNS(null, 'fill', 'none');
+            markerLarge.setAttributeNS(null, 'fill-rule', 'evenodd');
 
-            const page1 = DOM.createNS("http://www.w3.org/2000/svg", "g");
-            page1.setAttributeNS(null, "fill-rule", "nonzero");
+            const page1 = DOM.createNS('http://www.w3.org/2000/svg', 'g');
+            page1.setAttributeNS(null, 'fill-rule', 'nonzero');
 
-            const shadow = DOM.createNS("http://www.w3.org/2000/svg", "g");
-            shadow.setAttributeNS(null, "transform", "translate(3.0, 29.0)");
-            shadow.setAttributeNS(null, "fill", "#000000");
+            const shadow = DOM.createNS('http://www.w3.org/2000/svg', 'g');
+            shadow.setAttributeNS(null, 'transform', 'translate(3.0, 29.0)');
+            shadow.setAttributeNS(null, 'fill', '#000000');
 
             const ellipses = [
-                { rx: "10.5", ry: "5.25002273" },
-                { rx: "10.5", ry: "5.25002273" },
-                { rx: "9.5", ry: "4.77275007" },
-                { rx: "8.5", ry: "4.29549936" },
-                { rx: "7.5", ry: "3.81822308" },
-                { rx: "6.5", ry: "3.34094679" },
-                { rx: "5.5", ry: "2.86367051" },
-                { rx: "4.5", ry: "2.38636864" },
+                {rx: '10.5', ry: '5.25002273'},
+                {rx: '10.5', ry: '5.25002273'},
+                {rx: '9.5', ry: '4.77275007'},
+                {rx: '8.5', ry: '4.29549936'},
+                {rx: '7.5', ry: '3.81822308'},
+                {rx: '6.5', ry: '3.34094679'},
+                {rx: '5.5', ry: '2.86367051'},
+                {rx: '4.5', ry: '2.38636864'},
             ];
 
             for (const data of ellipses) {
                 const ellipse = DOM.createNS(
-                    "http://www.w3.org/2000/svg",
-                    "ellipse"
+                    'http://www.w3.org/2000/svg',
+                    'ellipse'
                 );
-                ellipse.setAttributeNS(null, "opacity", "0.04");
-                ellipse.setAttributeNS(null, "cx", "10.5");
-                ellipse.setAttributeNS(null, "cy", "5.80029008");
-                ellipse.setAttributeNS(null, "rx", data["rx"]);
-                ellipse.setAttributeNS(null, "ry", data["ry"]);
+                ellipse.setAttributeNS(null, 'opacity', '0.04');
+                ellipse.setAttributeNS(null, 'cx', '10.5');
+                ellipse.setAttributeNS(null, 'cy', '5.80029008');
+                ellipse.setAttributeNS(null, 'rx', data['rx']);
+                ellipse.setAttributeNS(null, 'ry', data['ry']);
                 shadow.appendChild(ellipse);
             }
 
-            const background = DOM.createNS("http://www.w3.org/2000/svg", "g");
-            background.setAttributeNS(null, "fill", this._color);
+            const background = DOM.createNS('http://www.w3.org/2000/svg', 'g');
+            background.setAttributeNS(null, 'fill', this._color);
 
-            const bgPath = DOM.createNS("http://www.w3.org/2000/svg", "path");
+            const bgPath = DOM.createNS('http://www.w3.org/2000/svg', 'path');
             bgPath.setAttributeNS(
                 null,
-                "d",
-                "M27,13.5 C27,19.074644 20.250001,27.000002 14.75,34.500002 C14.016665,35.500004 12.983335,35.500004 12.25,34.500002 C6.7499993,27.000002 0,19.222562 0,13.5 C0,6.0441559 6.0441559,0 13.5,0 C20.955844,0 27,6.0441559 27,13.5 Z"
+                'd',
+                'M27,13.5 C27,19.074644 20.250001,27.000002 14.75,34.500002 C14.016665,35.500004 12.983335,35.500004 12.25,34.500002 C6.7499993,27.000002 0,19.222562 0,13.5 C0,6.0441559 6.0441559,0 13.5,0 C20.955844,0 27,6.0441559 27,13.5 Z'
             );
 
             background.appendChild(bgPath);
 
-            const border = DOM.createNS("http://www.w3.org/2000/svg", "g");
-            border.setAttributeNS(null, "opacity", "0.25");
-            border.setAttributeNS(null, "fill", "#000000");
+            const border = DOM.createNS('http://www.w3.org/2000/svg', 'g');
+            border.setAttributeNS(null, 'opacity', '0.25');
+            border.setAttributeNS(null, 'fill', '#000000');
 
             const borderPath = DOM.createNS(
-                "http://www.w3.org/2000/svg",
-                "path"
+                'http://www.w3.org/2000/svg',
+                'path'
             );
             borderPath.setAttributeNS(
                 null,
-                "d",
-                "M13.5,0 C6.0441559,0 0,6.0441559 0,13.5 C0,19.222562 6.7499993,27 12.25,34.5 C13,35.522727 14.016664,35.500004 14.75,34.5 C20.250001,27 27,19.074644 27,13.5 C27,6.0441559 20.955844,0 13.5,0 Z M13.5,1 C20.415404,1 26,6.584596 26,13.5 C26,15.898657 24.495584,19.181431 22.220703,22.738281 C19.945823,26.295132 16.705119,30.142167 13.943359,33.908203 C13.743445,34.180814 13.612715,34.322738 13.5,34.441406 C13.387285,34.322738 13.256555,34.180814 13.056641,33.908203 C10.284481,30.127985 7.4148684,26.314159 5.015625,22.773438 C2.6163816,19.232715 1,15.953538 1,13.5 C1,6.584596 6.584596,1 13.5,1 Z"
+                'd',
+                'M13.5,0 C6.0441559,0 0,6.0441559 0,13.5 C0,19.222562 6.7499993,27 12.25,34.5 C13,35.522727 14.016664,35.500004 14.75,34.5 C20.250001,27 27,19.074644 27,13.5 C27,6.0441559 20.955844,0 13.5,0 Z M13.5,1 C20.415404,1 26,6.584596 26,13.5 C26,15.898657 24.495584,19.181431 22.220703,22.738281 C19.945823,26.295132 16.705119,30.142167 13.943359,33.908203 C13.743445,34.180814 13.612715,34.322738 13.5,34.441406 C13.387285,34.322738 13.256555,34.180814 13.056641,33.908203 C10.284481,30.127985 7.4148684,26.314159 5.015625,22.773438 C2.6163816,19.232715 1,15.953538 1,13.5 C1,6.584596 6.584596,1 13.5,1 Z'
             );
 
             border.appendChild(borderPath);
 
-            const maki = DOM.createNS("http://www.w3.org/2000/svg", "g");
-            maki.setAttributeNS(null, "transform", "translate(6.0, 7.0)");
-            maki.setAttributeNS(null, "fill", "#FFFFFF");
+            const maki = DOM.createNS('http://www.w3.org/2000/svg', 'g');
+            maki.setAttributeNS(null, 'transform', 'translate(6.0, 7.0)');
+            maki.setAttributeNS(null, 'fill', '#FFFFFF');
 
             const circleContainer = DOM.createNS(
-                "http://www.w3.org/2000/svg",
-                "g"
+                'http://www.w3.org/2000/svg',
+                'g'
             );
             circleContainer.setAttributeNS(
                 null,
-                "transform",
-                "translate(8.0, 8.0)"
+                'transform',
+                'translate(8.0, 8.0)'
             );
 
             const circle1 = DOM.createNS(
-                "http://www.w3.org/2000/svg",
-                "circle"
+                'http://www.w3.org/2000/svg',
+                'circle'
             );
-            circle1.setAttributeNS(null, "fill", "#000000");
-            circle1.setAttributeNS(null, "opacity", "0.25");
-            circle1.setAttributeNS(null, "cx", "5.5");
-            circle1.setAttributeNS(null, "cy", "5.5");
-            circle1.setAttributeNS(null, "r", "5.4999962");
+            circle1.setAttributeNS(null, 'fill', '#000000');
+            circle1.setAttributeNS(null, 'opacity', '0.25');
+            circle1.setAttributeNS(null, 'cx', '5.5');
+            circle1.setAttributeNS(null, 'cy', '5.5');
+            circle1.setAttributeNS(null, 'r', '5.4999962');
 
             const circle2 = DOM.createNS(
-                "http://www.w3.org/2000/svg",
-                "circle"
+                'http://www.w3.org/2000/svg',
+                'circle'
             );
-            circle2.setAttributeNS(null, "fill", "#FFFFFF");
-            circle2.setAttributeNS(null, "cx", "5.5");
-            circle2.setAttributeNS(null, "cy", "5.5");
-            circle2.setAttributeNS(null, "r", "5.4999962");
+            circle2.setAttributeNS(null, 'fill', '#FFFFFF');
+            circle2.setAttributeNS(null, 'cx', '5.5');
+            circle2.setAttributeNS(null, 'cy', '5.5');
+            circle2.setAttributeNS(null, 'r', '5.4999962');
 
             circleContainer.appendChild(circle1);
             circleContainer.appendChild(circle2);
@@ -305,12 +305,12 @@ export class Marker extends Evented {
 
             svg.setAttributeNS(
                 null,
-                "height",
+                'height',
                 `${defaultHeight * this._scale}px`
             );
             svg.setAttributeNS(
                 null,
-                "width",
+                'width',
                 `${defaultWidth * this._scale}px`
             );
 
@@ -331,18 +331,18 @@ export class Marker extends Evented {
             this._offset = Point.convert((options && options.offset) || [0, 0]);
         }
 
-        this._element.classList.add("mapmetricsgl-marker");
-        this._element.addEventListener("dragstart", (e: DragEvent) => {
+        this._element.classList.add('mapmetricsgl-marker');
+        this._element.addEventListener('dragstart', (e: DragEvent) => {
             e.preventDefault();
         });
-        this._element.addEventListener("mousedown", (e: MouseEvent) => {
+        this._element.addEventListener('mousedown', (e: MouseEvent) => {
             // prevent focusing on click
             e.preventDefault();
         });
-        applyAnchorClass(this._element, this._anchor, "marker");
+        applyAnchorClass(this._element, this._anchor, 'marker');
 
         if (options && options.className) {
-            for (const name of options.className.split(" ")) {
+            for (const name of options.className.split(' ')) {
                 this._element.classList.add(name);
             }
         }
@@ -364,15 +364,15 @@ export class Marker extends Evented {
         this.remove();
         this._map = map;
         this._element.setAttribute(
-            "aria-label",
-            map._getUIString("Marker.Title")
+            'aria-label',
+            map._getUIString('Marker.Title')
         );
 
         map.getCanvasContainer().appendChild(this._element);
-        map.on("move", this._update);
-        map.on("moveend", this._update);
-        map.on("terrain", this._update);
-        map.on("projectiontransition", this._update);
+        map.on('move', this._update);
+        map.on('moveend', this._update);
+        map.on('terrain', this._update);
+        map.on('projectiontransition', this._update);
 
         this.setDraggable(this._draggable);
         this._update();
@@ -380,7 +380,7 @@ export class Marker extends Evented {
         // If we attached the `click` listener to the marker element, the popup
         // would close once the event propagated to `map` due to the
         // `Popup#_onClickClose` listener.
-        this._map.on("click", this._onMapClick);
+        this._map.on('click', this._onMapClick);
 
         // Register marker for SEO tracking
         map._addMarker(this);
@@ -403,17 +403,17 @@ export class Marker extends Evented {
         }
         if (this._map) {
             this._map._removeMarker(this);
-            this._map.off("click", this._onMapClick);
-            this._map.off("move", this._update);
-            this._map.off("moveend", this._update);
-            this._map.off("terrain", this._update);
-            this._map.off("projectiontransition", this._update);
-            this._map.off("mousedown", this._addDragHandler);
-            this._map.off("touchstart", this._addDragHandler);
-            this._map.off("mouseup", this._onUp);
-            this._map.off("touchend", this._onUp);
-            this._map.off("mousemove", this._onMove);
-            this._map.off("touchmove", this._onMove);
+            this._map.off('click', this._onMapClick);
+            this._map.off('move', this._update);
+            this._map.off('moveend', this._update);
+            this._map.off('terrain', this._update);
+            this._map.off('projectiontransition', this._update);
+            this._map.off('mousedown', this._addDragHandler);
+            this._map.off('touchstart', this._addDragHandler);
+            this._map.off('mouseup', this._onUp);
+            this._map.off('touchend', this._onUp);
+            this._map.off('mousemove', this._onMove);
+            this._map.off('touchmove', this._onMove);
             delete this._map;
         }
         DOM.remove(this._element);
@@ -488,50 +488,50 @@ export class Marker extends Evented {
         if (this._popup) {
             this._popup.remove();
             this._popup = null;
-            this._element.removeEventListener("keypress", this._onKeyPress);
+            this._element.removeEventListener('keypress', this._onKeyPress);
 
             if (!this._originalTabIndex) {
-                this._element.removeAttribute("tabindex");
+                this._element.removeAttribute('tabindex');
             }
         }
 
         if (popup) {
-            if (!("offset" in popup.options)) {
+            if (!('offset' in popup.options)) {
                 const markerHeight = 41 - 5.8 / 2;
                 const markerRadius = 13.5;
                 const linearOffset = Math.abs(markerRadius) / Math.SQRT2;
                 popup.options.offset = this._defaultMarker
                     ? ({
-                          top: [0, 0],
-                          "top-left": [0, 0],
-                          "top-right": [0, 0],
-                          bottom: [0, -markerHeight],
-                          "bottom-left": [
-                              linearOffset,
-                              (markerHeight - markerRadius + linearOffset) * -1,
-                          ],
-                          "bottom-right": [
-                              -linearOffset,
-                              (markerHeight - markerRadius + linearOffset) * -1,
-                          ],
-                          left: [
-                              markerRadius,
-                              (markerHeight - markerRadius) * -1,
-                          ],
-                          right: [
-                              -markerRadius,
-                              (markerHeight - markerRadius) * -1,
-                          ],
-                      } as Offset)
+                        top: [0, 0],
+                        'top-left': [0, 0],
+                        'top-right': [0, 0],
+                        bottom: [0, -markerHeight],
+                        'bottom-left': [
+                            linearOffset,
+                            (markerHeight - markerRadius + linearOffset) * -1,
+                        ],
+                        'bottom-right': [
+                            -linearOffset,
+                            (markerHeight - markerRadius + linearOffset) * -1,
+                        ],
+                        left: [
+                            markerRadius,
+                            (markerHeight - markerRadius) * -1,
+                        ],
+                        right: [
+                            -markerRadius,
+                            (markerHeight - markerRadius) * -1,
+                        ],
+                    } as Offset)
                     : this._offset;
             }
             this._popup = popup;
 
-            this._originalTabIndex = this._element.getAttribute("tabindex");
+            this._originalTabIndex = this._element.getAttribute('tabindex');
             if (!this._originalTabIndex) {
-                this._element.setAttribute("tabindex", "0");
+                this._element.setAttribute('tabindex', '0');
             }
-            this._element.addEventListener("keypress", this._onKeyPress);
+            this._element.addEventListener('keypress', this._onKeyPress);
         }
 
         return this;
@@ -558,8 +558,8 @@ export class Marker extends Evented {
         const legacyCode = e.charCode || e.keyCode;
 
         if (
-            code === "Space" ||
-            code === "Enter" ||
+            code === 'Space' ||
+            code === 'Enter' ||
             legacyCode === 32 ||
             legacyCode === 13 // space or enter
         ) {
@@ -689,12 +689,12 @@ export class Marker extends Evented {
             : this._opacity;
     }
 
-    _update = (e?: { type: "move" | "moveend" | "terrain" | "render" }) => {
+    _update = (e?: { type: 'move' | 'moveend' | 'terrain' | 'render' }) => {
         if (!this._map) return;
 
         const isFullyLoaded = this._map.loaded() && !this._map.isMoving();
-        if (e?.type === "terrain" || (e?.type === "render" && !isFullyLoaded)) {
-            this._map.once("render", this._update);
+        if (e?.type === 'terrain' || (e?.type === 'render' && !isFullyLoaded)) {
+            this._map.once('render', this._update);
         }
 
         if (this._map.transform.renderWorldCopies) {
@@ -717,30 +717,30 @@ export class Marker extends Evented {
                 ._add(this._offset);
         }
 
-        let rotation = "";
+        let rotation = '';
         if (
-            this._rotationAlignment === "viewport" ||
-            this._rotationAlignment === "auto"
+            this._rotationAlignment === 'viewport' ||
+            this._rotationAlignment === 'auto'
         ) {
             rotation = `rotateZ(${this._rotation}deg)`;
-        } else if (this._rotationAlignment === "map") {
+        } else if (this._rotationAlignment === 'map') {
             rotation = `rotateZ(${this._rotation - this._map.getBearing()}deg)`;
         }
 
-        let pitch = "";
+        let pitch = '';
         if (
-            this._pitchAlignment === "viewport" ||
-            this._pitchAlignment === "auto"
+            this._pitchAlignment === 'viewport' ||
+            this._pitchAlignment === 'auto'
         ) {
-            pitch = "rotateX(0deg)";
-        } else if (this._pitchAlignment === "map") {
+            pitch = 'rotateX(0deg)';
+        } else if (this._pitchAlignment === 'map') {
             pitch = `rotateX(${this._map.getPitch()}deg)`;
         }
 
         // because rounding the coordinates at every `move` event causes stuttered zooming
         // we only round them when _update is called with `moveend` or when its called with
         // no arguments (when the Marker is initialized or Marker#setLngLat is invoked).
-        if (!this._subpixelPositioning && (!e || e.type === "moveend")) {
+        if (!this._subpixelPositioning && (!e || e.type === 'moveend')) {
             this._pos = this._pos.round();
         }
 
@@ -755,7 +755,7 @@ export class Marker extends Evented {
             .frameAsync(new AbortController())
             .then(() => {
                 // Run _updateOpacity only after painter.render and drawDepth
-                this._updateOpacity(e && e.type === "moveend");
+                this._updateOpacity(e && e.type === 'moveend');
             })
             .catch(() => {});
     };
@@ -838,33 +838,33 @@ export class Marker extends Evented {
         this._lngLat = this._map.unproject(this._pos);
         this.setLngLat(this._lngLat);
         // suppress click event so that popups don't toggle on drag
-        this._element.style.pointerEvents = "none";
+        this._element.style.pointerEvents = 'none';
 
         // make sure dragstart only fires on the first move event after mousedown.
         // this can't be on mousedown because that event doesn't necessarily
         // imply that a drag is about to happen.
-        if (this._state === "pending") {
-            this._state = "active";
-            this.fire(new Event("dragstart"));
+        if (this._state === 'pending') {
+            this._state = 'active';
+            this.fire(new Event('dragstart'));
         }
-        this.fire(new Event("drag"));
+        this.fire(new Event('drag'));
     };
 
     _onUp = () => {
         // revert to normal pointer event handling
-        this._element.style.pointerEvents = "auto";
+        this._element.style.pointerEvents = 'auto';
         this._positionDelta = null;
         this._pointerdownPos = null;
         this._isDragging = false;
-        this._map.off("mousemove", this._onMove);
-        this._map.off("touchmove", this._onMove);
+        this._map.off('mousemove', this._onMove);
+        this._map.off('touchmove', this._onMove);
 
         // only fire dragend if it was preceded by at least one drag event
-        if (this._state === "active") {
-            this.fire(new Event("dragend"));
+        if (this._state === 'active') {
+            this.fire(new Event('dragend'));
         }
 
-        this._state = "inactive";
+        this._state = 'inactive';
     };
 
     _addDragHandler = (e: MapMouseEvent | MapTouchEvent) => {
@@ -881,11 +881,11 @@ export class Marker extends Evented {
 
             this._pointerdownPos = e.point;
 
-            this._state = "pending";
-            this._map.on("mousemove", this._onMove);
-            this._map.on("touchmove", this._onMove);
-            this._map.once("mouseup", this._onUp);
-            this._map.once("touchend", this._onUp);
+            this._state = 'pending';
+            this._map.on('mousemove', this._onMove);
+            this._map.on('touchmove', this._onMove);
+            this._map.once('mouseup', this._onUp);
+            this._map.once('touchend', this._onUp);
         }
     };
 
@@ -900,11 +900,11 @@ export class Marker extends Evented {
         // e.g. when setDraggable is called before addTo
         if (this._map) {
             if (shouldBeDraggable) {
-                this._map.on("mousedown", this._addDragHandler);
-                this._map.on("touchstart", this._addDragHandler);
+                this._map.on('mousedown', this._addDragHandler);
+                this._map.on('touchstart', this._addDragHandler);
             } else {
-                this._map.off("mousedown", this._addDragHandler);
-                this._map.off("touchstart", this._addDragHandler);
+                this._map.off('mousedown', this._addDragHandler);
+                this._map.off('touchstart', this._addDragHandler);
             }
         }
 
@@ -942,7 +942,7 @@ export class Marker extends Evented {
      * @param alignment - Sets the `rotationAlignment` property of the marker. defaults to 'auto'
      */
     setRotationAlignment(alignment?: Alignment): this {
-        this._rotationAlignment = alignment || "auto";
+        this._rotationAlignment = alignment || 'auto';
         this._update();
         return this;
     }
@@ -961,7 +961,7 @@ export class Marker extends Evented {
      */
     setPitchAlignment(alignment?: Alignment): this {
         this._pitchAlignment =
-            alignment && alignment !== "auto"
+            alignment && alignment !== 'auto'
                 ? alignment
                 : this._rotationAlignment;
         this._update();
@@ -988,8 +988,8 @@ export class Marker extends Evented {
             this._opacity === undefined ||
             (opacity === undefined && opacityWhenCovered === undefined)
         ) {
-            this._opacity = "1";
-            this._opacityWhenCovered = "0.2";
+            this._opacity = '1';
+            this._opacityWhenCovered = '0.2';
         }
 
         if (opacity !== undefined) {

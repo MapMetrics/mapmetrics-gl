@@ -20,7 +20,7 @@ function createMap(cooperativeGestures) {
 /**
  * Zoom change produced by one `simulate.magicWheelZoomDelta` wheel tick.
  * The MapMetrics fork retunes `defaultZoomRate`/`wheelZoomRate` in `scroll_zoom.ts`
- * (1/1200 -> 1/1000), so a tick moves ~0.1404 zoom levels rather than upstream's 0.0285.
+ * (1/1200 to 1/1000), so a tick moves ~0.1404 zoom levels rather than upstream's 0.0285.
  * See the matching constant in `scroll_zoom.test.ts`.
  */
 const singleTickZoomDelta = 0.1404;

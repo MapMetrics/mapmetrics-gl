@@ -21,7 +21,7 @@ function createMap() {
  *
  * The MapMetrics fork deliberately retunes the scroll-zoom rate for a faster, more
  * responsive feel than upstream MapLibre: `defaultZoomRate`/`wheelZoomRate` in
- * `scroll_zoom.ts` went 1/1200 -> 1/1000 (and, before that, 1/100 & 1/450 -> 1/1200).
+ * `scroll_zoom.ts` went 1/1200 to 1/1000 (and, before that, 1/100 & 1/450 to 1/1200).
  * Upstream's expected value here is 0.0285; the fork's is ~0.1404.
  *
  * Keep this pinned to a literal rather than deriving it from the handler's constants:

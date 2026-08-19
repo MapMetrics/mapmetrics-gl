@@ -62,7 +62,7 @@ describe('LogoControl', () => {
 
     /**
      * MapMetrics fork behaviour: unlike upstream MapLibre, the logo does NOT collapse to
-     * compact automatically on narrow (<640px) containers - see `_updateCompact` in
+     * compact automatically on narrow (under 640px) containers - see `_updateCompact` in
      * `logo_control.ts`, which only applies `mapmetricsgl-compact` when `compact: true`
      * was explicitly requested. This keeps the brand mark at a fixed 180px on mobile.
      */

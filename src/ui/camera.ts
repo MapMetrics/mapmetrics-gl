@@ -1,20 +1,20 @@
-import { extend, wrap, defaultEasing, pick, scaleZoom } from "../util/util";
-import { interpolates } from "@maplibre/maplibre-gl-style-spec";
-import { browser } from "../util/browser";
-import { LngLat } from "../geo/lng_lat";
-import { LngLatBounds } from "../geo/lng_lat_bounds";
-import Point from "@mapbox/point-geometry";
-import { Event, Evented } from "../util/evented";
-import { MercatorCoordinate } from "../geo/mercator_coordinate";
+import {extend, wrap, defaultEasing, pick, scaleZoom} from '../util/util';
+import {interpolates} from '@maplibre/maplibre-gl-style-spec';
+import {browser} from '../util/browser';
+import {LngLat} from '../geo/lng_lat';
+import {LngLatBounds} from '../geo/lng_lat_bounds';
+import Point from '@mapbox/point-geometry';
+import {Event, Evented} from '../util/evented';
+import {MercatorCoordinate} from '../geo/mercator_coordinate';
 
-import type { Terrain } from "../render/terrain";
-import type { ITransform } from "../geo/transform_interface";
-import type { LngLatLike } from "../geo/lng_lat";
-import type { LngLatBoundsLike } from "../geo/lng_lat_bounds";
-import type { TaskID } from "../util/task_queue";
-import type { PaddingOptions } from "../geo/edge_insets";
-import type { HandlerManager } from "./handler_manager";
-import type { ICameraHelper } from "../geo/projection/camera_helper";
+import type {Terrain} from '../render/terrain';
+import type {ITransform} from '../geo/transform_interface';
+import type {LngLatLike} from '../geo/lng_lat';
+import type {LngLatBoundsLike} from '../geo/lng_lat_bounds';
+import type {TaskID} from '../util/task_queue';
+import type {PaddingOptions} from '../geo/edge_insets';
+import type {HandlerManager} from './handler_manager';
+import type {ICameraHelper} from '../geo/projection/camera_helper';
 
 /**
  * A [Point](https://github.com/mapbox/point-geometry) or an array of two numbers representing `x` and `y` screen coordinates in pixels.
@@ -336,7 +336,7 @@ export abstract class Camera extends Evented {
         this._bearingSnap = options.bearingSnap;
         this.cameraHelper = cameraHelper;
 
-        this.on("moveend", () => {
+        this.on('moveend', () => {
             delete this._requestedCameraState;
         });
     }
@@ -385,7 +385,7 @@ export abstract class Camera extends Evented {
      * ```
      */
     setCenter(center: LngLatLike, eventData?: any) {
-        return this.jumpTo({ center }, eventData);
+        return this.jumpTo({center}, eventData);
     }
 
     /**
@@ -406,7 +406,7 @@ export abstract class Camera extends Evented {
      * @param eventData - Additional properties to be added to event objects of events triggered by this method.
      */
     setCenterElevation(elevation: number, eventData?: any): this {
-        this.jumpTo({ elevation }, eventData);
+        this.jumpTo({elevation}, eventData);
         return this;
     }
 
@@ -448,7 +448,7 @@ export abstract class Camera extends Evented {
         offset = Point.convert(offset).mult(-1);
         return this.panTo(
             this.transform.center,
-            extend({ offset }, options),
+            extend({offset}, options),
             eventData
         );
     }
@@ -508,7 +508,7 @@ export abstract class Camera extends Evented {
      * ```
      */
     setZoom(zoom: number, eventData?: any): this {
-        this.jumpTo({ zoom }, eventData);
+        this.jumpTo({zoom}, eventData);
         return this;
     }
 
@@ -614,9 +614,9 @@ export abstract class Camera extends Evented {
     setVerticalFieldOfView(fov: number, eventData?: any): this {
         if (fov != this.transform.fov) {
             this.transform.setFov(fov);
-            this.fire(new Event("movestart", eventData))
-                .fire(new Event("move", eventData))
-                .fire(new Event("moveend", eventData));
+            this.fire(new Event('movestart', eventData))
+                .fire(new Event('move', eventData))
+                .fire(new Event('moveend', eventData));
         }
         return this;
     }
@@ -649,7 +649,7 @@ export abstract class Camera extends Evented {
      * ```
      */
     setBearing(bearing: number, eventData?: any): this {
-        this.jumpTo({ bearing }, eventData);
+        this.jumpTo({bearing}, eventData);
         return this;
     }
 
@@ -678,7 +678,7 @@ export abstract class Camera extends Evented {
      * ```
      */
     setPadding(padding: PaddingOptions, eventData?: any): this {
-        this.jumpTo({ padding }, eventData);
+        this.jumpTo({padding}, eventData);
         return this;
     }
 
@@ -713,7 +713,7 @@ export abstract class Camera extends Evented {
      * @param eventData - Additional properties to be added to event objects of events triggered by this method.
      */
     resetNorth(options?: AnimationOptions, eventData?: any): this {
-        this.rotateTo(0, extend({ duration: 1000 }, options), eventData);
+        this.rotateTo(0, extend({duration: 1000}, options), eventData);
         return this;
     }
 
@@ -775,7 +775,7 @@ export abstract class Camera extends Evented {
      * @param eventData - Additional properties to be added to event objects of events triggered by this method.
      */
     setPitch(pitch: number, eventData?: any): this {
-        this.jumpTo({ pitch }, eventData);
+        this.jumpTo({pitch}, eventData);
         return this;
     }
 
@@ -797,7 +797,7 @@ export abstract class Camera extends Evented {
      * @param eventData - Additional properties to be added to event objects of events triggered by this method.
      */
     setRoll(roll: number, eventData?: any): this {
-        this.jumpTo({ roll }, eventData);
+        this.jumpTo({roll}, eventData);
         return this;
     }
 
@@ -874,7 +874,7 @@ export abstract class Camera extends Evented {
             options
         );
 
-        if (typeof options.padding === "number") {
+        if (typeof options.padding === 'number') {
             const p = options.padding;
             options.padding = {
                 top: p,
@@ -1030,21 +1030,21 @@ export abstract class Camera extends Evented {
 
         const zoomChanged = tr.zoom !== oldZoom;
 
-        if ("elevation" in options && tr.elevation !== +options.elevation) {
+        if ('elevation' in options && tr.elevation !== +options.elevation) {
             tr.setElevation(+options.elevation);
         }
 
-        if ("bearing" in options && tr.bearing !== +options.bearing) {
+        if ('bearing' in options && tr.bearing !== +options.bearing) {
             bearingChanged = true;
             tr.setBearing(+options.bearing);
         }
 
-        if ("pitch" in options && tr.pitch !== +options.pitch) {
+        if ('pitch' in options && tr.pitch !== +options.pitch) {
             pitchChanged = true;
             tr.setPitch(+options.pitch);
         }
 
-        if ("roll" in options && tr.roll !== +options.roll) {
+        if ('roll' in options && tr.roll !== +options.roll) {
             rollChanged = true;
             tr.setRoll(+options.roll);
         }
@@ -1054,35 +1054,35 @@ export abstract class Camera extends Evented {
         }
         this._applyUpdatedTransform(tr);
 
-        this.fire(new Event("movestart", eventData)).fire(
-            new Event("move", eventData)
+        this.fire(new Event('movestart', eventData)).fire(
+            new Event('move', eventData)
         );
 
         if (zoomChanged) {
-            this.fire(new Event("zoomstart", eventData))
-                .fire(new Event("zoom", eventData))
-                .fire(new Event("zoomend", eventData));
+            this.fire(new Event('zoomstart', eventData))
+                .fire(new Event('zoom', eventData))
+                .fire(new Event('zoomend', eventData));
         }
 
         if (bearingChanged) {
-            this.fire(new Event("rotatestart", eventData))
-                .fire(new Event("rotate", eventData))
-                .fire(new Event("rotateend", eventData));
+            this.fire(new Event('rotatestart', eventData))
+                .fire(new Event('rotate', eventData))
+                .fire(new Event('rotateend', eventData));
         }
 
         if (pitchChanged) {
-            this.fire(new Event("pitchstart", eventData))
-                .fire(new Event("pitch", eventData))
-                .fire(new Event("pitchend", eventData));
+            this.fire(new Event('pitchstart', eventData))
+                .fire(new Event('pitch', eventData))
+                .fire(new Event('pitchend', eventData));
         }
 
         if (rollChanged) {
-            this.fire(new Event("rollstart", eventData))
-                .fire(new Event("roll", eventData))
-                .fire(new Event("rollend", eventData));
+            this.fire(new Event('rollstart', eventData))
+                .fire(new Event('roll', eventData))
+                .fire(new Event('rollend', eventData));
         }
 
-        return this.fire(new Event("moveend", eventData));
+        return this.fire(new Event('moveend', eventData));
     }
 
     /**
@@ -1119,7 +1119,7 @@ export abstract class Camera extends Evented {
         const distance3D = Math.hypot(dx, dy, dz);
         if (distance3D === 0)
             throw new Error(
-                "Can't calculate camera options with same From and To"
+                'Can\'t calculate camera options with same From and To'
             );
 
         const groundDistance = Math.hypot(dx, dy);
@@ -1227,16 +1227,16 @@ export abstract class Camera extends Evented {
             startPitch = tr.pitch,
             startRoll = tr.roll,
             bearing =
-                "bearing" in options
+                'bearing' in options
                     ? this._normalizeBearing(options.bearing, startBearing)
                     : startBearing,
-            pitch = "pitch" in options ? +options.pitch : startPitch,
+            pitch = 'pitch' in options ? +options.pitch : startPitch,
             roll =
-                "roll" in options
+                'roll' in options
                     ? this._normalizeBearing(options.roll, startRoll)
                     : startRoll,
             padding = (
-                "padding" in options ? options.padding : tr.padding
+                'padding' in options ? options.padding : tr.padding
             ) as PaddingOptions;
         const offsetAsPoint = Point.convert(options.offset);
 
@@ -1313,19 +1313,19 @@ export abstract class Camera extends Evented {
     ) {
         this._moving = true;
         if (!noMoveStart && !currently.moving) {
-            this.fire(new Event("movestart", eventData));
+            this.fire(new Event('movestart', eventData));
         }
         if (this._zooming && !currently.zooming) {
-            this.fire(new Event("zoomstart", eventData));
+            this.fire(new Event('zoomstart', eventData));
         }
         if (this._rotating && !currently.rotating) {
-            this.fire(new Event("rotatestart", eventData));
+            this.fire(new Event('rotatestart', eventData));
         }
         if (this._pitching && !currently.pitching) {
-            this.fire(new Event("pitchstart", eventData));
+            this.fire(new Event('pitchstart', eventData));
         }
         if (this._rolling && !currently.rolling) {
-            this.fire(new Event("rollstart", eventData));
+            this.fire(new Event('rollstart', eventData));
         }
     }
 
@@ -1447,7 +1447,7 @@ export abstract class Camera extends Evented {
         const finalTransform = tr.clone();
         for (const modifier of modifiers) {
             const nextTransform = finalTransform.clone();
-            const { center, zoom, roll, pitch, bearing, elevation } =
+            const {center, zoom, roll, pitch, bearing, elevation} =
                 modifier(nextTransform);
             if (center) nextTransform.setCenter(center);
             if (elevation !== undefined) nextTransform.setElevation(elevation);
@@ -1461,18 +1461,18 @@ export abstract class Camera extends Evented {
     }
 
     _fireMoveEvents(eventData?: any) {
-        this.fire(new Event("move", eventData));
+        this.fire(new Event('move', eventData));
         if (this._zooming) {
-            this.fire(new Event("zoom", eventData));
+            this.fire(new Event('zoom', eventData));
         }
         if (this._rotating) {
-            this.fire(new Event("rotate", eventData));
+            this.fire(new Event('rotate', eventData));
         }
         if (this._pitching) {
-            this.fire(new Event("pitch", eventData));
+            this.fire(new Event('pitch', eventData));
         }
         if (this._rolling) {
-            this.fire(new Event("roll", eventData));
+            this.fire(new Event('roll', eventData));
         }
     }
 
@@ -1496,18 +1496,18 @@ export abstract class Camera extends Evented {
         this._padding = false;
 
         if (wasZooming) {
-            this.fire(new Event("zoomend", eventData));
+            this.fire(new Event('zoomend', eventData));
         }
         if (wasRotating) {
-            this.fire(new Event("rotateend", eventData));
+            this.fire(new Event('rotateend', eventData));
         }
         if (wasPitching) {
-            this.fire(new Event("pitchend", eventData));
+            this.fire(new Event('pitchend', eventData));
         }
         if (wasRolling) {
-            this.fire(new Event("rollend", eventData));
+            this.fire(new Event('rollend', eventData));
         }
-        this.fire(new Event("moveend", eventData));
+        this.fire(new Event('moveend', eventData));
     }
 
     /**
@@ -1549,12 +1549,12 @@ export abstract class Camera extends Evented {
         // Fall through to jumpTo if user has set prefers-reduced-motion
         if (!options.essential && browser.prefersReducedMotion) {
             const coercedOptions = pick(options, [
-                "center",
-                "zoom",
-                "bearing",
-                "pitch",
-                "roll",
-                "elevation",
+                'center',
+                'zoom',
+                'bearing',
+                'pitch',
+                'roll',
+                'elevation',
             ]) as CameraOptions;
             return this.jumpTo(coercedOptions, eventData);
         }
@@ -1586,16 +1586,16 @@ export abstract class Camera extends Evented {
             startPadding = tr.padding;
 
         const bearing =
-            "bearing" in options
+            'bearing' in options
                 ? this._normalizeBearing(options.bearing, startBearing)
                 : startBearing;
-        const pitch = "pitch" in options ? +options.pitch : startPitch;
+        const pitch = 'pitch' in options ? +options.pitch : startPitch;
         const roll =
-            "roll" in options
+            'roll' in options
                 ? this._normalizeBearing(options.roll, startRoll)
                 : startRoll;
         const padding = (
-            "padding" in options ? options.padding : tr.padding
+            'padding' in options ? options.padding : tr.padding
         ) as PaddingOptions;
 
         const offsetAsPoint = Point.convert(options.offset);
@@ -1624,7 +1624,7 @@ export abstract class Camera extends Evented {
         // the world image origin at the initial scale.
         const u1 = flyToHandler.pixelPathLength;
 
-        if (typeof flyToHandler.scaleOfMinZoom === "number") {
+        if (typeof flyToHandler.scaleOfMinZoom === 'number') {
             // w<sub>m</sub>: Maximum visible span, measured in pixels with respect to the initial
             // scale.
             const wMax = w0 / flyToHandler.scaleOfMinZoom;
@@ -1691,11 +1691,11 @@ export abstract class Camera extends Evented {
             w = (s) => Math.exp(k * rho * s);
         }
 
-        if ("duration" in options) {
+        if ('duration' in options) {
             options.duration = +options.duration;
         } else {
             const V =
-                "screenSpeed" in options
+                'screenSpeed' in options
                     ? +options.screenSpeed / rho
                     : +options.speed;
             options.duration = (1000 * S) / V;

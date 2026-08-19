@@ -1,22 +1,22 @@
-import { Event, ErrorEvent, Evented } from "../util/evented";
+import {Event, ErrorEvent, Evented} from '../util/evented';
 
-import { extend, pick } from "../util/util";
-import { loadTileJson } from "./load_tilejson";
-import { TileBounds } from "./tile_bounds";
-import { ResourceType } from "../util/request_manager";
+import {extend, pick} from '../util/util';
+import {loadTileJson} from './load_tilejson';
+import {TileBounds} from './tile_bounds';
+import {ResourceType} from '../util/request_manager';
 import {mapSession} from '../util/map_session';
 
-import type { Source } from "./source";
-import type { OverscaledTileID } from "./tile_id";
-import type { Map } from "../ui/map";
-import type { Dispatcher } from "../util/dispatcher";
-import type { Tile } from "./tile";
+import type {Source} from './source';
+import type {OverscaledTileID} from './tile_id';
+import type {Map} from '../ui/map';
+import type {Dispatcher} from '../util/dispatcher';
+import type {Tile} from './tile';
 import type {
     VectorSourceSpecification,
     PromoteIdSpecification,
-} from "@maplibre/maplibre-gl-style-spec";
-import type { WorkerTileParameters, WorkerTileResult } from "./worker_source";
-import { MessageType } from "../util/actor_messages";
+} from '@maplibre/maplibre-gl-style-spec';
+import type {WorkerTileParameters, WorkerTileResult} from './worker_source';
+import {MessageType} from '../util/actor_messages';
 
 export type VectorTileSourceOptions = VectorSourceSpecification & {
     collectResourceTiming?: boolean;
@@ -59,7 +59,7 @@ export type VectorTileSourceOptions = VectorSourceSpecification & {
  * @see [Add a vector tile source](https://maplibre.org/maplibre-gl-js/docs/examples/vector-source/)
  */
 export class VectorTileSource extends Evented implements Source {
-    type: "vector";
+    type: 'vector';
     id: string;
     minzoom: number;
     maxzoom: number;
@@ -90,22 +90,22 @@ export class VectorTileSource extends Evented implements Source {
         this.id = id;
         this.dispatcher = dispatcher;
 
-        this.type = "vector";
+        this.type = 'vector';
         this.minzoom = 0;
         this.maxzoom = 22;
-        this.scheme = "xyz";
+        this.scheme = 'xyz';
         this.tileSize = 512;
         this.reparseOverscaled = true;
         this.isTileClipped = true;
         this._loaded = false;
 
-        extend(this, pick(options, ["url", "scheme", "tileSize", "promoteId"]));
-        this._options = extend({ type: "vector" }, options);
+        extend(this, pick(options, ['url', 'scheme', 'tileSize', 'promoteId']));
+        this._options = extend({type: 'vector'}, options);
 
         this._collectResourceTiming = options.collectResourceTiming;
 
         if (this.tileSize !== 512) {
-            throw new Error("vector tile sources must have a tileSize of 512");
+            throw new Error('vector tile sources must have a tileSize of 512');
         }
 
         this.setEventedParent(eventedParent);
@@ -113,7 +113,7 @@ export class VectorTileSource extends Evented implements Source {
 
     async load() {
         this._loaded = false;
-        this.fire(new Event("dataloading", { dataType: "source" }));
+        this.fire(new Event('dataloading', {dataType: 'source'}));
         this._tileJSONRequest = new AbortController();
         try {
             const tileJSON = await loadTileJson(
@@ -137,15 +137,15 @@ export class VectorTileSource extends Evented implements Source {
                 // before the TileJSON arrives. this makes sure the tiles needed are loaded once TileJSON arrives
                 // ref: https://github.com/mapbox/mapbox-gl-js/pull/4347#discussion_r104418088
                 this.fire(
-                    new Event("data", {
-                        dataType: "source",
-                        sourceDataType: "metadata",
+                    new Event('data', {
+                        dataType: 'source',
+                        sourceDataType: 'metadata',
                     })
                 );
                 this.fire(
-                    new Event("data", {
-                        dataType: "source",
-                        sourceDataType: "content",
+                    new Event('data', {
+                        dataType: 'source',
+                        sourceDataType: 'content',
                     })
                 );
             }
@@ -245,18 +245,18 @@ export class VectorTileSource extends Evented implements Source {
         params.request.collectResourceTiming = this._collectResourceTiming;
         let messageType: MessageType.loadTile | MessageType.reloadTile =
             MessageType.reloadTile;
-        if (!tile.actor || tile.state === "expired") {
+        if (!tile.actor || tile.state === 'expired') {
             tile.actor = this.dispatcher.getActor();
             messageType = MessageType.loadTile;
-        } else if (tile.state === "loading") {
+        } else if (tile.state === 'loading') {
             return new Promise<void>((resolve, reject) => {
-                tile.reloadPromise = { resolve, reject };
+                tile.reloadPromise = {resolve, reject};
             });
         }
         tile.abortController = new AbortController();
         try {
             const data = await tile.actor.sendAsync(
-                { type: messageType, data: params },
+                {type: messageType, data: params},
                 tile.abortController
             );
             delete tile.abortController;
@@ -310,7 +310,7 @@ export class VectorTileSource extends Evented implements Source {
         if (tile.actor) {
             await tile.actor.sendAsync({
                 type: MessageType.abortTile,
-                data: { uid: tile.uid, type: this.type, source: this.id },
+                data: {uid: tile.uid, type: this.type, source: this.id},
             });
         }
     }

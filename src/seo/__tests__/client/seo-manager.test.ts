@@ -30,7 +30,7 @@ function createMockMap() {
         })),
         getZoom: vi.fn(() => 12),
         getContainer: vi.fn(() => container),
-        querySourceFeatures: vi.fn((sourceId: string) => [
+        querySourceFeatures: vi.fn((_sourceId: string) => [
             {
                 type: 'Feature',
                 geometry: {type: 'Point', coordinates: [4.8832, 52.3742]},

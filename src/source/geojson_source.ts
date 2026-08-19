@@ -1,26 +1,26 @@
-import { Event, ErrorEvent, Evented } from "../util/evented";
+import {Event, ErrorEvent, Evented} from '../util/evented';
 
-import { extend, warnOnce } from "../util/util";
-import { EXTENT } from "../data/extent";
-import { ResourceType } from "../util/request_manager";
-import { browser } from "../util/browser";
+import {extend, warnOnce} from '../util/util';
+import {EXTENT} from '../data/extent';
+import {ResourceType} from '../util/request_manager';
+import {browser} from '../util/browser';
 
-import type { Source } from "./source";
-import type { Map } from "../ui/map";
-import type { Dispatcher } from "../util/dispatcher";
-import type { Tile } from "./tile";
-import type { Actor } from "../util/actor";
+import type {Source} from './source';
+import type {Map} from '../ui/map';
+import type {Dispatcher} from '../util/dispatcher';
+import type {Tile} from './tile';
+import type {Actor} from '../util/actor';
 import type {
     GeoJSONSourceSpecification,
     PromoteIdSpecification,
-} from "@maplibre/maplibre-gl-style-spec";
-import type { GeoJSONSourceDiff } from "./geojson_source_diff";
+} from '@maplibre/maplibre-gl-style-spec';
+import type {GeoJSONSourceDiff} from './geojson_source_diff';
 import type {
     GeoJSONWorkerOptions,
     LoadGeoJSONParameters,
-} from "./geojson_worker_source";
-import { type WorkerTileParameters } from "./worker_source";
-import { MessageType } from "../util/actor_messages";
+} from './geojson_worker_source';
+import {type WorkerTileParameters} from './worker_source';
+import {MessageType} from '../util/actor_messages';
 
 /**
  * Options object for GeoJSONSource.
@@ -113,7 +113,7 @@ export type SetClusterOptions = {
  * @see [Create and style clusters](https://atlasdocs.mapmetrics.org/overview/sdk/examples/add-a-cluster.html)
  */
 export class GeoJSONSource extends Evented implements Source {
-    type: "geojson";
+    type: 'geojson';
     id: string;
     minzoom: number;
     maxzoom: number;
@@ -145,7 +145,7 @@ export class GeoJSONSource extends Evented implements Source {
 
         // `type` is a property rather than a constant to make it easy for 3rd
         // parties to use GeoJSONSource to build their own source types.
-        this.type = "geojson";
+        this.type = 'geojson';
 
         this.minzoom = 0;
         this.maxzoom = 18;
@@ -219,7 +219,7 @@ export class GeoJSONSource extends Evented implements Source {
         );
 
         // send the promoteId to the worker to have more flexible updates, but only if it is a string
-        if (typeof this.promoteId === "string") {
+        if (typeof this.promoteId === 'string') {
             this.workerOptions.promoteId = this.promoteId;
         }
     }
@@ -276,7 +276,7 @@ export class GeoJSONSource extends Evented implements Source {
      */
     async getData(): Promise<GeoJSON.GeoJSON> {
         const options: LoadGeoJSONParameters = extend(
-            { type: this.type },
+            {type: this.type},
             this.workerOptions
         );
         return this.actor.sendAsync({
@@ -317,7 +317,7 @@ export class GeoJSONSource extends Evented implements Source {
     getClusterExpansionZoom(clusterId: number): Promise<number> {
         return this.actor.sendAsync({
             type: MessageType.getClusterExpansionZoom,
-            data: { type: this.type, clusterId, source: this.id },
+            data: {type: this.type, clusterId, source: this.id},
         });
     }
 
@@ -330,7 +330,7 @@ export class GeoJSONSource extends Evented implements Source {
     getClusterChildren(clusterId: number): Promise<Array<GeoJSON.Feature>> {
         return this.actor.sendAsync({
             type: MessageType.getClusterChildren,
-            data: { type: this.type, clusterId, source: this.id },
+            data: {type: this.type, clusterId, source: this.id},
         });
     }
 
@@ -384,12 +384,12 @@ export class GeoJSONSource extends Evented implements Source {
      */
     async _updateWorkerData(diff?: GeoJSONSourceDiff) {
         const options: LoadGeoJSONParameters = extend(
-            { type: this.type },
+            {type: this.type},
             this.workerOptions
         );
         if (diff) {
             options.dataDiff = diff;
-        } else if (typeof this._data === "string") {
+        } else if (typeof this._data === 'string') {
             options.request = this.map._requestManager.transformRequest(
                 browser.resolveURL(this._data as string),
                 ResourceType.Source
@@ -399,7 +399,7 @@ export class GeoJSONSource extends Evented implements Source {
             options.data = JSON.stringify(this._data);
         }
         this._pendingLoads++;
-        this.fire(new Event("dataloading", { dataType: "source" }));
+        this.fire(new Event('dataloading', {dataType: 'source'}));
         try {
             const result = await this.actor.sendAsync({
                 type: MessageType.loadData,
@@ -407,7 +407,7 @@ export class GeoJSONSource extends Evented implements Source {
             });
             this._pendingLoads--;
             if (this._removed || result.abandoned) {
-                this.fire(new Event("dataabort", { dataType: "source" }));
+                this.fire(new Event('dataabort', {dataType: 'source'}));
                 return;
             }
 
@@ -416,27 +416,27 @@ export class GeoJSONSource extends Evented implements Source {
                 resourceTiming = result.resourceTiming[this.id].slice(0);
             }
 
-            const data: any = { dataType: "source" };
+            const data: any = {dataType: 'source'};
             if (
                 this._collectResourceTiming &&
                 resourceTiming &&
                 resourceTiming.length > 0
             ) {
-                extend(data, { resourceTiming });
+                extend(data, {resourceTiming});
             }
 
             // although GeoJSON sources contain no metadata, we fire this event to let the SourceCache
             // know its ok to start requesting tiles.
             this.fire(
-                new Event("data", { ...data, sourceDataType: "metadata" })
+                new Event('data', {...data, sourceDataType: 'metadata'})
             );
             this.fire(
-                new Event("data", { ...data, sourceDataType: "content" })
+                new Event('data', {...data, sourceDataType: 'content'})
             );
         } catch (err) {
             this._pendingLoads--;
             if (this._removed) {
-                this.fire(new Event("dataabort", { dataType: "source" }));
+                this.fire(new Event('dataabort', {dataType: 'source'}));
                 return;
             }
             this.fire(new ErrorEvent(err));
@@ -469,7 +469,7 @@ export class GeoJSONSource extends Evented implements Source {
 
         tile.abortController = new AbortController();
         const data = await this.actor.sendAsync(
-            { type: message, data: params },
+            {type: message, data: params},
             tile.abortController
         );
         delete tile.abortController;
@@ -496,7 +496,7 @@ export class GeoJSONSource extends Evented implements Source {
         tile.unloadVectorData();
         await this.actor.sendAsync({
             type: MessageType.removeTile,
-            data: { uid: tile.uid, type: this.type, source: this.id },
+            data: {uid: tile.uid, type: this.type, source: this.id},
         });
     }
 
@@ -504,7 +504,7 @@ export class GeoJSONSource extends Evented implements Source {
         this._removed = true;
         this.actor.sendAsync({
             type: MessageType.removeSource,
-            data: { type: this.type, source: this.id },
+            data: {type: this.type, source: this.id},
         });
     }
 

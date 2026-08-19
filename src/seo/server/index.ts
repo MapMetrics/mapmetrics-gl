@@ -20,7 +20,7 @@ export {buildStaticImageUrl} from './static-image-url';
 
 /**
  * Normalizes input geojson to a single FeatureCollection.
- * Handles both a direct FeatureCollection and a Record<string, FeatureCollection>.
+ * Handles both a direct FeatureCollection and a `Record<string, FeatureCollection>`.
  */
 function normalizeToFeatureCollection(
     geojson: FeatureCollection | Record<string, FeatureCollection>
@@ -106,7 +106,7 @@ function countByGeometry(features: Feature[], featureLimit: number) {
 /**
  * Main entry point: generates all SEO/AEO artifacts for server-side rendering.
  *
- * 1. Normalizes input geojson (FeatureCollection or Record<string, FeatureCollection>)
+ * 1. Normalizes input geojson (FeatureCollection or `Record<string, FeatureCollection>`)
  * 2. Applies privacy filter if options.privacy is provided
  * 3. Calls generateJsonLd
  * 4. Calls generateNoscriptHtml

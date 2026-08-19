@@ -47,7 +47,7 @@ const VALID_SCHEMA_PROPERTIES = new Set([
 
 /**
  * Validates a rating value and count for schema.org AggregateRating.
- * Returns null if the rating is invalid (undefined, out of 0-5 range, or count <= 0).
+ * Returns null if the rating is invalid (undefined, out of 0-5 range, or count `<=` 0).
  */
 export function validateRating(
     ratingValue: number | undefined,

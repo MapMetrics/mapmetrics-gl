@@ -2,16 +2,16 @@ function rewind(gj: any, outer: boolean): any {
     const type = gj && gj.type;
     let i;
 
-    if (type === "FeatureCollection") {
+    if (type === 'FeatureCollection') {
         for (i = 0; i < gj.features.length; i++) rewind(gj.features[i], outer);
-    } else if (type === "GeometryCollection") {
+    } else if (type === 'GeometryCollection') {
         for (i = 0; i < gj.geometries.length; i++)
             rewind(gj.geometries[i], outer);
-    } else if (type === "Feature") {
+    } else if (type === 'Feature') {
         rewind(gj.geometry, outer);
-    } else if (type === "Polygon") {
+    } else if (type === 'Polygon') {
         rewindRings(gj.coordinates, outer);
-    } else if (type === "MultiPolygon") {
+    } else if (type === 'MultiPolygon') {
         for (i = 0; i < gj.coordinates.length; i++)
             rewindRings(gj.coordinates[i], outer);
     }

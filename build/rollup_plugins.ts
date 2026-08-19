@@ -64,7 +64,6 @@ export const plugins = (production: boolean): Plugin[] => [
     })
 ].filter(Boolean) as Plugin[];
 
-
 export const watchStagingPlugin: Plugin = {
     name: 'watch-external',
     buildStart() {

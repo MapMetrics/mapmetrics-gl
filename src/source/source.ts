@@ -1,19 +1,19 @@
-import { VectorTileSource } from "../source/vector_tile_source";
-import { RasterTileSource } from "../source/raster_tile_source";
-import { RasterDEMTileSource } from "../source/raster_dem_tile_source";
-import { GeoJSONSource } from "../source/geojson_source";
-import { VideoSource } from "../source/video_source";
-import { ImageSource } from "../source/image_source";
-import { CanvasSource } from "../source/canvas_source";
-import { type Dispatcher } from "../util/dispatcher";
+import {VectorTileSource} from '../source/vector_tile_source';
+import {RasterTileSource} from '../source/raster_tile_source';
+import {RasterDEMTileSource} from '../source/raster_dem_tile_source';
+import {GeoJSONSource} from '../source/geojson_source';
+import {VideoSource} from '../source/video_source';
+import {ImageSource} from '../source/image_source';
+import {CanvasSource} from '../source/canvas_source';
+import {type Dispatcher} from '../util/dispatcher';
 
-import type { SourceSpecification } from "@maplibre/maplibre-gl-style-spec";
-import type { Event, Evented } from "../util/evented";
-import type { Map } from "../ui/map";
-import type { Tile } from "./tile";
-import type { OverscaledTileID, CanonicalTileID } from "./tile_id";
-import type { CanvasSourceSpecification } from "../source/canvas_source";
-import { type CalculateTileZoomFunction } from "../geo/projection/covering_tiles";
+import type {SourceSpecification} from '@maplibre/maplibre-gl-style-spec';
+import type {Event, Evented} from '../util/evented';
+import type {Map} from '../ui/map';
+import type {Tile} from './tile';
+import type {OverscaledTileID, CanonicalTileID} from './tile_id';
+import type {CanvasSourceSpecification} from '../source/canvas_source';
+import {type CalculateTileZoomFunction} from '../geo/projection/covering_tiles';
 
 const registeredSources = {} as { [key: string]: SourceClass };
 
@@ -172,19 +172,19 @@ export const create = (
 
 const getSourceType = (name: string): SourceClass => {
     switch (name) {
-        case "geojson":
+        case 'geojson':
             return GeoJSONSource;
-        case "image":
+        case 'image':
             return ImageSource;
-        case "raster":
+        case 'raster':
             return RasterTileSource;
-        case "raster-dem":
+        case 'raster-dem':
             return RasterDEMTileSource;
-        case "vector":
+        case 'vector':
             return VectorTileSource;
-        case "video":
+        case 'video':
             return VideoSource;
-        case "canvas":
+        case 'canvas':
             return CanvasSource;
     }
     return registeredSources[name];

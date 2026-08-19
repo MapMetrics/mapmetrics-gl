@@ -1,9 +1,6 @@
-import {browser} from '../../util/browser';
 import {coveringTiles} from '../../geo/projection/covering_tiles';
 import type {Map} from '../map';
-import type {SourceCache} from '../../source/source_cache';
 import type {OverscaledTileID} from '../../source/tile_id';
-import type {MapDataEvent} from '../events';
 
 /**
  * Manages tile loading states and provides utilities to wait for tiles to load
@@ -125,7 +122,6 @@ export class TileLoadingManager {
         }
 
         return new Promise<boolean>((resolve) => {
-            const startTime = browser.now();
             const tileKeys = new Set(requiredTiles.map(tile => tile.key));
             const loadedTiles = new Set<string>();
             const fallbackTileKeys = new Set<string>();
@@ -139,7 +135,6 @@ export class TileLoadingManager {
             let rapidZoomTimeoutId: any = null;
             let finished = false;
             let fallbackZoom: number | null = null;
-            let rapidZoomFallbackZoom: number | null = null;
 
             // Check if tiles are already loaded
             for (const tileID of requiredTiles) {

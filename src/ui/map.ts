@@ -32,6 +32,7 @@ import {config} from '../util/config';
 import {defaultLocale} from './default_locale';
 
 import type {RequestTransformFunction} from '../util/request_manager';
+import type {Marker} from './marker';
 import type {LngLatLike} from '../geo/lng_lat';
 import type {LngLatBoundsLike} from '../geo/lng_lat_bounds';
 import type {AddLayerObject, FeatureIdentifier, StyleOptions, StyleSetterOptions} from '../style/style';
@@ -542,7 +543,7 @@ export class Map extends Camera {
     _maxCanvasSize: [number, number];
     _terrainDataCallback: (e: MapStyleDataEvent | MapSourceDataEvent) => void;
     _seoManager?: SeoManager;
-    _markers: Set<import('./marker').Marker>;
+    _markers: Set<Marker>;
 
     /**
      * @internal
@@ -3045,7 +3046,7 @@ export class Map extends Camera {
      * @internal
      * Registers a marker with the map for tracking (used by SEO layer).
      */
-    _addMarker(marker: import('./marker').Marker): void {
+    _addMarker(marker: Marker): void {
         this._markers.add(marker);
     }
 
@@ -3053,7 +3054,7 @@ export class Map extends Camera {
      * @internal
      * Unregisters a marker from the map (used by SEO layer).
      */
-    _removeMarker(marker: import('./marker').Marker): void {
+    _removeMarker(marker: Marker): void {
         this._markers.delete(marker);
     }
 
@@ -3061,7 +3062,7 @@ export class Map extends Camera {
      * Returns all markers currently added to the map.
      * @returns A Set of all active Marker instances.
      */
-    getMarkers(): Set<import('./marker').Marker> {
+    getMarkers(): Set<Marker> {
         return this._markers;
     }
 
@@ -3315,7 +3316,7 @@ export class Map extends Camera {
             // Create tile object for position calculation
             const tile = {
                 tileID: {
-                    canonical: { z, x, y }
+                    canonical: {z, x, y}
                 }
             };
             
@@ -3430,9 +3431,9 @@ export class Map extends Camera {
         // Create grid colors based on the extracted style colors
         const colors = this._createGridColorsFromStyle(styleColors);
 
-        // Create two grid patterns for pulsing effect (large and small) - dramatic difference
+        // Only the large grid is drawn up front; the small size (14) is applied by
+        // _startGridPulseAnimation() as it alternates the pattern.
         const largeSizeGrid = 28;
-        const smallSizeGrid = 14;
 
         const createGridPattern = (size: number, patternName: string) => {
             const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
@@ -3557,12 +3558,7 @@ export class Map extends Camera {
             clearInterval(this._gridPulseInterval);
             this._gridPulseInterval = null;
         }
-        // Keep current pattern
-        try {
-            // Pattern stays as is
-        } catch (e) {
-            // Ignore errors
-        }
+        // Keep the current pattern as-is.
     }
 
     /**
@@ -3574,7 +3570,7 @@ export class Map extends Camera {
         let g: number = 200;
         let b: number = 200;
 
-        if (!color) return { r, g, b };
+        if (!color) return {r, g, b};
 
         if (color.startsWith('#')) {
             const hex = color.replace('#', '');
@@ -3590,7 +3586,7 @@ export class Map extends Camera {
             }
         }
 
-        return { r, g, b };
+        return {r, g, b};
     }
 
     /**
@@ -3771,7 +3767,6 @@ export class Map extends Camera {
         
         // Calculate which tiles should be visible in viewport
         const transform = this.transform;
-        const tileSize = 512;
         const zoom = Math.floor(transform.zoom);
         const scale = Math.pow(2, zoom);
         
@@ -3799,7 +3794,7 @@ export class Map extends Camera {
                         // Create a pseudo-tile for the not-yet-downloaded area
                         const pseudoTile = {
                             tileID: {
-                                canonical: { z: zoom, x: x % scale, y: y }
+                                canonical: {z: zoom, x: x % scale, y: y}
                             }
                         };
                         this._addTileGrid(pseudoTile);

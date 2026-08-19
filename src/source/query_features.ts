@@ -1,17 +1,17 @@
-import { mat4 } from "gl-matrix";
-import type Point from "@mapbox/point-geometry";
-import type { SourceCache } from "./source_cache";
-import type { StyleLayer } from "../style/style_layer";
-import type { CollisionIndex } from "../symbol/collision_index";
-import type { IReadonlyTransform } from "../geo/transform_interface";
-import type { RetainedQueryData } from "../symbol/placement";
-import type { FilterSpecification } from "@maplibre/maplibre-gl-style-spec";
+import {mat4} from 'gl-matrix';
+import type Point from '@mapbox/point-geometry';
+import type {SourceCache} from './source_cache';
+import type {StyleLayer} from '../style/style_layer';
+import type {CollisionIndex} from '../symbol/collision_index';
+import type {IReadonlyTransform} from '../geo/transform_interface';
+import type {RetainedQueryData} from '../symbol/placement';
+import type {FilterSpecification} from '@maplibre/maplibre-gl-style-spec';
 import type {
     GeoJSONFeature,
     MapGeoJSONFeature,
-} from "../util/vectortile_to_geojson";
-import type { QueryResults, QueryResultsItem } from "../data/feature_index";
-import type { OverscaledTileID } from "./tile_id";
+} from '../util/vectortile_to_geojson';
+import type {QueryResults, QueryResultsItem} from '../data/feature_index';
+import type {OverscaledTileID} from './tile_id';
 
 type RenderedFeatureLayer = {
     wrappedTileID: string;
@@ -43,7 +43,7 @@ export type QueryRenderedFeaturesOptions = {
 
 export type QueryRenderedFeaturesOptionsStrict = Omit<
     QueryRenderedFeaturesOptions,
-    "layers"
+    'layers'
 > & {
     layers: Set<string> | null;
 };
@@ -106,7 +106,7 @@ function queryIncludes3DLayer(
             if (
                 layer &&
                 layer.source === sourceID &&
-                layer.type === "fill-extrusion"
+                layer.type === 'fill-extrusion'
             ) {
                 return true;
             }
@@ -114,7 +114,7 @@ function queryIncludes3DLayer(
     } else {
         for (const key in styleLayers) {
             const layer = styleLayers[key];
-            if (layer.source === sourceID && layer.type === "fill-extrusion") {
+            if (layer.source === sourceID && layer.type === 'fill-extrusion') {
                 return true;
             }
         }
@@ -332,12 +332,12 @@ function convertFeatureToMapFeature(
 ) {
     const feature = featureWrapper.feature as MapGeoJSONFeature;
     const state = sourceCache.getFeatureState(
-        feature.layer["source-layer"],
+        feature.layer['source-layer'],
         feature.id
     );
     feature.source = feature.layer.source;
-    if (feature.layer["source-layer"]) {
-        feature.sourceLayer = feature.layer["source-layer"];
+    if (feature.layer['source-layer']) {
+        feature.sourceLayer = feature.layer['source-layer'];
     }
     feature.state = state;
 }

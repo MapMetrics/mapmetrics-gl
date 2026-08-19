@@ -1,15 +1,15 @@
-import { getVideo } from "../util/ajax";
-import { ResourceType } from "../util/request_manager";
+import {getVideo} from '../util/ajax';
+import {ResourceType} from '../util/request_manager';
 
-import { ImageSource } from "./image_source";
-import { Texture } from "../render/texture";
-import { Event, ErrorEvent } from "../util/evented";
-import { ValidationError } from "@maplibre/maplibre-gl-style-spec";
+import {ImageSource} from './image_source';
+import {Texture} from '../render/texture';
+import {Event, ErrorEvent} from '../util/evented';
+import {ValidationError} from '@maplibre/maplibre-gl-style-spec';
 
-import type { Map } from "../ui/map";
-import type { Dispatcher } from "../util/dispatcher";
-import type { Evented } from "../util/evented";
-import type { VideoSourceSpecification } from "@maplibre/maplibre-gl-style-spec";
+import type {Map} from '../ui/map';
+import type {Dispatcher} from '../util/dispatcher';
+import type {Evented} from '../util/evented';
+import type {VideoSourceSpecification} from '@maplibre/maplibre-gl-style-spec';
 
 /**
  * A data source containing video.
@@ -65,7 +65,7 @@ export class VideoSource extends ImageSource {
     ) {
         super(id, options, dispatcher, eventedParent);
         this.roundZoom = true;
-        this.type = "video";
+        this.type = 'video';
         this.options = options;
     }
 
@@ -93,7 +93,7 @@ export class VideoSource extends ImageSource {
 
             // Start repainting when video starts playing. hasTransition() will then return
             // true to trigger additional frames as long as the videos continues playing.
-            this.video.addEventListener("playing", () => {
+            this.video.addEventListener('playing', () => {
                 this.map.triggerRepaint();
             });
 
@@ -199,8 +199,8 @@ export class VideoSource extends ImageSource {
         let newTilesLoaded = false;
         for (const w in this.tiles) {
             const tile = this.tiles[w];
-            if (tile.state !== "loaded") {
-                tile.state = "loaded";
+            if (tile.state !== 'loaded') {
+                tile.state = 'loaded';
                 tile.texture = this.texture;
                 newTilesLoaded = true;
             }
@@ -208,9 +208,9 @@ export class VideoSource extends ImageSource {
 
         if (newTilesLoaded) {
             this.fire(
-                new Event("data", {
-                    dataType: "source",
-                    sourceDataType: "idle",
+                new Event('data', {
+                    dataType: 'source',
+                    sourceDataType: 'idle',
                     sourceId: this.id,
                 })
             );
@@ -219,7 +219,7 @@ export class VideoSource extends ImageSource {
 
     serialize(): VideoSourceSpecification {
         return {
-            type: "video",
+            type: 'video',
             urls: this.urls,
             coordinates: this.coordinates,
         };

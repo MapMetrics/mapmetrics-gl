@@ -23,7 +23,7 @@ import type {SourceSpecification} from '@maplibre/maplibre-gl-style-spec';
 import type {MapSourceDataEvent} from '../ui/events';
 import type {Terrain} from '../render/terrain';
 import type {CanvasSourceSpecification} from './canvas_source';
-import {coveringTiles, coveringZoomLevel, expandTileCoverage} from '../geo/projection/covering_tiles';
+import {coveringTiles, coveringZoomLevel} from '../geo/projection/covering_tiles';
 
 type TileResult = {
     tile: Tile;
@@ -648,6 +648,9 @@ export class SourceCache extends Evented {
 
             // // Expand tile coverage around the bounding box for smoother panning and zooming
             // // This adds a buffer of neighboring tiles to prevent loading delays during navigation
+            // // NOTE: kept disabled deliberately - it increases the number of tiles requested,
+            // // which is billed. Re-import expandTileCoverage from
+            // // '../geo/projection/covering_tiles' if this is ever re-enabled.
             // const bufferSize = this._source.expandTileCoverage || 1; // Default to 1 tile buffer
             // if (bufferSize > 0) {
             //     idealTileIDs = expandTileCoverage(idealTileIDs, bufferSize);
