@@ -1,4 +1,5 @@
 import {makeRequest} from './ajax';
+import {isMapMetricsGatewayUrl} from './mapmetrics_hosts';
 
 /**
  * The six short-form credential parameters carried on a signed tile URL.
@@ -78,6 +79,23 @@ export type MapSessionOptions = {
      * How many seconds before `exp` to renew. Defaults to {@link DEFAULT_RENEW_LEAD_TIME_SECONDS}.
      */
     renewLeadTimeSeconds?: number;
+    /**
+     * The opt-OUT. Pass `false` to keep this page on v1 cookie billing.
+     *
+     * v2 map sessions are now on by DEFAULT: the SDK learns its own key from the gateway style URL
+     * it already requests (see {@link MapSession.learnFromStyleUrl}), so a customer gets correct
+     * per-window billing with no code change. That is the right default, but it must not be the only
+     * option: an application diagnosing a tile-auth problem needs to be able to take the SDK's
+     * signing out of the picture in one line and see the un-signed behaviour, and an account whose
+     * key is genuinely not permitted to create sessions should be able to say so instead of
+     * absorbing three failed creates on every load. Both are cheap now and expensive to retrofit
+     * once apps depend on the default.
+     *
+     * `false` is a master switch, not merely a "do not learn": it makes {@link MapSession.isEnabled}
+     * false, so nothing is signed even if an `apiKey` is passed in the same call. That is what makes
+     * it usable as a debugging toggle.
+     */
+    enabled?: boolean;
 };
 
 /**
@@ -107,6 +125,14 @@ const defaultTransport: MapSessionTransport = async (url: string) => {
 export class MapSession {
     // --- configuration ---------------------------------------------------------------
     _apiKey: string | null = null;
+    /**
+     * True once `configure()` supplied an apiKey. A key LEARNED from a style URL does not set this,
+     * which is what lets {@link learnFromStyleUrl} tell "explicitly configured, hands off" from
+     * "learned, and therefore already learned once".
+     */
+    _apiKeyIsConfigured: boolean = false;
+    /** False only after an explicit `configure({enabled: false})`. See {@link MapSessionOptions.enabled}. */
+    _enabled: boolean = true;
     _renewLeadTimeSeconds: number = DEFAULT_RENEW_LEAD_TIME_SECONDS;
 
     // --- credential ------------------------------------------------------------------
@@ -151,7 +177,14 @@ export class MapSession {
      * @param options - see {@link MapSessionOptions}
      */
     configure(options: MapSessionOptions) {
-        if (options.apiKey !== undefined) this._apiKey = options.apiKey || null;
+        if (options.enabled !== undefined) this._enabled = options.enabled !== false;
+        if (options.apiKey !== undefined) {
+            this._apiKey = options.apiKey || null;
+            // Records the INTENT, not the value: `configure({apiKey: ''})` is still an explicit
+            // statement that this application supplies its own key, and a style URL must not then
+            // quietly substitute a different one.
+            this._apiKeyIsConfigured = true;
+        }
         if (options.renewLeadTimeSeconds !== undefined && options.renewLeadTimeSeconds > 0) {
             this._renewLeadTimeSeconds = options.renewLeadTimeSeconds;
         }
@@ -187,9 +220,88 @@ export class MapSession {
         if (this._apiKey && this._origin && !this._sig) this.refreshNow();
     }
 
-    /** True once an API key has been configured. Everything else is inert until then. */
+    /**
+     * True once an API key is held — configured, or learned from a gateway style URL. Everything
+     * else is inert until then, and stays inert after `configure({enabled: false})`.
+     * @returns true if tiles may be signed
+     */
     isEnabled(): boolean {
-        return !!this._apiKey;
+        return this._enabled && !!this._apiKey;
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Learning the key from the style request
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * THE DEFAULT-ON PATH. Learns the API key and gateway origin from a style URL the SDK was going
+     * to request anyway, so an application gets correct per-window billing without calling
+     * {@link configure} at all.
+     *
+     * It works because the credential is already on the wire. A production style URL is
+     *
+     * ```
+     * https://gateway.mapmetrics-atlas.net/styles/?fileName=<uuid>/NightGrid.json&token=<JWT>
+     * ```
+     *
+     * and `POST /v2/map-sessions?token=<T>` asks only that T's scope include `maps` — which that JWT
+     * has. So the SDK can buy its own window with the credential it is already showing, and no style
+     * has to change.
+     *
+     * THE HOST GUARD IS THE WHOLE SAFETY ARGUMENT. A style is a document a third party may control.
+     * Without {@link isMapMetricsGatewayUrl} — an exact hostname match, never a substring — any
+     * style could name an origin of its choosing and be handed the customer's key to POST there.
+     * Learning ONLY from a known-gateway host is strictly SAFER than the pre-existing
+     * trust-on-first-use origin learning in {@link signUrl}, which accepts any https tile host.
+     *
+     * Everything here degrades silently. A style with no `token=`, a customer-hosted or CDN-served
+     * style, a style handed to the `Map` as an object rather than a URL: none of them learn, none of
+     * them throw, and the map behaves exactly as it does today.
+     * @param url - a URL about to be requested as {@link ResourceType.Style}
+     */
+    learnFromStyleUrl(url: string) {
+        if (!this._enabled || !url) return;
+
+        // LEARN ONCE. Style switching is a supported feature, so a second style load must not
+        // re-point the key mid-session — the window already bought would be stranded and the next
+        // create billed again. Re-learning is only permissible while nothing at all is held, which
+        // is also what lets a first, token-less style leave the door open for a later one.
+        if (this._apiKey || this._apiKeyIsConfigured) return;
+        // Explicit configuration wins on the origin half too: an application that pinned
+        // `gatewayOrigin` chose where its key may be POSTed, and a style document does not get to
+        // revisit that decision by supplying a key for somewhere else.
+        if (this._origin || this._originIsConfigured) return;
+
+        // THE SECURITY GUARD. Do not weaken this to a substring or a suffix test.
+        if (!isMapMetricsGatewayUrl(url)) return;
+
+        let parsed: URL;
+        try {
+            parsed = new URL(url, typeof location !== 'undefined' ? location.href : undefined);
+        } catch {
+            return;
+        }
+        // Belt and braces with the host guard: the key is POSTed to this origin, so it may not
+        // travel over cleartext even to a host on the allow-list.
+        if (parsed.protocol !== 'https:') return;
+        const token = parsed.searchParams.get('token');
+        if (!token) return;
+
+        this._apiKey = token;
+        this._origin = originOf(parsed.href);
+        if (!this._origin) {
+            this._apiKey = null;
+            return;
+        }
+        this._installVisibilityHandler();
+
+        // MINT EAGERLY, exactly as the configured path does — see the long comment in
+        // {@link configure}. `transformRequest` is synchronous, so any tile that arrives before a
+        // credential exists goes out unsigned, still carrying the style's `?token=`, and is billed
+        // through the v1 cookie path. Those tiles return 200, not 401, so nothing self-corrects. A
+        // lazy create here measured 4-11 billed units for ONE page load; the style request is issued
+        // before any tile request, so minting here lands the credential first.
+        if (!this._sig) this.refreshNow();
     }
 
     // ---------------------------------------------------------------------------------
@@ -670,6 +782,8 @@ export class MapSession {
         }
         this._visibilityHandler = null;
         this._apiKey = null;
+        this._apiKeyIsConfigured = false;
+        this._enabled = true;
         this._renewLeadTimeSeconds = DEFAULT_RENEW_LEAD_TIME_SECONDS;
         this._account = null;
         this._sessionId = null;

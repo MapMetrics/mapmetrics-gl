@@ -67,19 +67,31 @@ function setMaxParallelImageRequests(numRequests: number) { config.MAX_PARALLEL_
 function getWorkerUrl() { return config.WORKER_URL; }
 function setWorkerUrl(value: string) { config.WORKER_URL = value; }
 /**
- * Enables v2 map-session authentication.
+ * Configures v2 map-session authentication. Calling this is OPTIONAL.
  *
- * The gateway bills one map load per 30-minute window of use. With an API key configured the SDK
- * buys a short-lived, maps-only, account-bound credential and signs the tile URLs the style already
- * emits with it, instead of putting a permanent full-scope key on every request. Until this is
- * called nothing changes: tiles go out exactly as they do today.
+ * The gateway bills one map load per 30-minute window of use. The SDK buys a short-lived, maps-only,
+ * account-bound credential and signs the tile URLs the style already emits with it, instead of
+ * letting a permanent full-scope key on every request be billed by cookie inference.
+ *
+ * This is ON BY DEFAULT and needs no code: when the style URL is served by a MapMetrics gateway it
+ * already carries a `token=` JWT whose scope includes `maps`, and that is exactly the credential
+ * `POST /v2/map-sessions` wants — so the SDK learns its key and origin from the style request it was
+ * making anyway. Nothing is ever learned from a non-gateway host, so a third-party style cannot
+ * redirect the key. A style with no token, or one served from a CDN or passed as an object, simply
+ * leaves the SDK on the previous behaviour.
+ *
+ * Call this to supply the key yourself (a self-hosted style, a pinned gateway), or to opt OUT with
+ * `{enabled: false}`.
  *
  * All `Map` instances on the page share ONE session, otherwise each map would buy its own window.
- * @param options - see {@link MapSessionOptions}. Pass `gatewayOrigin` to pin the origin the API key
- * may be POSTed to; without it the origin is learned once from the first https tile URL.
+ * @param options - see {@link MapSessionOptions}. An explicitly configured `apiKey` or
+ * `gatewayOrigin` is never overridden by a style URL.
  * @example
  * ```ts
+ * // Only needed if the style is not gateway-hosted, or to pin the origin explicitly:
  * mapmetricsgl.configureMapSession({apiKey: MY_KEY, gatewayOrigin: 'https://gateway.mapmetrics.org'});
+ * // Opt out and stay on the previous behaviour:
+ * mapmetricsgl.configureMapSession({enabled: false});
  * ```
  */
 function configureMapSession(options: MapSessionOptions) { mapSession.configure(options); }
