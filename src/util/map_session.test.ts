@@ -8,7 +8,10 @@ import {
 } from './map_session';
 import {RequestManager, ResourceType} from './request_manager';
 
-const ORIGIN = 'https://gateway.example.com';
+// An ALLOW-LISTED gateway host, because the origin guards now require one -- but deliberately the
+// one that does NOT resolve. Using the live host makes any test that forgets to stub `transport`
+// issue a REAL request to production, which then lands asynchronously inside a later test.
+const ORIGIN = 'https://gateway.mapmetrics.org';
 const TILE = `${ORIGIN}/planet20251013/12/2094/1362.mvt?token=JWT`;
 
 function nowSeconds() {
@@ -126,6 +129,21 @@ describe('invariant 5 — never send the API key to an unvalidated origin', () =
         mapSession.signUrl(TILE);
         expect(mapSession._origin).toBe(ORIGIN);
         mapSession.signUrl('https://evil.example.net/12/2094/1362.mvt');
+        expect(mapSession._origin).toBe(ORIGIN);
+    });
+
+    test('a NON-gateway https tile URL never becomes the learned origin', () => {
+        // The learned origin decides where the API key is POSTed AND which hosts get signed
+        // tiles. A style document picks its own tile URLs, so trust-on-first-use over plain
+        // https let any host named there become the destination for a configured key.
+        mapSession.configure({apiKey: 'KEY'});
+        mapSession.signUrl('https://evil.example.net/planet/12/2094/1362.mvt');
+        expect(mapSession._origin).toBeNull();
+    });
+
+    test('a gateway https tile URL still IS learned, so zero-config keeps working', () => {
+        mapSession.configure({apiKey: 'KEY'});
+        mapSession.signUrl(TILE);
         expect(mapSession._origin).toBe(ORIGIN);
     });
 

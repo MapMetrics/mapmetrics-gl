@@ -329,7 +329,20 @@ export class MapSession {
         // works against staging and production with no setup. Two constraints keep that safe
         // enough: https only (the API key is POSTed here later), and learned exactly ONCE, so a
         // later style can never re-point it.
-        if (!this._origin && !this._originIsConfigured && parsed.protocol === 'https:' && parsed.host) {
+        // THE SAME HOST GUARD AS learnFromStyleUrl. The learned origin decides two things, and
+        // both are dangerous to get wrong: it is where the API key is later POSTed, and it is the
+        // set of hosts whose tiles get SIGNED. A signed tile handed to a third party is a
+        // replayable credential billed to this customer.
+        //
+        // Trust-on-first-use over plain https was the old behaviour and it is not a control: a
+        // style document chooses its own tile URLs, so any host named there could become the
+        // destination for `configureMapSession({apiKey})` when no `gatewayOrigin` was pinned. The
+        // warning below was the only thing standing in the way.
+        //
+        // Cost of the guard: a gateway that is not on the allow-list — a staging deployment, a
+        // self-hosted instance — must pass `gatewayOrigin` explicitly. That is the correct trade.
+        if (!this._origin && !this._originIsConfigured && parsed.protocol === 'https:' && parsed.host
+            && isMapMetricsGatewayUrl(parsed.href)) {
             this._origin = originOf(parsed.href);
             warnOnce(`map-session gateway origin LEARNED from tile traffic as "${this._origin}"; the API key will be POSTed there. Pass gatewayOrigin to configure it instead.`);
         }
