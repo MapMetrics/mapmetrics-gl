@@ -26,13 +26,23 @@ export const plugins = (production: boolean): Plugin[] => [
             '_token_stack:': ''
         }
     }),
-    // production && terser({
-    //     compress: {
-    //         pure_getters: true,
-    //         passes: 3
-    //     },
-    //     sourceMap: true
-    // }),
+    // Minify the production bundle. This runs on the staging AMD chunks, which
+    // `rollup.config.ts` then concatenates into the UMD dist (that second pass has
+    // `treeshake: false` and no transforms), so minifying here covers the published
+    // artifact. `rollup.config.csp.ts` uses this same plugin list directly.
+    //
+    // This was commented out in 70ffb2c, the squashed initial import of the fork - no commit
+    // ever records a reason, and re-enabling it leaves `test-build` (which evals the bundle)
+    // and the unit suite green. It is NOT safe to disable again casually: without it the
+    // published bundle is ~2.5 MB instead of ~0.9 MB, i.e. ~1.6 MB of dead weight on exactly
+    // the mobile connections this SDK targets.
+    production && terser({
+        compress: {
+            pure_getters: true,
+            passes: 3
+        },
+        sourceMap: true
+    }),
     nodeResolve,
     typescript(),
     // Strip developer-only output from the published bundle so consuming applications get a quiet

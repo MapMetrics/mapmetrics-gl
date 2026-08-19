@@ -38,7 +38,14 @@ describe('test min build', () => {
         const decreaseQuota = 4096;
 
         // feel free to update this value after you've checked that it has changed on purpose :-)
-        const expectedBytes = 911111;
+        //
+        // 950004 measured 2026-08 with terser re-enabled in build/rollup_plugins.ts. The
+        // previous value (911111) was inherited from upstream MapLibre and had never been
+        // met by this fork: with minification off the bundle was 2565907 bytes and this
+        // assertion simply failed on every branch. The fork's own additions (map-session
+        // auth, tile loading manager, grid overlays, seo/client) account for the delta
+        // against upstream's ~0.87 MB.
+        const expectedBytes = 950004;
 
         expect(actualBytes).toBeLessThan(expectedBytes + increaseQuota);
         expect(actualBytes).toBeGreaterThan(expectedBytes - decreaseQuota);
