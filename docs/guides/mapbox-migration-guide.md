@@ -30,9 +30,9 @@ Mapmetrics GL JS is completely backward compatible with Mapbox GL JS. This compa
 -    />
 
 
-+    <script src="https://gateway.mapmetrics.org/assets/js/mapmetrics-gl.js"></script>
++    <script src="https://unpkg.com/@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.js"></script>
 +    <link
-+      href="https://gateway.mapmetrics.org/assets/css/mapmetrics-gl.css"
++      href="https://unpkg.com/@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.css"
 +      rel="stylesheet"
 +    />
 

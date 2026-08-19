@@ -79,7 +79,7 @@ function setWorkerUrl(value: string) { config.WORKER_URL = value; }
  * may be POSTed to; without it the origin is learned once from the first https tile URL.
  * @example
  * ```ts
- * mapmetricsgl.configureMapSession({apiKey: MY_KEY, gatewayOrigin: 'https://gateway.mapmetrics.org'});
+ * mapmetricsgl.configureMapSession({apiKey: MY_KEY, gatewayOrigin: 'https://gateway.mapmetrics-atlas.net'});
  * ```
  */
 function configureMapSession(options: MapSessionOptions) { mapSession.configure(options); }

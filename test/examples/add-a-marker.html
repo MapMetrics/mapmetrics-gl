@@ -4,11 +4,11 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link
-            href="https://gateway.mapmetrics.org/assets/css/mapmetrics-gl.css"
+            href="https://unpkg.com/@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.css"
             rel="stylesheet"
         />
-        <script src="https://gateway.mapmetrics.org/assets/js/pmtiles.js"></script>
-        <script src="https://gateway.mapmetrics.org/assets/js/mapmetrics-gl.js"></script>
+        <script src="https://unpkg.com/pmtiles@4.5.0/dist/pmtiles.js"></script>
+        <script src="https://unpkg.com/@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.js"></script>
         <style>
             html,
             body {
@@ -39,13 +39,13 @@
             mapmetrics.addProtocol("pmtiles", protocol.tile);
             const map = new mapmetrics.Map({
                 container: "map",
-                style: `https://gateway.mapmetrics.org/styles/dark.json?token=${accessToken}`,
+                style: `https://gateway.mapmetrics-atlas.net/styles/?fileName=<YOUR_ACCOUNT_ID>/<YOUR_STYLE>.json&token=${accessToken}`,
                 zoom: 11,
                 center: [2.349902, 48.852966],
             }).addControl(new mapmetrics.NavigationControl(), "top-right");
             // This plugin is used for right to left languages
             mapmetrics.setRTLTextPlugin(
-                "https://gateway.mapmetrics.org/assets/js/mapmetrics-gl-rtl-text.min.js"
+                "https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js"
             );
 
             // Add a marker with the default icon

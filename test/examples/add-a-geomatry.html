@@ -3,11 +3,11 @@
     <head>
         <meta charset="UTF-8" />
         <link
-            href="https://gateway.mapmetrics.org/assets/css/mapmetrics-gl.css"
+            href="https://unpkg.com/@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.css"
             rel="stylesheet"
         />
-        <script src="https://gateway.mapmetrics.org/assets/js/mapmetrics-gl.js"></script>
-        <script src="https://gateway.mapmetrics.org/assets/js/pmtiles.js"></script>
+        <script src="https://unpkg.com/@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.js"></script>
+        <script src="https://unpkg.com/pmtiles@4.5.0/dist/pmtiles.js"></script>
         <style>
             html,
             body {
@@ -31,13 +31,13 @@
 
             const map = new mapmetrics.Map({
                 container: "map",
-                style: `https://gateway.mapmetrics.org/styles/dark.json?token=${accessToken}`,
+                style: `https://gateway.mapmetrics-atlas.net/styles/?fileName=<YOUR_ACCOUNT_ID>/<YOUR_STYLE>.json&token=${accessToken}`,
                 zoom: 11,
                 center: [2.349902, 48.852966],
             }).addControl(new mapmetrics.NavigationControl(), "top-right");
 
             mapmetrics.setRTLTextPlugin(
-                "https://gateway.mapmetrics.org/assets/js/mapmetrics-gl-rtl-text.min.js"
+                "https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js"
             );
 
             const geoJsonFeature = {
