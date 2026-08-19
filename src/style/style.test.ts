@@ -2236,7 +2236,7 @@ describe('Style#queryRenderedFeatures', () => {
         style.loadJSON({
             'version': 8,
             'sources': {
-                'Mapmetrics': {
+                'mapmetrics': {
                     'type': 'geojson',
                     'data': {type: 'FeatureCollection', features: []}
                 },
@@ -2248,7 +2248,7 @@ describe('Style#queryRenderedFeatures', () => {
             'layers': [{
                 'id': 'land',
                 'type': 'line',
-                'source': 'Mapmetrics',
+                'source': 'mapmetrics',
                 'source-layer': 'water',
                 'layout': {
                     'line-cap': 'round'

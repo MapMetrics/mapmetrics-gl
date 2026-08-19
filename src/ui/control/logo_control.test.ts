@@ -1,5 +1,6 @@
 import {describe, beforeEach, test, expect} from 'vitest';
 import {createMap as globalCreateMap, beforeMapTest} from '../../util/test/util';
+import {LogoControl} from './logo_control';
 
 function createMap(logoPosition, mapmetricsLogo) {
 
@@ -59,7 +60,13 @@ describe('LogoControl', () => {
         });
     }));
 
-    test('appears in compact mode if container is less then 640 pixel wide', () => {
+    /**
+     * MapMetrics fork behaviour: unlike upstream MapLibre, the logo does NOT collapse to
+     * compact automatically on narrow (<640px) containers - see `_updateCompact` in
+     * `logo_control.ts`, which only applies `mapmetricsgl-compact` when `compact: true`
+     * was explicitly requested. This keeps the brand mark at a fixed 180px on mobile.
+     */
+    test('does not collapse to compact on narrow containers (fork behaviour)', () => {
         const map = createMap(undefined, true);
         const container = map.getContainer();
 
@@ -70,6 +77,21 @@ describe('LogoControl', () => {
         ).toHaveLength(1);
 
         Object.defineProperty(map.getCanvasContainer(), 'offsetWidth', {value: 635, configurable: true});
+        map.resize();
+        expect(
+            container.querySelectorAll('.mapmetricsgl-ctrl-logo.mapmetricsgl-compact')
+        ).toHaveLength(0);
+        expect(
+            container.querySelectorAll('.mapmetricsgl-ctrl-logo:not(.mapmetricsgl-compact)')
+        ).toHaveLength(1);
+    });
+
+    test('appears in compact mode only when compact is explicitly requested', () => {
+        const map = createMap(undefined, false);
+        const container = map.getContainer();
+        map.addControl(new LogoControl({compact: true}));
+
+        Object.defineProperty(map.getCanvasContainer(), 'offsetWidth', {value: 1000, configurable: true});
         map.resize();
         expect(
             container.querySelectorAll('.mapmetricsgl-ctrl-logo.mapmetricsgl-compact')

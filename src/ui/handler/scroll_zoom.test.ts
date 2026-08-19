@@ -16,6 +16,20 @@ function createMap() {
     });
 }
 
+/**
+ * Zoom change produced by one `simulate.magicWheelZoomDelta` wheel tick.
+ *
+ * The MapMetrics fork deliberately retunes the scroll-zoom rate for a faster, more
+ * responsive feel than upstream MapLibre: `defaultZoomRate`/`wheelZoomRate` in
+ * `scroll_zoom.ts` went 1/1200 -> 1/1000 (and, before that, 1/100 & 1/450 -> 1/1200).
+ * Upstream's expected value here is 0.0285; the fork's is ~0.1404.
+ *
+ * Keep this pinned to a literal rather than deriving it from the handler's constants:
+ * the point of these assertions is that an accidental revert of the tuned zoom rate
+ * (e.g. when re-vendoring upstream) shows up as a test failure.
+ */
+const singleTickZoomDelta = 0.1404;
+
 beforeEach(() => {
     beforeMapTest();
 });
@@ -40,7 +54,7 @@ describe('ScrollZoomHandler', () => {
         browserNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
-        expect(map.getZoom() - startZoom).toBeCloseTo(0.0285, 3);
+        expect(map.getZoom() - startZoom).toBeCloseTo(singleTickZoomDelta, 3);
 
         map.remove();
     });
@@ -102,7 +116,7 @@ describe('ScrollZoomHandler', () => {
         browserNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
-        expect(map.getZoom() - startZoom).toBeCloseTo(0.0285 * iterations, 2);
+        expect(map.getZoom() - startZoom).toBeCloseTo(singleTickZoomDelta * iterations, 2);
 
         map.remove();
     });
@@ -231,7 +245,7 @@ describe('ScrollZoomHandler', () => {
         browserNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
-        expect(map.getZoom() - startZoom).toBeCloseTo(0.0285 * 3, 3);
+        expect(map.getZoom() - startZoom).toBeCloseTo(singleTickZoomDelta * 3, 3);
 
         map.remove();
     });
@@ -494,7 +508,7 @@ describe('ScrollZoomHandler', () => {
 
         expect(map.getCenter().lat).toBeCloseTo(0, 10);
         expect(map.getCenter().lng).toBeCloseTo(0, 10);
-        expect(map.getZoom()).toBeCloseTo(0.028567106927402726, 10);
+        expect(map.getZoom()).toBeCloseTo(0.14038620420155865, 10);
 
         map.remove();
     });
@@ -519,9 +533,9 @@ describe('ScrollZoomHandler', () => {
         browserNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
-        expect(map.getCenter().lat).toBeCloseTo(-11.6371, 3);
-        expect(map.getCenter().lng).toBeCloseTo(11.0286, 3);
-        expect(map.getZoom()).toBeCloseTo(0.028567106927402726, 10);
+        expect(map.getCenter().lat).toBeCloseTo(-48.3721, 3);
+        expect(map.getCenter().lng).toBeCloseTo(52.15711, 3);
+        expect(map.getZoom()).toBeCloseTo(0.14038620420155865, 10);
 
         map.remove();
     });
@@ -546,8 +560,8 @@ describe('ScrollZoomHandler', () => {
         browserNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
-        expect(map.getCenter().lat).toBeCloseTo(-11.6371, 3);
-        expect(map.getCenter().lng).toBeCloseTo(11.0286, 3);
+        expect(map.getCenter().lat).toBeCloseTo(-48.3721, 3);
+        expect(map.getCenter().lng).toBeCloseTo(52.15711, 3);
 
         map.remove();
     });
@@ -580,7 +594,7 @@ describe('ScrollZoomHandler', () => {
         // On Top, use center point
         expect(map.getCenter().lat).toBeCloseTo(0, 3);
         expect(map.getCenter().lng).toBeCloseTo(0, 3);
-        expect(map.getZoom()).toBeCloseTo(5.02856, 3);
+        expect(map.getZoom()).toBeCloseTo(5 + singleTickZoomDelta, 3);
 
         // do the same test on the bottom
         map = createMap();
@@ -602,9 +616,9 @@ describe('ScrollZoomHandler', () => {
         browserNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
-        expect(map.getCenter().lat).toBeCloseTo(-0.125643, 3);
+        expect(map.getCenter().lat).toBeCloseTo(-0.594187, 3);
         expect(map.getCenter().lng).toBeCloseTo(0.0, 3);
-        expect(map.getZoom()).toBeCloseTo(5.02856, 3);
+        expect(map.getZoom()).toBeCloseTo(5 + singleTickZoomDelta, 3);
 
         map.remove();
     });

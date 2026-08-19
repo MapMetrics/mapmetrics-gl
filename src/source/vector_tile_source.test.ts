@@ -73,7 +73,9 @@ describe('VectorTileSource', () => {
         expect(source.tiles).toEqual(['http://example.com/{z}/{x}/{y}.png']);
         expect(source.minzoom).toBe(1);
         expect(source.maxzoom).toBe(10);
-        expect((source as Source).attribution).toBe('Mapmetrics');
+        // This source is loaded from the shared fixture, so assert the fixture's own
+        // attribution rather than a hard-coded brand string.
+        expect((source as Source).attribution).toBe(fixturesSource.attribution);
     });
 
     test('transforms the request for TileJSON URL', () => {

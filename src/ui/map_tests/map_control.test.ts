@@ -2,6 +2,16 @@ import {beforeEach, test, expect, vi} from 'vitest';
 import {createMap, beforeMapTest} from '../../util/test/util';
 import {type IControl} from '../control/control';
 
+/**
+ * MapMetrics fork behaviour: every `Map` is constructed with two mandatory controls
+ * already attached - an `AttributionControl` (attribution cannot be disabled, so that
+ * OpenStreetMap/ODbL attribution is always shown; `attributionControl: false` only
+ * resets it to defaults) and a `LogoControl` (`mapmetricsLogo` defaults to `true`).
+ * Upstream MapLibre starts with an empty `_controls` array when attribution is off.
+ * Tests therefore index/count relative to these built-ins rather than from zero.
+ */
+const DEFAULT_CONTROL_COUNT = 2;
+
 beforeEach(() => {
     beforeMapTest();
     global.fetch = null;
@@ -16,7 +26,8 @@ test('#addControl', () => {
         }
     } as any as IControl;
     map.addControl(control);
-    expect(map._controls[0]).toBe(control);
+    expect(map._controls).toHaveLength(DEFAULT_CONTROL_COUNT + 1);
+    expect(map._controls[DEFAULT_CONTROL_COUNT]).toBe(control);
 });
 
 test('#removeControl errors on invalid arguments', () => {
@@ -42,7 +53,7 @@ test('#removeControl', () => {
     };
     map.addControl(control);
     map.removeControl(control);
-    expect(map._controls).toHaveLength(0);
+    expect(map._controls).toHaveLength(DEFAULT_CONTROL_COUNT);
 
 });
 

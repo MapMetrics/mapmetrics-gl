@@ -17,6 +17,14 @@ function createMap(cooperativeGestures) {
     });
 }
 
+/**
+ * Zoom change produced by one `simulate.magicWheelZoomDelta` wheel tick.
+ * The MapMetrics fork retunes `defaultZoomRate`/`wheelZoomRate` in `scroll_zoom.ts`
+ * (1/1200 -> 1/1000), so a tick moves ~0.1404 zoom levels rather than upstream's 0.0285.
+ * See the matching constant in `scroll_zoom.test.ts`.
+ */
+const singleTickZoomDelta = 0.1404;
+
 beforeEach(() => {
     beforeMapTest();
 });
@@ -81,7 +89,7 @@ describe('CoopGesturesHandler', () => {
         map._renderTaskQueue.run();
 
         const endZoom = map.getZoom();
-        expect(endZoom - startZoom).toBeCloseTo(0.0285, 3);
+        expect(endZoom - startZoom).toBeCloseTo(singleTickZoomDelta, 3);
 
         map.remove();
     });
@@ -105,7 +113,7 @@ describe('CoopGesturesHandler', () => {
         map._renderTaskQueue.run();
 
         const endZoom = map.getZoom();
-        expect(endZoom - startZoom).toBeCloseTo(0.0285, 3);
+        expect(endZoom - startZoom).toBeCloseTo(singleTickZoomDelta, 3);
 
         map.remove();
     });
@@ -138,7 +146,7 @@ describe('CoopGesturesHandler', () => {
         map._renderTaskQueue.run();
 
         const endZoom = map.getZoom();
-        expect(endZoom - startZoom).toBeCloseTo(0.0285, 3);
+        expect(endZoom - startZoom).toBeCloseTo(singleTickZoomDelta, 3);
 
         map.remove();
     });
@@ -317,7 +325,7 @@ describe('CoopGesturesHandler', () => {
         map._renderTaskQueue.run();
 
         const midZoom = map.getZoom();
-        expect(midZoom - startZoom).toBeCloseTo(0.0285, 3);
+        expect(midZoom - startZoom).toBeCloseTo(singleTickZoomDelta, 3);
 
         // Enable cooperative gestures
         map.cooperativeGestures.enable();
