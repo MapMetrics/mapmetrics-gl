@@ -15,7 +15,7 @@ const PROPERTY_PATTERNS: Array<{pattern: RegExp; schemaProperty: string}> = [
 
 /**
  * Auto-detect schema.org property mappings from GeoJSON property names.
- * Returns a mapping of source property name -> schema.org property name.
+ * Returns a mapping of source property name to schema.org property name.
  */
 export function autoDetectProperties(properties: Record<string, unknown>): Record<string, string> {
     const mappings: Record<string, string> = {};

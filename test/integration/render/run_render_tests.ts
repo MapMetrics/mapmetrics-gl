@@ -1,22 +1,22 @@
-import path, { dirname } from "path";
-import fs from "fs";
-import st from "st";
-import { PNG } from "pngjs";
-import pixelmatch from "pixelmatch";
-import { fileURLToPath } from "url";
-import { globSync } from "glob";
-import http from "http";
-import puppeteer, { type Page, type Browser } from "puppeteer";
-import { CoverageReport } from "monocart-coverage-reports";
-import { localizeURLs } from "../lib/localize-urls";
+import path, {dirname} from 'path';
+import fs from 'fs';
+import st from 'st';
+import {PNG} from 'pngjs';
+import pixelmatch from 'pixelmatch';
+import {fileURLToPath} from 'url';
+import {globSync} from 'glob';
+import http from 'http';
+import puppeteer, {type Page, type Browser} from 'puppeteer';
+import {CoverageReport} from 'monocart-coverage-reports';
+import {localizeURLs} from '../lib/localize-urls';
 import type {
     Map as MapmetricsMap,
     CanvasSource,
     PointLike,
     StyleSpecification,
-} from "../../../dist/mapmetrics-gl";
-import junitReportBuilder, { type TestSuite } from "junit-report-builder";
-import type * as mapmetricsglModule from "../../../dist/mapmetrics-gl";
+} from '../../../dist/mapmetrics-gl';
+import junitReportBuilder, {type TestSuite} from 'junit-report-builder';
+import type * as mapmetricsglModule from '../../../dist/mapmetrics-gl';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 let mapmetricsgl: typeof mapmetricsglModule;
@@ -89,7 +89,7 @@ type TestStats = {
 function makeHash(): string {
     const array = [];
     const possible =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
     for (let i = 0; i < 10; ++i)
         array.push(
@@ -97,7 +97,7 @@ function makeHash(): string {
         );
 
     // join array elements without commas.
-    return array.join("");
+    return array.join('');
 }
 
 function checkParameter(options: RenderOptions, param: string): boolean {
@@ -117,7 +117,7 @@ function checkValueParameter(
     });
     if (index === -1) return defaultValue;
 
-    const split = String(options.tests.splice(index, 1)).split("=");
+    const split = String(options.tests.splice(index, 1)).split('=');
     if (split.length !== 2) return defaultValue;
 
     return split[1];
@@ -141,9 +141,9 @@ function compareRenderResults(
         fs.mkdirSync(dir);
     }
 
-    const expectedPath = path.join(dir, "expected.png");
-    const actualPath = path.join(dir, "actual.png");
-    const diffPath = path.join(dir, "diff.png");
+    const expectedPath = path.join(dir, 'expected.png');
+    const actualPath = path.join(dir, 'actual.png');
+    const diffPath = path.join(dir, 'diff.png');
 
     const width = Math.floor(
         testData.reportWidth ?? testData.width * testData.pixelRatio
@@ -151,7 +151,7 @@ function compareRenderResults(
     const height = Math.floor(
         testData.reportHeight ?? testData.height * testData.pixelRatio
     );
-    const actualImg = new PNG({ width, height });
+    const actualImg = new PNG({width, height});
 
     // PNG data must be unassociated (not premultiplied)
     for (let i = 0; i < data.length; i++) {
@@ -163,12 +163,12 @@ function compareRenderResults(
         }
     }
     actualImg.data = data as any;
-    const actualBuf = PNG.sync.write(actualImg, { filterType: 4 });
-    testData.actual = actualBuf.toString("base64");
+    const actualBuf = PNG.sync.write(actualImg, {filterType: 4});
+    testData.actual = actualBuf.toString('base64');
 
     // there may be multiple expected images, covering different platforms
-    let globPattern = path.join(dir, "expected*.png");
-    globPattern = globPattern.replace(/\\/g, "/");
+    let globPattern = path.join(dir, 'expected*.png');
+    globPattern = globPattern.replace(/\\/g, '/');
     const expectedPaths = globSync(globPattern);
 
     if (!process.env.UPDATE && expectedPaths.length === 0) {
@@ -187,9 +187,9 @@ function compareRenderResults(
     for (const path of expectedPaths) {
         const expectedBuf = fs.readFileSync(path);
         const expectedImg = PNG.sync.read(expectedBuf);
-        const diffImg = new PNG({ width, height });
+        const diffImg = new PNG({width, height});
         if (!testData.expected) {
-            testData.expected = expectedBuf.toString("base64"); // default expected image
+            testData.expected = expectedBuf.toString('base64'); // default expected image
         }
 
         const diff =
@@ -199,7 +199,7 @@ function compareRenderResults(
                 diffImg.data,
                 width,
                 height,
-                { threshold: testData.threshold }
+                {threshold: testData.threshold}
             ) /
             (width * height);
 
@@ -210,7 +210,7 @@ function compareRenderResults(
         }
     }
 
-    const diffBuf = PNG.sync.write(minDiffImg, { filterType: 4 });
+    const diffBuf = PNG.sync.write(minDiffImg, {filterType: 4});
 
     fs.writeFileSync(diffPath, diffBuf);
     fs.writeFileSync(actualPath, actualBuf);
@@ -223,8 +223,8 @@ function compareRenderResults(
         fs.writeFileSync(expectedPath, PNG.sync.write(actualImg));
     }
 
-    testData.expected = minExpectedBuf.toString("base64");
-    testData.diff = diffBuf.toString("base64");
+    testData.expected = minExpectedBuf.toString('base64');
+    testData.diff = diffBuf.toString('base64');
 }
 
 /**
@@ -241,11 +241,11 @@ function getTestStyles(
 ): StyleWithTestData[] {
     const tests = options.tests || [];
 
-    const sequence = globSync("**/style.json", { cwd: directory })
+    const sequence = globSync('**/style.json', {cwd: directory})
         .map((fixture) => {
             const id = path.dirname(fixture);
             const style = JSON.parse(
-                fs.readFileSync(path.join(directory, fixture), "utf8")
+                fs.readFileSync(path.join(directory, fixture), 'utf8')
             ) as StyleWithTestData;
             style.metadata = style.metadata || ({} as any);
 
@@ -272,13 +272,13 @@ function getTestStyles(
             }
 
             if (
-                process.env.BUILDTYPE !== "Debug" &&
+                process.env.BUILDTYPE !== 'Debug' &&
                 test.id.match(/^debug\//)
             ) {
                 console.log(`* skipped ${test.id}`);
                 return false;
             }
-            localizeURLs(style, port, path.join(__dirname, "../"));
+            localizeURLs(style, port, path.join(__dirname, '../'));
             return true;
         });
     return sequence;
@@ -298,7 +298,7 @@ async function getImageFromStyle(
     const width = styleForTest.metadata.test.width;
     const height = styleForTest.metadata.test.height;
 
-    await page.setViewport({ width, height, deviceScaleFactor: 2 });
+    await page.setViewport({width, height, deviceScaleFactor: 2});
 
     await page.setContent(`
 <!DOCTYPE html>
@@ -328,9 +328,9 @@ async function getImageFromStyle(
                 renderingMode: string;
                 program: WebGLProgram;
                 constructor() {
-                    this.id = "null-island";
-                    this.type = "custom";
-                    this.renderingMode = "2d";
+                    this.id = 'null-island';
+                    this.type = 'custom';
+                    this.renderingMode = '2d';
                 }
 
                 onAdd(map: MapmetricsMap, gl: WebGL2RenderingContext) {
@@ -370,12 +370,12 @@ async function getImageFromStyle(
                     gl.bufferData(gl.ARRAY_BUFFER, vertexArray, gl.STATIC_DRAW);
                     const posAttrib = gl.getAttribLocation(
                         this.program,
-                        "aPos"
+                        'aPos'
                     );
                     gl.enableVertexAttribArray(posAttrib);
                     gl.vertexAttribPointer(posAttrib, 3, gl.FLOAT, false, 0, 0);
                     gl.uniformMatrix4fv(
-                        gl.getUniformLocation(this.program, "u_matrix"),
+                        gl.getUniformLocation(this.program, 'u_matrix'),
                         false,
                         args.defaultProjectionData.mainMatrix
                     );
@@ -395,9 +395,9 @@ async function getImageFromStyle(
                 vertexBuffer: WebGLBuffer;
                 indexBuffer: WebGLBuffer;
                 constructor() {
-                    this.id = "tent-3d";
-                    this.type = "custom";
-                    this.renderingMode = "3d";
+                    this.id = 'tent-3d';
+                    this.type = 'custom';
+                    this.renderingMode = '3d';
                 }
 
                 onAdd(map: MapmetricsMap, gl: WebGL2RenderingContext) {
@@ -432,11 +432,11 @@ async function getImageFromStyle(
 
                     this.program.aPos = gl.getAttribLocation(
                         this.program,
-                        "aPos"
+                        'aPos'
                     );
                     this.program.uMatrix = gl.getUniformLocation(
                         this.program,
-                        "uMatrix"
+                        'uMatrix'
                     );
 
                     const x = 0.5 - 0.015;
@@ -520,9 +520,9 @@ async function getImageFromStyle(
                 > = new Map();
 
                 constructor() {
-                    this.id = "tent-3d-globe";
-                    this.type = "custom";
-                    this.renderingMode = "3d";
+                    this.id = 'tent-3d-globe';
+                    this.type = 'custom';
+                    this.renderingMode = '3d';
                 }
 
                 getShader(gl, shaderDescription) {
@@ -569,7 +569,7 @@ async function getImageFromStyle(
 
                     const result = {
                         program,
-                        aPos: gl.getAttribLocation(program, "a_pos"),
+                        aPos: gl.getAttribLocation(program, 'a_pos'),
                     };
 
                     this.shaderMap.set(shaderDescription.variantName, result);
@@ -625,7 +625,7 @@ async function getImageFromStyle(
                     gl.uniformMatrix4fv(
                         gl.getUniformLocation(
                             shader.program,
-                            "u_projection_fallback_matrix"
+                            'u_projection_fallback_matrix'
                         ),
                         false,
                         args.defaultProjectionData.fallbackMatrix
@@ -633,7 +633,7 @@ async function getImageFromStyle(
                     gl.uniformMatrix4fv(
                         gl.getUniformLocation(
                             shader.program,
-                            "u_projection_matrix"
+                            'u_projection_matrix'
                         ),
                         false,
                         args.defaultProjectionData.mainMatrix
@@ -641,21 +641,21 @@ async function getImageFromStyle(
                     gl.uniform4f(
                         gl.getUniformLocation(
                             shader.program,
-                            "u_projection_tile_mercator_coords"
+                            'u_projection_tile_mercator_coords'
                         ),
                         ...args.defaultProjectionData.tileMercatorCoords
                     );
                     gl.uniform4f(
                         gl.getUniformLocation(
                             shader.program,
-                            "u_projection_clipping_plane"
+                            'u_projection_clipping_plane'
                         ),
                         ...args.defaultProjectionData.clippingPlane
                     );
                     gl.uniform1f(
                         gl.getUniformLocation(
                             shader.program,
-                            "u_projection_transition"
+                            'u_projection_transition'
                         ),
                         args.defaultProjectionData.projectionTransition
                     );
@@ -674,7 +674,7 @@ async function getImageFromStyle(
                     );
                     for (let i = 0; i < 2; i++) {
                         gl.uniform4f(
-                            gl.getUniformLocation(shader.program, "u_color"),
+                            gl.getUniformLocation(shader.program, 'u_color'),
                             i === 0 ? 1 : 0.25,
                             0,
                             0,
@@ -687,9 +687,9 @@ async function getImageFromStyle(
             }
 
             const customLayerImplementations = {
-                "tent-3d": Tent3D,
-                "tent-3d-globe": Tent3DGlobe,
-                "null-island": NullIsland,
+                'tent-3d': Tent3D,
+                'tent-3d-globe': Tent3DGlobe,
+                'null-island': NullIsland,
             };
 
             async function updateFakeCanvas(
@@ -704,7 +704,7 @@ async function getImageFromStyle(
                 const getMeta = async (url) => {
                     const img = new Image();
                     img.src = url;
-                    img.crossOrigin = "anonymous";
+                    img.crossOrigin = 'anonymous';
                     await img.decode();
                     return img;
                 };
@@ -717,7 +717,7 @@ async function getImageFromStyle(
                 fakeCanvas.height = image.naturalHeight;
                 fakeCanvas.id = id;
 
-                const ctx = fakeCanvas.getContext("2d");
+                const ctx = fakeCanvas.getContext('2d');
                 ctx?.drawImage(
                     image,
                     0,
@@ -748,13 +748,13 @@ async function getImageFromStyle(
                         `Running operation: ${JSON.stringify(operation)}`
                     );
                     switch (operation[0]) {
-                        case "wait":
+                        case 'wait':
                             if (operation.length <= 1) {
                                 while (!map.loaded()) {
-                                    await map.once("render");
+                                    await map.once('render');
                                 }
                             } else {
-                                if (typeof operation[1] === "string") {
+                                if (typeof operation[1] === 'string') {
                                     // Wait for the event to fire
                                     await map.once(operation[1]);
                                 } else {
@@ -766,29 +766,29 @@ async function getImageFromStyle(
                                     map._render();
                                 }
                             }
-                            console.log("done waiting");
+                            console.log('done waiting');
                             break;
-                        case "idle":
+                        case 'idle':
                             map.repaint = false;
                             if (idle) {
-                                console.log("idle is true");
+                                console.log('idle is true');
                                 break;
                             }
-                            await map.once("idle");
-                            console.log("done waiting for idle");
+                            await map.once('idle');
+                            console.log('done waiting for idle');
                             break;
-                        case "sleep":
+                        case 'sleep':
                             await new Promise<void>((resolve) => {
                                 setTimeout(() => {
                                     resolve();
                                 }, operation[1]);
                             });
                             break;
-                        case "addImage": {
+                        case 'addImage': {
                             const getImage = async (url) => {
                                 const img = new Image();
                                 img.src = url;
-                                img.crossOrigin = "anonymous";
+                                img.crossOrigin = 'anonymous';
                                 await img.decode();
                                 return img;
                             };
@@ -803,14 +803,14 @@ async function getImageFromStyle(
                             );
                             break;
                         }
-                        case "addCustomLayer":
+                        case 'addCustomLayer':
                             map.addLayer(
                                 new customLayerImplementations[operation[1]](),
                                 operation[2]
                             );
                             map._render();
                             break;
-                        case "updateFakeCanvas": {
+                        case 'updateFakeCanvas': {
                             const canvasSource = map.getSource<CanvasSource>(
                                 operation[1]
                             );
@@ -831,16 +831,16 @@ async function getImageFromStyle(
                             map._render();
                             break;
                         }
-                        case "setStyle":
+                        case 'setStyle':
                             map.setStyle(operation[1], {
                                 localIdeographFontFamily: false as any,
                             });
                             break;
-                        case "pauseSource":
+                        case 'pauseSource':
                             map.style.sourceCaches[operation[1]].pause();
                             break;
                         default:
-                            if (typeof map[operation[0]] === "function") {
+                            if (typeof map[operation[0]] === 'function') {
                                 map[operation[0]](...operation.slice(1));
                             }
                     }
@@ -853,12 +853,12 @@ async function getImageFromStyle(
                 imagePath: string
             ): Promise<HTMLCanvasElement> {
                 const fakeCanvas: HTMLCanvasElement =
-                    document.createElement("canvas");
+                    document.createElement('canvas');
 
                 const getImage = async (url) => {
                     const img = new Image();
                     img.src = url;
-                    img.crossOrigin = "anonymous";
+                    img.crossOrigin = 'anonymous';
                     await img.decode();
                     return img;
                 };
@@ -871,7 +871,7 @@ async function getImageFromStyle(
                 fakeCanvas.height = image.naturalHeight;
                 fakeCanvas.id = id;
 
-                const ctx = fakeCanvas.getContext("2d");
+                const ctx = fakeCanvas.getContext('2d');
                 ctx?.drawImage(
                     image,
                     0,
@@ -885,7 +885,7 @@ async function getImageFromStyle(
 
             return new Promise(async (resolve, reject) => {
                 setTimeout(() => {
-                    reject(new Error("Test timed out"));
+                    reject(new Error('Test timed out'));
                 }, options.timeout || 40000);
 
                 if (options.addFakeCanvas) {
@@ -897,15 +897,15 @@ async function getImageFromStyle(
                     document.body.appendChild(fakeCanvas);
                 }
 
-                if (mapmetricsgl.getRTLTextPluginStatus() === "unavailable") {
+                if (mapmetricsgl.getRTLTextPluginStatus() === 'unavailable') {
                     mapmetricsgl.setRTLTextPlugin(
-                        "https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js",
+                        'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js',
                         false // Don't lazy load the plugin
                     );
                 }
 
                 const map = new mapmetricsgl.Map({
-                    container: "map",
+                    container: 'map',
                     style,
                     interactive: false,
                     attributionControl: false,
@@ -913,26 +913,26 @@ async function getImageFromStyle(
                     pixelRatio: options.pixelRatio,
                     canvasContextAttributes: {
                         preserveDrawingBuffer: true,
-                        powerPreference: "default",
+                        powerPreference: 'default',
                     },
                     fadeDuration: options.fadeDuration || 0,
                     localIdeographFontFamily:
                         options.localIdeographFontFamily || (false as any),
                     crossSourceCollisions:
-                        typeof options.crossSourceCollisions === "undefined"
+                        typeof options.crossSourceCollisions === 'undefined'
                             ? true
                             : options.crossSourceCollisions,
                     maxCanvasSize: [8192, 8192],
                 });
 
                 let idle = false;
-                map.on("idle", () => {
-                    console.log("idle");
+                map.on('idle', () => {
+                    console.log('idle');
                     idle = true;
                 });
                 // Configure the map to never stop the render loop
                 map.repaint =
-                    typeof options.continuesRepaint === "undefined"
+                    typeof options.continuesRepaint === 'undefined'
                         ? true
                         : options.continuesRepaint;
 
@@ -943,13 +943,13 @@ async function getImageFromStyle(
 
                 const gl = map.painter.context.gl;
 
-                await map.once("load");
+                await map.once('load');
                 if (options.collisionDebug) {
                     map.showCollisionBoxes = true;
                     if (options.operations) {
-                        options.operations.push(["wait"]);
+                        options.operations.push(['wait']);
                     } else {
-                        options.operations = [["wait"]];
+                        options.operations = [['wait']];
                     }
                 }
 
@@ -1001,15 +1001,15 @@ async function getImageFromStyle(
 function printProgress(test: TestData, total: number, index: number) {
     if (test.error) {
         console.log(
-            "\x1b[91m",
+            '\x1b[91m',
             `${index}/${total}: errored ${test.id} ${test.error.message}`,
-            "\x1b[0m"
+            '\x1b[0m'
         );
     } else if (!test.ok) {
         console.log(
-            "\x1b[31m",
+            '\x1b[31m',
             `${index}/${total}: failed ${test.id} ${test.difference}`,
-            "\x1b[0m"
+            '\x1b[0m'
         );
     } else {
         console.log(`${index}/${total}: passed ${test.id}`);
@@ -1017,7 +1017,7 @@ function printProgress(test: TestData, total: number, index: number) {
 }
 
 function printSpecificStatistics(
-    status: "passed" | "failed" | "errored",
+    status: 'passed' | 'failed' | 'errored',
     subsetStats: TestData[],
     total: number,
     suite: TestSuite
@@ -1036,13 +1036,13 @@ function printSpecificStatistics(
             .testCase()
             .className(testData.id)
             .name(testData.id);
-        if (status === "failed") {
+        if (status === 'failed') {
             testCase.failure();
-        } else if (status === "errored") {
+        } else if (status === 'errored') {
             testCase.error();
         }
     }
-    if (status === "passed") {
+    if (status === 'passed') {
         return;
     }
     for (let i = 0; i < subsetStats.length; i++) {
@@ -1057,12 +1057,12 @@ function printSpecificStatistics(
  * @returns `true` if all the tests passed
  */
 function printStatistics(stats: TestStats): boolean {
-    const suite = junitReportBuilder.testSuite().name("render-tests");
-    printSpecificStatistics("passed", stats.passed, stats.total, suite);
-    printSpecificStatistics("failed", stats.failed, stats.total, suite);
-    printSpecificStatistics("errored", stats.errored, stats.total, suite);
+    const suite = junitReportBuilder.testSuite().name('render-tests');
+    printSpecificStatistics('passed', stats.passed, stats.total, suite);
+    printSpecificStatistics('failed', stats.failed, stats.total, suite);
+    printSpecificStatistics('errored', stats.errored, stats.total, suite);
 
-    junitReportBuilder.writeTo("junit.xml");
+    junitReportBuilder.writeTo('junit.xml');
     return stats.failed.length + stats.errored.length === 0;
 }
 
@@ -1086,7 +1086,7 @@ function getReportItem(test: TestData) {
         <p>Diff</p>
         <img src="data:image/png;base64,${test.diff}" data-alt-src="data:image/png;base64,${test.expected}">
         </div>`
-                : ""
+                : ''
         }
         ${
             test.expected
@@ -1095,28 +1095,28 @@ function getReportItem(test: TestData) {
         <p>Closest expected</p>
         <img src="data:image/png;base64,${test.expected}"  >
         </div>`
-                : ""
+                : ''
         }
     </div>`
-            : ""
+            : ''
     }
     ${
         test.error
             ? `<p style="color: red"><strong>Error:</strong> ${test.error.message}</p>`
-            : ""
+            : ''
     }
     ${
         test.difference
             ? `<p class="diff"><strong>Diff:</strong> ${test.difference}</p>`
-            : ""
+            : ''
     }
 </div>`;
 }
 
 function applyDebugParameter(options: RenderOptions, page: Page) {
     if (options.debug) {
-        page.on("console", async (message) => {
-            if (message.text() !== "JSHandle@error") {
+        page.on('console', async (message) => {
+            if (message.text() !== 'JSHandle@error') {
                 console.log(
                     `${message
                         .type()
@@ -1126,7 +1126,7 @@ function applyDebugParameter(options: RenderOptions, page: Page) {
                 return;
             }
             const messages = await Promise.all(
-                message.args().map((arg) => arg.getProperty("message"))
+                message.args().map((arg) => arg.getProperty('message'))
             );
             console.log(
                 `${message
@@ -1136,13 +1136,13 @@ function applyDebugParameter(options: RenderOptions, page: Page) {
             );
         });
 
-        page.on("pageerror", ({ message }) => console.error(message));
+        page.on('pageerror', ({message}) => console.error(message));
 
-        page.on("response", (response) =>
+        page.on('response', (response) =>
             console.log(`${response.status()} ${response.url()}`)
         );
 
-        page.on("requestfailed", (request) => {
+        page.on('requestfailed', (request) => {
             if (request) {
                 console.error(
                     `requestfailed, error text: ${
@@ -1150,7 +1150,7 @@ function applyDebugParameter(options: RenderOptions, page: Page) {
                     }, url: ${request.url()}`
                 );
             } else {
-                console.error("Request failed and request object is ", request);
+                console.error('Request failed and request object is ', request);
             }
         });
     }
@@ -1181,9 +1181,9 @@ async function createPageAndStart(
     options: RenderOptions
 ) {
     const page = await browser.newPage();
-    await page.coverage.startJSCoverage({ includeRawScriptCoverage: true });
+    await page.coverage.startJSCoverage({includeRawScriptCoverage: true});
     applyDebugParameter(options, page);
-    await page.addScriptTag({ path: "dist/mapmetrics-gl-dev.js" });
+    await page.addScriptTag({path: 'dist/mapmetrics-gl-dev.js'});
     await runTests(page, testStyles, directory);
     return page;
 }
@@ -1201,20 +1201,20 @@ async function closePageAndFinish(page: Page, reportCoverage: boolean) {
             source: it.text,
             ...it.rawScriptCoverage,
         };
-        if (entry.url.endsWith("mapmtrics-gl-dev.js")) {
+        if (entry.url.endsWith('mapmtrics-gl-dev.js')) {
             entry.sourceMap = JSON.parse(
                 fs
-                    .readFileSync("dist/mapmetrics-gl-dev.js.map")
-                    .toString("utf-8")
+                    .readFileSync('dist/mapmetrics-gl-dev.js.map')
+                    .toString('utf-8')
             );
         }
         return entry;
     });
 
     const coverageReport = new CoverageReport({
-        name: "Mapmetrics Coverage Report",
-        outputDir: "./coverage/render",
-        reports: [["v8"], ["codecov"]],
+        name: 'Mapmetrics Coverage Report',
+        outputDir: './coverage/render',
+        reports: [['v8'], ['codecov']],
     });
     coverageReport.cleanCache();
 
@@ -1247,47 +1247,47 @@ async function executeRenderTests() {
             process.argv.slice(2).filter((value, index, self) => {
                 return self.indexOf(value) === index;
             }) || [];
-        options.recycleMap = checkParameter(options, "--recycle-map");
-        options.skipreport = checkParameter(options, "--skip-report");
-        options.seed = checkValueParameter(options, options.seed, "--seed");
-        options.debug = checkParameter(options, "--debug");
-        options.openBrowser = checkParameter(options, "--open-browser");
+        options.recycleMap = checkParameter(options, '--recycle-map');
+        options.skipreport = checkParameter(options, '--skip-report');
+        options.seed = checkValueParameter(options, options.seed, '--seed');
+        options.debug = checkParameter(options, '--debug');
+        options.openBrowser = checkParameter(options, '--open-browser');
     }
 
     const browser = await puppeteer.launch({
         headless: !options.openBrowser,
-        args: ["--enable-webgl", "--no-sandbox", "--disable-web-security"],
+        args: ['--enable-webgl', '--no-sandbox', '--disable-web-security'],
     });
 
     const mount = st({
-        path: "test/integration/assets",
+        path: 'test/integration/assets',
         cors: true,
         passthrough: true,
     });
     const server = http.createServer((req, res) => {
         mount(req, res, () => {
-            if (req.url.includes("/sparse204/1-")) {
+            if (req.url.includes('/sparse204/1-')) {
                 res.writeHead(204);
-                res.end("");
+                res.end('');
             } else {
                 res.writeHead(404);
-                res.end("");
+                res.end('');
             }
         });
     });
 
     const mvtServer = http.createServer(
         st({
-            path: "node_modules/@mapbox/mvt-fixtures/real-world",
+            path: 'node_modules/@mapbox/mvt-fixtures/real-world',
             cors: true,
         })
     );
 
     await new Promise<void>((resolve) =>
-        server.listen(2900, "0.0.0.0", resolve)
+        server.listen(2900, '0.0.0.0', resolve)
     );
     await new Promise<void>((resolve) =>
-        mvtServer.listen(2901, "0.0.0.0", resolve)
+        mvtServer.listen(2901, '0.0.0.0', resolve)
     );
 
     const directory = path.join(__dirname);
@@ -1358,33 +1358,33 @@ async function executeRenderTests() {
         let resultData: string;
         if (erroredItems.length || failedItems.length) {
             const resultItemTemplate = fs
-                .readFileSync(path.join(__dirname, "result_item_template.html"))
+                .readFileSync(path.join(__dirname, 'result_item_template.html'))
                 .toString();
             resultData = resultItemTemplate
-                .replace("${failedItemsLength}", failedItems.length.toString())
-                .replace("${failedItems}", failedItems.join("\n"))
+                .replace('${failedItemsLength}', failedItems.length.toString())
+                .replace('${failedItems}', failedItems.join('\n'))
                 .replace(
-                    "${erroredItemsLength}",
+                    '${erroredItemsLength}',
                     erroredItems.length.toString()
                 )
-                .replace("${erroredItems}", erroredItems.join("\n"));
+                .replace('${erroredItems}', erroredItems.join('\n'));
         } else {
             resultData = '<h1 style="color: green">All tests passed!</h1>';
         }
 
         const reportTemplate = fs
-            .readFileSync(path.join(__dirname, "report_template.html"))
+            .readFileSync(path.join(__dirname, 'report_template.html'))
             .toString();
         const resultsContent = reportTemplate.replace(
-            "${resultData}",
+            '${resultData}',
             resultData
         );
 
         const p = path.join(
             __dirname,
-            options.recycleMap ? "results-recycle-map.html" : "results.html"
+            options.recycleMap ? 'results-recycle-map.html' : 'results.html'
         );
-        fs.writeFileSync(p, resultsContent, "utf8");
+        fs.writeFileSync(p, resultsContent, 'utf8');
         console.log(`\nFull html report is logged to '${p}'`);
 
         // write text report of just the error/failed id
@@ -1392,9 +1392,9 @@ async function executeRenderTests() {
             const erroredItemIds = testStats.errored.map((t) => t.id);
             const caseIdFileName = path.join(
                 __dirname,
-                "results-errored-caseIds.txt"
+                'results-errored-caseIds.txt'
             );
-            fs.writeFileSync(caseIdFileName, erroredItemIds.join("\n"), "utf8");
+            fs.writeFileSync(caseIdFileName, erroredItemIds.join('\n'), 'utf8');
 
             console.log(
                 `\n${testStats.errored?.length} errored test case IDs are logged to '${caseIdFileName}'`
@@ -1405,9 +1405,9 @@ async function executeRenderTests() {
             const failedItemIds = testStats.failed.map((t) => t.id);
             const caseIdFileName = path.join(
                 __dirname,
-                "results-failed-caseIds.txt"
+                'results-failed-caseIds.txt'
             );
-            fs.writeFileSync(caseIdFileName, failedItemIds.join("\n"), "utf8");
+            fs.writeFileSync(caseIdFileName, failedItemIds.join('\n'), 'utf8');
 
             console.log(
                 `\n${testStats.failed?.length} failed test case IDs are logged to '${caseIdFileName}'`

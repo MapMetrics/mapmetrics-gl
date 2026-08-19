@@ -6,9 +6,20 @@ import {fakeServer} from 'nise';
 import {type Map} from '../../ui/map';
 import {type MapSourceDataEvent} from '../events';
 
+/**
+ * MapMetrics fork behaviour: attribution is mandatory. `Map`'s constructor always adds an
+ * `AttributionControl` (see `map.ts`: "Attribution control is mandatory to ensure proper
+ * OpenStreetMap attribution"), and passing `attributionControl: false` only resets it to
+ * `defaultAttributionControlOptions` rather than omitting it. Upstream MapLibre omits the
+ * control entirely for `attributionControl: false`.
+ *
+ * The tests below exercise `AttributionControl` in isolation, so they detach the built-in
+ * instance first and add their own. The mandatory-by-default contract itself is covered by
+ * the dedicated test at the bottom of this file - do not weaken that one.
+ */
 function createMap() {
 
-    return globalCreateMap({
+    const map = globalCreateMap({
         attributionControl: false,
         style: {
             version: 8,
@@ -19,6 +30,15 @@ function createMap() {
         },
         hash: true
     }, undefined);
+
+    return map;
+}
+
+/** Detach the mandatory built-in AttributionControl so a test can exercise its own. */
+function removeDefaultAttributionControl(m: Map) {
+    for (const control of [...(m as any)._controls]) {
+        if (control instanceof AttributionControl) m.removeControl(control);
+    }
 }
 
 let map: Map;
@@ -26,6 +46,7 @@ let map: Map;
 beforeEach(() => {
     beforeMapTest();
     map = createMap();
+    removeDefaultAttributionControl(map);
 });
 
 afterEach(() => {
@@ -123,6 +144,13 @@ describe('AttributionControl', () => {
         ).toHaveLength(1);
     });
 
+    /**
+     * MapMetrics fork behaviour: compact attribution starts COLLAPSED. Upstream MapLibre's
+     * `_updateCompact` adds both `mapmetricsgl-compact` and `mapmetricsgl-compact-show` plus
+     * `open=""` on first render (i.e. expanded); the fork adds only `mapmetricsgl-compact`
+     * and removes `open` ("Start collapsed", commit 932a7cf). The toggle sequence is
+     * therefore collapsed, then shown, then collapsed again - the inverse of upstream's.
+     */
     test('compact mode control toggles attribution', () => {
         map.addControl(new AttributionControl({
             compact: true,
@@ -132,15 +160,15 @@ describe('AttributionControl', () => {
         const container = map.getContainer();
         const toggle = container.querySelector('.mapmetricsgl-ctrl-attrib-button');
 
-        expect(container.querySelectorAll('.mapmetricsgl-compact-show')).toHaveLength(1);
-
-        simulate.click(toggle);
-
         expect(container.querySelectorAll('.mapmetricsgl-compact-show')).toHaveLength(0);
 
         simulate.click(toggle);
 
         expect(container.querySelectorAll('.mapmetricsgl-compact-show')).toHaveLength(1);
+
+        simulate.click(toggle);
+
+        expect(container.querySelectorAll('.mapmetricsgl-compact-show')).toHaveLength(0);
     });
 
     test('dedupes attributions that are substrings of others', async () => {
@@ -167,7 +195,7 @@ describe('AttributionControl', () => {
 
         await sleep(100);
 
-        expect(attribution._innerContainer.innerHTML).toBe(`Hello World | Another Source | GeoJSON Source | ${defaultAttributionControlOptions.customAttribution}`);
+        expect(attribution._innerContainer.innerHTML).toBe('Hello World | Another Source | GeoJSON Source');
         expect(spy.mock.calls.filter((call) => call[0].dataType === 'source' && call[0].sourceDataType === 'visibility')).toHaveLength(7);
 
     });
@@ -273,7 +301,7 @@ describe('AttributionControl', () => {
                    mapDataEvent.sourceId === '1';
         })).toHaveLength(1);
 
-        expect(attribution._innerContainer.innerHTML).toBe(`Used | ${defaultAttributionControlOptions.customAttribution}`);
+        expect(attribution._innerContainer.innerHTML).toBe('Used');
     });
 
     test('does not show attributions for sources that are used for terrain when they are not in use', async () => {
@@ -305,7 +333,7 @@ describe('AttributionControl', () => {
                    mapDataEvent.sourceDataType === 'visibility';
         })).toHaveLength(0);
 
-        expect(attribution._innerContainer.innerHTML).toBe(defaultAttributionControlOptions.customAttribution);
+        expect(attribution._innerContainer.innerHTML).toBe('');
     });
 
     test('shows attributions for sources that are used for terrain', async () => {
@@ -337,7 +365,7 @@ describe('AttributionControl', () => {
                    mapDataEvent.sourceDataType === 'visibility';
         })).toHaveLength(0);
 
-        expect(attribution._innerContainer.innerHTML).toBe(`Terrain | ${defaultAttributionControlOptions.customAttribution}`);
+        expect(attribution._innerContainer.innerHTML).toBe('Terrain');
     });
 
     test('toggles attributions for sources whose visibility changes when zooming', async () => {
@@ -420,7 +448,13 @@ describe('AttributionControl test regarding the HTML elements details and summar
             expect(map.getContainer().querySelectorAll('.mapmetricsgl-ctrl-attrib')[0].getAttribute('open')).toBe('');
         });
 
-        test('The attribute open="" SHOULD exist after resize from size > 640 to <= 640 and and vice versa.', () => {
+        /**
+         * MapMetrics fork behaviour: compact starts collapsed (see the toggle test above),
+         * so `open=""` tracks the compact state - absent while compact, present once the
+         * container is wide enough to show the full attribution. Upstream keeps `open=""`
+         * set in both states.
+         */
+        test('The attribute open="" tracks compact state across resize over/under 640.', () => {
             Object.defineProperty(map.getCanvasContainer(), 'offsetWidth', {value: 640, configurable: true});
             const attributionControl = new AttributionControl({
                 customAttribution: 'Mapmetrics'
@@ -428,7 +462,7 @@ describe('AttributionControl test regarding the HTML elements details and summar
             map.addControl(attributionControl);
 
             expect(map.getContainer().querySelectorAll('.mapmetricsgl-ctrl-attrib.mapmetricsgl-compact')).toHaveLength(1);
-            expect(map.getContainer().querySelectorAll('.mapmetricsgl-ctrl-attrib')[0].getAttribute('open')).toBe('');
+            expect(map.getContainer().querySelectorAll('.mapmetricsgl-ctrl-attrib')[0].getAttribute('open')).toBeNull();
 
             Object.defineProperty(map.getCanvasContainer(), 'offsetWidth', {value: 641, configurable: true});
             map.resize();
@@ -440,7 +474,7 @@ describe('AttributionControl test regarding the HTML elements details and summar
             map.resize();
 
             expect(map.getContainer().querySelectorAll('.mapmetricsgl-ctrl-attrib.mapmetricsgl-compact')).toHaveLength(1);
-            expect(map.getContainer().querySelectorAll('.mapmetricsgl-ctrl-attrib')[0].getAttribute('open')).toBe('');
+            expect(map.getContainer().querySelectorAll('.mapmetricsgl-ctrl-attrib')[0].getAttribute('open')).toBeNull();
         });
 
         test('The attribute open="" should NOT change on resize from > 640 to another > 640.', () => {
@@ -540,5 +574,32 @@ describe('AttributionControl test regarding the HTML elements details and summar
 
             expect(map.getContainer().querySelectorAll('.mapmetricsgl-ctrl-attrib')[0].getAttribute('open')).toBe('');
         });
+    });
+});
+
+describe('AttributionControl is mandatory (MapMetrics fork)', () => {
+    /**
+     * Attribution must never be removable via constructor options: it is what keeps the SDK
+     * compliant with OpenStreetMap/ODbL attribution requirements. Upstream MapLibre honours
+     * `attributionControl: false` by omitting the control; this fork deliberately does not.
+     * If a re-vendor of upstream drops this patch, this test is the alarm.
+     */
+    test('an AttributionControl is attached even when attributionControl is false', () => {
+        const m = createMap();
+        expect((m as any)._controls.filter(c => c instanceof AttributionControl)).toHaveLength(1);
+        expect(m.getContainer().querySelectorAll('.mapmetricsgl-ctrl-attrib')).toHaveLength(1);
+        m.remove();
+    });
+
+    test('attributionControl options are merged over the defaults rather than disabling it', () => {
+        const m = globalCreateMap({
+            attributionControl: {customAttribution: 'Custom Attribution'},
+            style: {version: 8, sources: {}, layers: []}
+        }, undefined);
+        const control = (m as any)._controls.find(c => c instanceof AttributionControl) as AttributionControl;
+        expect(control).toBeDefined();
+        expect(control.options.compact).toBe(defaultAttributionControlOptions.compact);
+        expect(control.options.customAttribution).toBe('Custom Attribution');
+        m.remove();
     });
 });

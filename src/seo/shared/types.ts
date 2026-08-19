@@ -1,4 +1,4 @@
-import type {Feature, FeatureCollection, Point, LineString, Polygon, MultiPolygon, MultiLineString} from 'geojson';
+import type {Feature, FeatureCollection} from 'geojson';
 
 // --- Preset types ---
 export type PointPreset = 'restaurant' | 'hotel' | 'store' | 'parking' | 'poi' | 'property' | 'ev-charger';

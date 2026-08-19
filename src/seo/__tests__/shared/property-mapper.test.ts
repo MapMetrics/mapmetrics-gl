@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest';
-import type {Feature, Point, Polygon} from 'geojson';
+import type {Feature, Point} from 'geojson';
 import {mapFeatureToSchema} from '../../shared/property-mapper';
 
 const restaurantFeature: Feature<Point> = {

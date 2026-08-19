@@ -21,7 +21,7 @@ export interface JsonLdInput {
 
 /**
  * Normalizes input geojson to a single FeatureCollection.
- * Handles both a direct FeatureCollection and a Record<string, FeatureCollection>.
+ * Handles both a direct FeatureCollection and a `Record<string, FeatureCollection>`.
  */
 function normalizeToFeatureCollection(
     geojson: FeatureCollection | Record<string, FeatureCollection>
@@ -56,7 +56,6 @@ function generateMapSchema(
     bounds: [[number, number], [number, number]],
     provider?: {name: string} | false,
 ): Record<string, unknown> {
-    const [lng, lat] = center;
     const [[swLng, swLat], [neLng, neLat]] = bounds;
 
     const schema: Record<string, unknown> = {

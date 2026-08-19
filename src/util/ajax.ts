@@ -1,12 +1,13 @@
-import { extend, isWorker } from "./util";
-import { createAbortError } from "./abort_error";
-import { getProtocol } from "../source/protocol_crud";
-import { MessageType } from "./actor_messages";
+import {extend, isWorker} from './util';
+import {isMapMetricsGatewayUrl} from './mapmetrics_hosts';
+import {createAbortError} from './abort_error';
+import {getProtocol} from '../source/protocol_crud';
+import {MessageType} from './actor_messages';
 
 /**
  * This is used to identify the global dispatcher id when sending a message from the worker without a target map id.
  */
-export const GLOBAL_DISPATCHER_ID = "global-dispatcher";
+export const GLOBAL_DISPATCHER_ID = 'global-dispatcher';
 
 /**
  * A type used to store the tile's expiration date and cache control definition
@@ -14,7 +15,31 @@ export const GLOBAL_DISPATCHER_ID = "global-dispatcher";
 export type ExpiryData = {
     cacheControl?: string | null;
     expires?: Date | string | null;
+    /**
+     * Lower-cased `x-map-session-*` response headers, present only when the gateway rolled the v2
+     * map-session credential over. The gateway lists them in `Access-Control-Expose-Headers`, so
+     * they are readable cross-origin. Rides the same plumbing as the expiry data because tiles are
+     * fetched on a worker thread and this is the only channel back to the main thread, where the
+     * session lives.
+     */
+    mapSessionHeaders?: {[_: string]: string} | null;
 };
+
+/**
+ * The `x-map-session-*` response headers, or undefined when the response carried none.
+ * @param getHeader - reads one response header by name
+ * @returns the rollover headers, lower-cased, or undefined
+ */
+export function collectMapSessionHeaders(getHeader: (name: string) => string | null): {[_: string]: string} | undefined {
+    const sig = getHeader('X-Map-Session-Sig');
+    if (!sig) return undefined;
+    const headers: {[_: string]: string} = {'x-map-session-sig': sig};
+    for (const name of ['Id', 'Exp', 'Ends', 'Key-Id']) {
+        const value = getHeader(`X-Map-Session-${name}`);
+        if (value) headers[`x-map-session-${name.toLowerCase()}`] = value;
+    }
+    return headers;
+}
 
 /**
  * A `RequestParameters` object to be returned from Map.options.transformRequest callbacks.
@@ -44,7 +69,7 @@ export type RequestParameters = {
     /**
      * Request method `'GET' | 'POST' | 'PUT'`.
      */
-    method?: "GET" | "POST" | "PUT";
+    method?: 'GET' | 'POST' | 'PUT';
     /**
      * Request body.
      */
@@ -52,11 +77,11 @@ export type RequestParameters = {
     /**
      * Response body type to be returned.
      */
-    type?: "string" | "json" | "arrayBuffer" | "image";
+    type?: 'string' | 'json' | 'arrayBuffer' | 'image';
     /**
      * `'same-origin'|'include'` Use 'include' to send cookies with cross-origin requests.
      */
-    credentials?: "same-origin" | "include";
+    credentials?: 'same-origin' | 'include';
     /**
      * If `true`, Resource Timing API information will be collected for these transformed requests and returned in a resourceTiming property of relevant data events.
      */
@@ -132,8 +157,8 @@ export class AJAXError extends Error {
 export const getReferrer = () =>
     isWorker(self)
         ? self.worker && self.worker.referrer
-        : (window.location.protocol === "blob:" ? window.parent : window)
-              .location.href;
+        : (window.location.protocol === 'blob:' ? window.parent : window)
+            .location.href;
 
 /**
  * Determines whether a URL is a file:// URL. This is obviously the case if it begins
@@ -153,28 +178,31 @@ function makeXMLHttpRequest(
         const xhr: XMLHttpRequest = new XMLHttpRequest();
 
         xhr.open(
-            requestParameters.method || "GET",
+            requestParameters.method || 'GET',
             requestParameters.url,
             true
         );
         if (
-            requestParameters.type === "arrayBuffer" ||
-            requestParameters.type === "image"
+            requestParameters.type === 'arrayBuffer' ||
+            requestParameters.type === 'image'
         ) {
-            xhr.responseType = "arraybuffer";
+            xhr.responseType = 'arraybuffer';
         }
         for (const k in requestParameters.headers) {
             xhr.setRequestHeader(k, requestParameters.headers[k]);
         }
-        if (requestParameters.type === "json") {
-            xhr.responseType = "text";
+        if (requestParameters.type === 'json') {
+            xhr.responseType = 'text';
             // Do not overwrite the user-provided Accept header
             if (!requestParameters.headers?.Accept) {
-                xhr.setRequestHeader("Accept", "application/json");
+                xhr.setRequestHeader('Accept', 'application/json');
             }
         }
-        // Enable credentials for MapMetrics domains to allow cookie setting
-        xhr.withCredentials = requestParameters.url.includes('gateway.mapmetrics-atlas.net');
+        // Enable credentials for MapMetrics gateways to allow cookie setting.
+        // NOTE: no font/sprite carve-out here, deliberately. This is the transport layer and it
+        // preserves today's live behaviour: every gateway request carries credentials. The
+        // carve-outs live in the callers that FORCE credentials onto a request that did not ask.
+        xhr.withCredentials = isMapMetricsGatewayUrl(requestParameters.url);
         xhr.onerror = () => {
             console.error(`🍪 XHR error for ${requestParameters.url.substring(0, 50)}...`, xhr.status, xhr.statusText);
             reject(new Error(xhr.statusText));
@@ -188,7 +216,7 @@ function makeXMLHttpRequest(
                 xhr.response !== null
             ) {
                 let data: unknown = xhr.response;
-                if (requestParameters.type === "json") {
+                if (requestParameters.type === 'json') {
                     // We're manually parsing JSON here to get better error messages.
                     try {
                         data = JSON.parse(xhr.response);
@@ -197,18 +225,15 @@ function makeXMLHttpRequest(
                         return;
                     }
                 }
-                // Log cookie information
-                if (typeof document !== 'undefined') {
-                    console.log(`🍪 Current cookies: ${document.cookie}`);
-                }
                 resolve({
                     data,
-                    cacheControl: xhr.getResponseHeader("Cache-Control"),
-                    expires: xhr.getResponseHeader("Expires"),
+                    cacheControl: xhr.getResponseHeader('Cache-Control'),
+                    expires: xhr.getResponseHeader('Expires'),
+                    mapSessionHeaders: collectMapSessionHeaders((name) => xhr.getResponseHeader(name)),
                 });
             } else {
                 const body = new Blob([xhr.response], {
-                    type: xhr.getResponseHeader("Content-Type"),
+                    type: xhr.getResponseHeader('Content-Type'),
                 });
                 console.error(`🍪 XHR failed for ${requestParameters.url.substring(0, 50)}...`, xhr.status, xhr.statusText);
                 reject(
@@ -221,7 +246,7 @@ function makeXMLHttpRequest(
                 );
             }
         };
-        abortController.signal.addEventListener("abort", () => {
+        abortController.signal.addEventListener('abort', () => {
             xhr.abort();
             reject(createAbortError());
         });
@@ -234,9 +259,9 @@ async function makeFetchRequest(
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
     const request = new Request(requestParameters.url, {
-        method: requestParameters.method || "GET",
+        method: requestParameters.method || 'GET',
         body: requestParameters.body,
-        credentials: requestParameters.url.includes('gateway.mapmetrics-atlas.net') ? 'include' : undefined,
+        credentials: isMapMetricsGatewayUrl(requestParameters.url) ? 'include' : undefined,
         headers: requestParameters.headers,
         cache: requestParameters.cache,
         referrer: getReferrer(),
@@ -245,8 +270,8 @@ async function makeFetchRequest(
     });
 
     // If the user has already set an Accept header, do not overwrite it here
-    if (requestParameters.type === "json" && !request.headers.has("Accept")) {
-        request.headers.set("Accept", "application/json");
+    if (requestParameters.type === 'json' && !request.headers.has('Accept')) {
+        request.headers.set('Accept', 'application/json');
     }
 
     let response: Response;
@@ -269,18 +294,13 @@ async function makeFetchRequest(
         );
     }
 
-    // Log cookie information
-    if (typeof document !== 'undefined') {
-        console.log(`🍪 Current cookies: ${document.cookie}`);
-    }
-
     let parsePromise: Promise<any>;
     if (
-        requestParameters.type === "arrayBuffer" ||
-        requestParameters.type === "image"
+        requestParameters.type === 'arrayBuffer' ||
+        requestParameters.type === 'image'
     ) {
         parsePromise = response.arrayBuffer();
-    } else if (requestParameters.type === "json") {
+    } else if (requestParameters.type === 'json') {
         parsePromise = response.json();
     } else {
         parsePromise = response.text();
@@ -291,8 +311,9 @@ async function makeFetchRequest(
     }
     return {
         data: result,
-        cacheControl: response.headers.get("Cache-Control"),
-        expires: response.headers.get("Expires"),
+        cacheControl: response.headers.get('Cache-Control'),
+        expires: response.headers.get('Expires'),
+        mapSessionHeaders: collectMapSessionHeaders((name) => response.headers.get(name)),
     };
 }
 
@@ -309,8 +330,9 @@ export const makeRequest = function (
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
     const url = requestParameters.url;
-    const isMapMetricsRequest = url.includes('gateway.mapmetrics.org') || 
-                               url.includes('gateway.mapmetrics-atlas.net') ||
+    // Transport selection, not a credential decision: gateway hosts plus two tile path shapes
+    // that may be served from a customer's own domain.
+    const isMapMetricsRequest = isMapMetricsGatewayUrl(url) ||
                                url.includes('/rtile/') ||
                                url.includes('/vector-tile/');
     
@@ -324,12 +346,10 @@ export const makeRequest = function (
             ...requestParameters.headers,
             'Accept': 'application/x-protobuf'
         };
-        console.log(`🍪 Setting headers for request: ${url}`);
     }
 
     // For MapMetrics domains, rtile and vector tile requests, always use XMLHttpRequest
     if (isMapMetricsRequest) {
-        console.log(`🍪 Using XMLHttpRequest for MapMetrics domain, rtile or vector tile: ${url.substring(0, 50)}...`);
         return makeXMLHttpRequest(requestParameters, abortController);
     }
 
@@ -357,7 +377,7 @@ export const makeRequest = function (
             fetch &&
             Request &&
             AbortController &&
-            Object.prototype.hasOwnProperty.call(Request.prototype, "signal")
+            Object.prototype.hasOwnProperty.call(Request.prototype, 'signal')
         ) {
             return makeFetchRequest(requestParameters, abortController);
         }
@@ -381,7 +401,7 @@ export const getJSON = <T>(
     abortController: AbortController
 ): Promise<{ data: T } & ExpiryData> => {
     return makeRequest(
-        extend(requestParameters, { type: "json" }),
+        extend(requestParameters, {type: 'json'}),
         abortController
     );
 };
@@ -391,7 +411,7 @@ export const getArrayBuffer = (
     abortController: AbortController
 ): Promise<{ data: ArrayBuffer } & ExpiryData> => {
     return makeRequest(
-        extend(requestParameters, { type: "arrayBuffer" }),
+        extend(requestParameters, {type: 'arrayBuffer'}),
         abortController
     );
 };
@@ -402,9 +422,9 @@ export function sameOrigin(inComingUrl: string) {
     // also check data URL
     if (
         !inComingUrl ||
-        inComingUrl.indexOf("://") <= 0 || // relative URL
-        inComingUrl.indexOf("data:image/") === 0 || // data image URL
-        inComingUrl.indexOf("blob:") === 0
+        inComingUrl.indexOf('://') <= 0 || // relative URL
+        inComingUrl.indexOf('data:image/') === 0 || // data image URL
+        inComingUrl.indexOf('blob:') === 0
     ) {
         // blob
         return true;
@@ -418,7 +438,7 @@ export function sameOrigin(inComingUrl: string) {
 }
 
 export const getVideo = (urls: Array<string>): Promise<HTMLVideoElement> => {
-    const video: HTMLVideoElement = window.document.createElement("video");
+    const video: HTMLVideoElement = window.document.createElement('video');
     video.muted = true;
     return new Promise((resolve) => {
         video.onloadstart = () => {
@@ -426,9 +446,9 @@ export const getVideo = (urls: Array<string>): Promise<HTMLVideoElement> => {
         };
         for (const url of urls) {
             const s: HTMLSourceElement =
-                window.document.createElement("source");
+                window.document.createElement('source');
             if (!sameOrigin(url)) {
-                video.crossOrigin = "Anonymous";
+                video.crossOrigin = 'Anonymous';
             }
             s.src = url;
             video.appendChild(s);

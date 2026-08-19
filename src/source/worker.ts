@@ -5,6 +5,7 @@ import {RasterDEMTileWorkerSource} from './raster_dem_tile_worker_source';
 import {rtlWorkerPlugin, type RTLTextPlugin} from './rtl_text_plugin_worker';
 import {GeoJSONWorkerSource, type LoadGeoJSONParameters} from './geojson_worker_source';
 import {isWorker} from '../util/util';
+import {shouldForceGatewayCredentials} from '../util/mapmetrics_hosts';
 import {addProtocol, removeProtocol} from './protocol_crud';
 import {type PluginState} from './rtl_text_plugin_status';
 import type {
@@ -116,13 +117,8 @@ export default class Worker {
         });
 
         this.actor.registerMessageHandler(MessageType.loadTile, async (mapId: string, params: WorkerTileParameters) => {
-            // Ensure credentials and headers for MapMetrics domains
-            if (params.request && params.request.url && 
-                (params.request.url.includes('mapmetrics.org') || 
-                 params.request.url.includes('gateway.mapmetrics1.org') ||
-                 params.request.url.includes('gateway.mapmetrics-atlas.net')) &&
-                !params.request.url.includes('/fonts/') &&  // Don't require credentials for font requests
-                !params.request.url.includes('/basemaps-assets/fonts/')) {  // Don't require credentials for font requests
+            // Ensure credentials and headers for MapMetrics gateway tile requests
+            if (params.request && shouldForceGatewayCredentials(params.request.url)) {
                 params.request.credentials = 'include';
                 params.request.headers = {
                     ...params.request.headers,
@@ -130,17 +126,13 @@ export default class Worker {
                 };
                 // Force XMLHttpRequest for all requests to MapMetrics domains
                 params.request.type = 'arrayBuffer';
-                console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
             }
             return this._getWorkerSource(mapId, params.type, params.source).loadTile(params);
         });
 
         this.actor.registerMessageHandler(MessageType.reloadTile, async (mapId: string, params: WorkerTileParameters) => {
-            // Ensure credentials and headers for MapMetrics domains
-            if (params.request && params.request.url && 
-                (params.request.url.includes('mapmetrics.org') || 
-                 params.request.url.includes('gateway.mapmetrics1.org') ||
-                 params.request.url.includes('gateway.mapmetrics-atlas.net'))) {
+            // Ensure credentials and headers for MapMetrics gateway tile requests
+            if (params.request && shouldForceGatewayCredentials(params.request.url)) {
                 params.request.credentials = 'include';
                 params.request.headers = {
                     ...params.request.headers,
@@ -148,7 +140,6 @@ export default class Worker {
                 };
                 // Force XMLHttpRequest for all requests to MapMetrics domains
                 params.request.type = 'arrayBuffer';
-                console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
             }
             return this._getWorkerSource(mapId, params.type, params.source).reloadTile(params);
         });

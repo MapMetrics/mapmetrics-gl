@@ -1,8 +1,7 @@
 /**
  * Generates HTML meta tags for geo-position metadata.
  *
- * @param input.center - Map center as [lng, lat]
- * @param input.area   - Optional place name
+ * @param input - Object with `center` (map center as `[lng, lat]`) and optional `area` (place name)
  * @returns HTML string with geo.position (and optionally geo.placename) meta tags
  */
 export function generateMetaTags(input: {center: [number, number]; area?: string}): string {

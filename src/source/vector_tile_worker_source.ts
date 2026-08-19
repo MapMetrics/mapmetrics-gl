@@ -13,10 +13,6 @@ import type {
     WorkerTileResult
 } from '../source/worker_source';
 
-import type {
-    RequestParameters
-} from '../util/ajax';
-
 import type {IActor} from '../util/actor';
 import type {StyleLayerIndex} from '../style/style_layer_index';
 import type {VectorTile} from '@mapbox/vector-tile';
@@ -35,25 +31,6 @@ type FetchingState = {
 
 export type AbortVectorData = () => void;
 export type LoadVectorData = (params: WorkerTileParameters, abortController: AbortController) => Promise<LoadVectorTileResult | null>;
-
-/**
- * Ensures request credentials are properly set for MapMetrics domains
- */
-function ensureMapmetricsCredentials(request: RequestParameters): RequestParameters {
-    if (request.url && 
-        (request.url.includes('mapmetrics.org') || request.url.includes('gateway.mapmetrics1.org')) && 
-        request.credentials !== 'include' &&
-        !request.url.includes('/fonts/') &&  // Don't require credentials for font requests
-        !request.url.includes('/basemaps-assets/fonts/')) {  // Don't require credentials for font requests
-        
-        // Create a new request parameters object with credentials set
-        return {
-            ...request,
-            credentials: 'include' // Always include credentials for MapMetrics domains
-        };
-    }
-    return request;
-}
 
 /**
  * The {@link WorkerSource} implementation that supports {@link VectorTileSource}.
@@ -88,16 +65,6 @@ export class VectorTileWorkerSource implements WorkerSource {
      * Loads a vector tile
      */
     async loadVectorTile(params: WorkerTileParameters, abortController: AbortController): Promise<LoadVectorTileResult> {
-        // Ensure credentials and headers for MapMetrics tile requests
-        if (params.request && params.request.url && params.request.url.includes('mapmetrics.org')) {
-            params.request.credentials = 'include';
-            params.request.headers = {
-                'Accept': 'application/x-protobuf',
-                'Origin': 'https://localhost:8000'
-            };
-            console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
-        }
-        
         const response = await getArrayBuffer(params.request, abortController);
         try {
             const vectorTile = new vt.VectorTile(new Protobuf(response.data));
@@ -105,7 +72,8 @@ export class VectorTileWorkerSource implements WorkerSource {
                 vectorTile,
                 rawData: response.data,
                 cacheControl: response.cacheControl,
-                expires: response.expires
+                expires: response.expires,
+                mapSessionHeaders: response.mapSessionHeaders
             };
         } catch (ex) {
             const bytes = new Uint8Array(response.data);
@@ -147,6 +115,9 @@ export class VectorTileWorkerSource implements WorkerSource {
             const cacheControl = {} as ExpiryData;
             if (response.expires) cacheControl.expires = response.expires;
             if (response.cacheControl) cacheControl.cacheControl = response.cacheControl;
+            // Carried back to the main thread, where the v2 map session lives: a rollover credential
+            // arrives on a tile response and the tile is fetched here, on a worker thread.
+            if (response.mapSessionHeaders) cacheControl.mapSessionHeaders = response.mapSessionHeaders;
 
             const resourceTiming = {} as {resourceTiming: any};
             if (perf) {

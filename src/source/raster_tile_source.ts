@@ -1,22 +1,22 @@
-import { extend, pick } from "../util/util";
+import {extend, pick} from '../util/util';
 
-import { ImageRequest } from "../util/image_request";
+import {ImageRequest} from '../util/image_request';
 
-import { ResourceType } from "../util/request_manager";
-import { Event, ErrorEvent, Evented } from "../util/evented";
-import { loadTileJson } from "./load_tilejson";
-import { TileBounds } from "./tile_bounds";
-import { Texture } from "../render/texture";
+import {ResourceType} from '../util/request_manager';
+import {Event, ErrorEvent, Evented} from '../util/evented';
+import {loadTileJson} from './load_tilejson';
+import {TileBounds} from './tile_bounds';
+import {Texture} from '../render/texture';
 
-import type { Source } from "./source";
-import type { OverscaledTileID } from "./tile_id";
-import type { Map } from "../ui/map";
-import type { Dispatcher } from "../util/dispatcher";
-import type { Tile } from "./tile";
+import type {Source} from './source';
+import type {OverscaledTileID} from './tile_id';
+import type {Map} from '../ui/map';
+import type {Dispatcher} from '../util/dispatcher';
+import type {Tile} from './tile';
 import type {
     RasterSourceSpecification,
     RasterDEMSourceSpecification,
-} from "@maplibre/maplibre-gl-style-spec";
+} from '@maplibre/maplibre-gl-style-spec';
 
 /**
  * A source containing raster tiles (See the [Style Specification]() for detailed documentation of options.)
@@ -45,7 +45,7 @@ import type {
  * ```
  */
 export class RasterTileSource extends Evented implements Source {
-    type: "raster" | "raster-dem";
+    type: 'raster' | 'raster-dem';
     id: string;
     minzoom: number;
     maxzoom: number;
@@ -75,21 +75,21 @@ export class RasterTileSource extends Evented implements Source {
         this.dispatcher = dispatcher;
         this.setEventedParent(eventedParent);
 
-        this.type = "raster";
+        this.type = 'raster';
         this.minzoom = 0;
         this.maxzoom = 22;
         this.roundZoom = true;
-        this.scheme = "xyz";
+        this.scheme = 'xyz';
         this.tileSize = 512;
         this._loaded = false;
 
-        this._options = extend({ type: "raster" }, options);
-        extend(this, pick(options, ["url", "scheme", "tileSize"]));
+        this._options = extend({type: 'raster'}, options);
+        extend(this, pick(options, ['url', 'scheme', 'tileSize']));
     }
 
     async load(sourceDataChanged: boolean = false) {
         this._loaded = false;
-        this.fire(new Event("dataloading", { dataType: "source" }));
+        this.fire(new Event('dataloading', {dataType: 'source'}));
         this._tileJSONRequest = new AbortController();
         try {
             const tileJSON = await loadTileJson(
@@ -112,15 +112,15 @@ export class RasterTileSource extends Evented implements Source {
                 // before the TileJSON arrives. this makes sure the tiles needed are loaded once TileJSON arrives
                 // ref: https://github.com/mapbox/mapbox-gl-js/pull/4347#discussion_r104418088
                 this.fire(
-                    new Event("data", {
-                        dataType: "source",
-                        sourceDataType: "metadata",
+                    new Event('data', {
+                        dataType: 'source',
+                        sourceDataType: 'metadata',
                     })
                 );
                 this.fire(
-                    new Event("data", {
-                        dataType: "source",
-                        sourceDataType: "content",
+                    new Event('data', {
+                        dataType: 'source',
+                        sourceDataType: 'content',
                         sourceDataChanged,
                     })
                 );
@@ -211,7 +211,7 @@ export class RasterTileSource extends Evented implements Source {
             );
             delete tile.abortController;
             if (tile.aborted) {
-                tile.state = "unloaded";
+                tile.state = 'unloaded';
                 return;
             }
             if (response && response.data) {
@@ -230,7 +230,7 @@ export class RasterTileSource extends Evented implements Source {
                 const img = response.data;
                 tile.texture = this.map.painter.getTileTexture(img.width);
                 if (tile.texture) {
-                    tile.texture.update(img, { useMipmap: true });
+                    tile.texture.update(img, {useMipmap: true});
                 } else {
                     tile.texture = new Texture(context, img, gl.RGBA, {
                         useMipmap: true,
@@ -241,14 +241,14 @@ export class RasterTileSource extends Evented implements Source {
                         gl.LINEAR_MIPMAP_NEAREST
                     );
                 }
-                tile.state = "loaded";
+                tile.state = 'loaded';
             }
         } catch (err) {
             delete tile.abortController;
             if (tile.aborted) {
-                tile.state = "unloaded";
+                tile.state = 'unloaded';
             } else if (err) {
-                tile.state = "errored";
+                tile.state = 'errored';
                 throw err;
             }
         }

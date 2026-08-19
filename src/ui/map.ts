@@ -5,6 +5,7 @@ import packageJSON from '../../package.json' with {type: 'json'};
 import {type GetResourceResponse, getJSON} from '../util/ajax';
 import {ImageRequest} from '../util/image_request';
 import {RequestManager, ResourceType} from '../util/request_manager';
+import {mapSession} from '../util/map_session';
 import {Style, type StyleSwapOptions} from '../style/style';
 import {EvaluationParameters} from '../style/evaluation_parameters';
 import {Painter} from '../render/painter';
@@ -31,6 +32,7 @@ import {config} from '../util/config';
 import {defaultLocale} from './default_locale';
 
 import type {RequestTransformFunction} from '../util/request_manager';
+import type {Marker} from './marker';
 import type {LngLatLike} from '../geo/lng_lat';
 import type {LngLatBoundsLike} from '../geo/lng_lat_bounds';
 import type {AddLayerObject, FeatureIdentifier, StyleOptions, StyleSetterOptions} from '../style/style';
@@ -541,13 +543,15 @@ export class Map extends Camera {
     _maxCanvasSize: [number, number];
     _terrainDataCallback: (e: MapStyleDataEvent | MapSourceDataEvent) => void;
     _seoManager?: SeoManager;
-    _markers: Set<import('./marker').Marker>;
+    _markers: Set<Marker>;
 
     /**
      * @internal
      * image queue throttling handle. To be used later when clean up
      */
     _imageQueueHandle: number;
+    /** Removes this map's v2 map-session credential listener. See {@link mapSession}. */
+    _mapSessionUnsubscribe: (() => void) | null = null;
 
     /**
      * The map's {@link ScrollZoomHandler}, which implements zooming in and out with a scroll wheel or trackpad.
@@ -686,6 +690,10 @@ export class Map extends Camera {
 
         this._markers = new Set();
         this._imageQueueHandle = ImageRequest.addThrottleControl(() => this.isMoving());
+        // Tiles that 401'd before a v2 map-session credential existed are left in the `errored`
+        // state and this SDK never retries them on its own, so without this nudge nothing would
+        // ever be signed. Inert unless map sessions are configured.
+        this._mapSessionUnsubscribe = mapSession.addCredentialListener(() => this._reloadErroredTiles());
 
         this._requestManager = new RequestManager(resolvedOptions.transformRequest);
 
@@ -3038,7 +3046,7 @@ export class Map extends Camera {
      * @internal
      * Registers a marker with the map for tracking (used by SEO layer).
      */
-    _addMarker(marker: import('./marker').Marker): void {
+    _addMarker(marker: Marker): void {
         this._markers.add(marker);
     }
 
@@ -3046,7 +3054,7 @@ export class Map extends Camera {
      * @internal
      * Unregisters a marker from the map (used by SEO layer).
      */
-    _removeMarker(marker: import('./marker').Marker): void {
+    _removeMarker(marker: Marker): void {
         this._markers.delete(marker);
     }
 
@@ -3054,7 +3062,7 @@ export class Map extends Camera {
      * Returns all markers currently added to the map.
      * @returns A Set of all active Marker instances.
      */
-    getMarkers(): Set<import('./marker').Marker> {
+    getMarkers(): Set<Marker> {
         return this._markers;
     }
 
@@ -3246,7 +3254,6 @@ export class Map extends Camera {
         // Auto-remove quickly if tile detection fails
         setTimeout(() => {
             if (this._tileLoadingStates[tileKey] === gridOverlay) {
-                console.log(`Auto-removing grid for tile: ${tileKey}`);
                 this._removeTileGrid(tileKey);
             }
         }, 300);
@@ -3309,7 +3316,7 @@ export class Map extends Camera {
             // Create tile object for position calculation
             const tile = {
                 tileID: {
-                    canonical: { z, x, y }
+                    canonical: {z, x, y}
                 }
             };
             
@@ -3363,15 +3370,11 @@ export class Map extends Camera {
         const minZoom = Math.max(0, currentZoom - 5);
         const maxZoom = Math.min(22, currentZoom + 5);
 
-        console.log(`[Tile Preload] Starting: zoom ${minZoom} to ${maxZoom} (current: ${currentZoom})`);
-
         // Preload each zoom level sequentially with minimal delay
         let zoomLevel = minZoom;
-        let tilesRequested = 0;
 
         const preloadNextZoomLevel = () => {
             if (zoomLevel > maxZoom || !this.style) {
-                console.log(`[Tile Preload] Complete: ${tilesRequested} tile requests queued`);
                 return;
             }
 
@@ -3389,19 +3392,14 @@ export class Map extends Camera {
                 // Force render to queue tile requests
                 this._update(false);
 
-                // Count tiles (rough estimate)
-                tilesRequested += Math.pow(2, Math.max(0, zoomLevel - currentZoom + 2));
-
                 // Restore original zoom immediately
                 this.jumpTo({
                     center: originalCenter,
                     zoom: originalZoom
                 });
 
-                console.log(`[Tile Preload] Level ${zoomLevel} queued`);
-
             } catch (e) {
-                console.warn(`[Tile Preload] Error at level ${zoomLevel}:`, e);
+                warnOnce(`[Tile Preload] Error at level ${zoomLevel}: ${e}`);
             }
 
             // Move to next zoom level
@@ -3429,15 +3427,13 @@ export class Map extends Camera {
 
         // Extract colors from the actual style layers
         const styleColors = this._extractStyleLayerColors();
-        console.log('[MapMetrics] Style colors extracted:', styleColors);
 
         // Create grid colors based on the extracted style colors
         const colors = this._createGridColorsFromStyle(styleColors);
-        console.log('[MapMetrics] Grid pattern colors:', colors);
 
-        // Create two grid patterns for pulsing effect (large and small) - dramatic difference
+        // Only the large grid is drawn up front; the small size (14) is applied by
+        // _startGridPulseAnimation() as it alternates the pattern.
         const largeSizeGrid = 28;
-        const smallSizeGrid = 14;
 
         const createGridPattern = (size: number, patternName: string) => {
             const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
@@ -3474,8 +3470,6 @@ export class Map extends Camera {
             // Get image data and add it to the map
             const imageData = ctx.getImageData(0, 0, size, size);
 
-            console.log(`[MapMetrics] Creating pattern: ${patternName}, size: ${size}x${size}`);
-
             // Remove existing image first if it exists, then add new one
             if (this.hasImage(patternName)) {
                 this.removeImage(patternName);
@@ -3485,7 +3479,6 @@ export class Map extends Camera {
 
         // Create the pattern that we'll update for pulsing
         createGridPattern(largeSizeGrid, 'grid-pulse-pattern');
-        console.log('[MapMetrics] Grid pulse pattern created');
 
         // Store colors for pulse animation
         this._gridColors = {
@@ -3496,9 +3489,8 @@ export class Map extends Camera {
         // Set initial pattern
         try {
             this.setPaintProperty('background', 'background-pattern', 'grid-pulse-pattern');
-            console.log('[MapMetrics] Initial background pattern set');
         } catch (e) {
-            console.log('[MapMetrics] Error setting initial pattern:', e);
+            warnOnce(`[MapMetrics] Error setting initial background pattern: ${e}`);
         }
 
         // Start pulsing animation between grid sizes
@@ -3553,10 +3545,10 @@ export class Map extends Camera {
 
                 // Update the existing pattern image
                 this.updateImage('grid-pulse-pattern', imageData);
-                console.log('[MapMetrics] Grid pulse updated to size:', size);
                 this.triggerRepaint();
             } catch (e) {
-                console.log('[MapMetrics] Grid pulse error:', e);
+                // Runs on a 600ms interval; warnOnce keeps a persistent failure from flooding the console.
+                warnOnce(`[MapMetrics] Grid pulse error: ${e}`);
             }
         }, 600);
     }
@@ -3566,12 +3558,7 @@ export class Map extends Camera {
             clearInterval(this._gridPulseInterval);
             this._gridPulseInterval = null;
         }
-        // Keep current pattern
-        try {
-            // Pattern stays as is
-        } catch (e) {
-            // Ignore errors
-        }
+        // Keep the current pattern as-is.
     }
 
     /**
@@ -3583,7 +3570,7 @@ export class Map extends Camera {
         let g: number = 200;
         let b: number = 200;
 
-        if (!color) return { r, g, b };
+        if (!color) return {r, g, b};
 
         if (color.startsWith('#')) {
             const hex = color.replace('#', '');
@@ -3599,7 +3586,7 @@ export class Map extends Camera {
             }
         }
 
-        return { r, g, b };
+        return {r, g, b};
     }
 
     /**
@@ -3756,7 +3743,6 @@ export class Map extends Camera {
         }
 
         const downloadedTiles = new Set<string>();
-        let tilesLoaded = 0;
 
         // Identify tiles that have been DOWNLOADED (have texture or are in 'loaded' state)
         for (const sourceCache of Object.values(this.style.sourceCaches)) {
@@ -3768,24 +3754,19 @@ export class Map extends Camera {
                 // Check if tile has been downloaded (has texture or is loaded)
                 if (tile && (tile.texture || tile.state === 'loaded' || (tile.hasData && tile.hasData()))) {
                     downloadedTiles.add(tileKey);
-                    tilesLoaded++;
                 }
             }
         }
 
-        console.log(`Found ${tilesLoaded} downloaded tiles, ${Object.keys(this._tileLoadingStates).length} grids active`);
-
         // First, remove grids for any tiles that have been downloaded
         for (const tileKey in this._tileLoadingStates) {
             if (downloadedTiles.has(tileKey)) {
-                console.log(`Removing grid for downloaded tile: ${tileKey}`);
                 this._removeTileGrid(tileKey);
             }
         }
         
         // Calculate which tiles should be visible in viewport
         const transform = this.transform;
-        const tileSize = 512;
         const zoom = Math.floor(transform.zoom);
         const scale = Math.pow(2, zoom);
         
@@ -3813,7 +3794,7 @@ export class Map extends Camera {
                         // Create a pseudo-tile for the not-yet-downloaded area
                         const pseudoTile = {
                             tileID: {
-                                canonical: { z: zoom, x: x % scale, y: y }
+                                canonical: {z: zoom, x: x % scale, y: y}
                             }
                         };
                         this._addTileGrid(pseudoTile);
@@ -4084,6 +4065,8 @@ export class Map extends Camera {
         }
 
         ImageRequest.removeThrottleControl(this._imageQueueHandle);
+        this._mapSessionUnsubscribe?.();
+        this._mapSessionUnsubscribe = null;
 
         this._resizeObserver?.disconnect();
         const extension = this.painter.context.gl.getExtension('WEBGL_lose_context');
@@ -4099,6 +4082,26 @@ export class Map extends Camera {
 
         this._removed = true;
         this.fire(new Event('remove'));
+    }
+
+    /**
+     * Re-requests tiles that failed before a v2 map-session credential existed, so they go out
+     * signed. Called on every credential adoption.
+     *
+     * Only sources actually holding an `errored` tile are reloaded. A credential is adopted on
+     * every renewal too — roughly every 30 minutes for a map in continuous use — and
+     * `SourceCache.reload(true)` resets the tile cache and re-requests every tile it holds, not
+     * just the failed ones. Reloading unconditionally would therefore re-download the whole
+     * viewport twice an hour to no purpose: tiles already on screen are valid under the old
+     * credential, and tiles requested after this point pick up the new one anyway.
+     */
+    _reloadErroredTiles() {
+        if (this._removed || !this.style) return;
+        for (const id in this.style.sourceCaches) {
+            const sourceCache = this.style.sourceCaches[id];
+            if (!sourceCache.hasErroredTiles()) continue;
+            sourceCache.reload(true);
+        }
     }
 
     /**

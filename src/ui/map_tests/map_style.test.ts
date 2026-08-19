@@ -380,7 +380,18 @@ describe('#getStyle', () => {
 
         // map.getStyle() should still equal the original style since
         // we have not yet called map.setStyle(...).
-        expect(map.getStyle()).toEqual(style);
+        //
+        // MapMetrics fork behaviour: on the first `load`, `Map._createDefaultBackgroundPattern()`
+        // sets a `background-pattern` on any `background` layer to drive the loading grid-pulse
+        // animation. That is a genuine style change the fork makes, so it is expected here -
+        // the assertion below still proves the caller's edit to `newStyle` did not leak back.
+        expect(map.getStyle()).toEqual({
+            ...style,
+            layers: [{
+                ...style.layers[0],
+                paint: {...style.layers[0].paint, 'background-pattern': 'grid-pulse-pattern'}
+            }]
+        });
     });
 
     test('returns the style with added sources', () => new Promise<void>(done => {

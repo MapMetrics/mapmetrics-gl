@@ -4,6 +4,7 @@ import {webpSupported} from './webp_supported';
 import {config} from './config';
 import {createAbortError} from './abort_error';
 import {getProtocol} from '../source/protocol_crud';
+import {isMapMetricsGatewayUrl, isCredentialExemptUrl} from './mapmetrics_hosts';
 
 type ImageQueueThrottleControlCallback = () => boolean;
 
@@ -113,10 +114,8 @@ export namespace ImageRequest {
                 requestParameters.headers.accept = 'image/webp,*/*';
             }
 
-            // Don't require credentials for sprite requests
-            if (requestParameters.url && 
-                (requestParameters.url.includes('mapmetrics.org') || requestParameters.url.includes('gateway.mapmetrics.org')) &&
-                requestParameters.url.includes('/sprites/')) {
+            // Sprites are public assets: never send credentials for them.
+            if (isMapMetricsGatewayUrl(requestParameters.url) && isCredentialExemptUrl(requestParameters.url)) {
                 requestParameters.credentials = undefined;
             }
 
@@ -217,11 +216,16 @@ export namespace ImageRequest {
     };
 
     const getImageUsingHtmlImage = (requestParameters: RequestParameters, abortController: AbortController): Promise<GetResourceResponse<HTMLImageElement | ImageBitmap | null>>  => {
-        // Always include credentials for gateway.mapmetrics.org requests
-        if (requestParameters.url.includes('gateway.mapmetrics.org') && !requestParameters.credentials) {
-            requestParameters.credentials = 'include';
-        }
-        
+        // NOTE: there used to be a `url.includes('gateway.mapmetrics.org') -> credentials='include'`
+        // block here. It never executed, because that host does not resolve and the live gateway is
+        // `gateway.mapmetrics-atlas.net`. Routing it through the shared predicate would have made it
+        // fire for the first time, setting `crossOrigin='use-credentials'` on <img> loads — which
+        // FAILS outright unless the gateway answers with an exact `Access-Control-Allow-Origin` plus
+        // `Access-Control-Allow-Credentials: true`. That is unverifiable from here and could only
+        // break image loads that work today, so current effective behaviour is preserved: no
+        // credentials are forced on the HTMLImageElement path. Credentials set upstream (by
+        // transformRequest or by getImage) are still honoured below. Enabling this needs a check of
+        // the gateway's actual CORS response headers first.
         return new Promise<GetResourceResponse<HTMLImageElement | ImageBitmap | null>>((resolve, reject) => {
             const image = new Image() as HTMLImageElementWithPriority;
             const url = requestParameters.url;

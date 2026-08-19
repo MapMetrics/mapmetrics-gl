@@ -11,6 +11,16 @@ function createMap(options?) {
     }, options));
 }
 
+/**
+ * MapMetrics fork behaviour: `KeyboardHandler`'s camera animation is async and, for
+ * zoom-OUT only, awaits `map.tileLoadingManager.waitForZoomOutTiles()` before calling
+ * `easeTo`, so that zooming out does not flash grey un-loaded tiles. That means the
+ * `easeTo` call lands a few microtasks after the keydown instead of synchronously.
+ * Upstream MapLibre calls `easeTo` synchronously. This helper drains the microtask
+ * queue so the assertions can stay otherwise identical to upstream's.
+ */
+const flushCameraAnimation = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
 beforeEach(() => {
     beforeMapTest();
 });
@@ -183,7 +193,7 @@ describe('keyboard', () => {
 
     });
 
-    test('KeyboardHandler zooms map in response to -/+ keys', () => {
+    test('KeyboardHandler zooms map in response to -/+ keys', async () => {
         const map = createMap({zoom: 10, center: [0, 0]});
         const spy = vi.spyOn(map, 'easeTo');
 
@@ -198,17 +208,19 @@ describe('keyboard', () => {
 
         map.setZoom(10);
         simulate.keydown(map.getCanvas(), {keyCode: 189, key: 'Minus'});
+        await flushCameraAnimation();
         expect(spy).toHaveBeenCalledTimes(3);
         expect(spy.mock.calls[2][0].zoom).toBe(9);
 
         map.setZoom(10);
         simulate.keydown(map.getCanvas(), {keyCode: 189, key: 'Minus', shiftKey: true});
+        await flushCameraAnimation();
         expect(spy).toHaveBeenCalledTimes(4);
         expect(spy.mock.calls[3][0].zoom).toBe(8);
 
     });
 
-    test('KeyboardHandler zooms map in response to -/+ keys when disableRotation has been called', () => {
+    test('KeyboardHandler zooms map in response to -/+ keys when disableRotation has been called', async () => {
         const map = createMap({zoom: 10, center: [0, 0]});
         const spy = vi.spyOn(map, 'easeTo');
         map.keyboard.disableRotation();
@@ -224,11 +236,13 @@ describe('keyboard', () => {
 
         map.setZoom(10);
         simulate.keydown(map.getCanvas(), {keyCode: 189, key: 'Minus'});
+        await flushCameraAnimation();
         expect(spy).toHaveBeenCalledTimes(3);
         expect(spy.mock.calls[2][0].zoom).toBe(9);
 
         map.setZoom(10);
         simulate.keydown(map.getCanvas(), {keyCode: 189, key: 'Minus', shiftKey: true});
+        await flushCameraAnimation();
         expect(spy).toHaveBeenCalledTimes(4);
         expect(spy.mock.calls[3][0].zoom).toBe(8);
 

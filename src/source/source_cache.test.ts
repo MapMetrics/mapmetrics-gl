@@ -2125,3 +2125,24 @@ describe('SourceCache#usedForTerrain', () => {
         sourceCache.onAdd(undefined);
     }));
 });
+
+describe('SourceCache#hasErroredTiles', () => {
+    test('false when the cache is empty', () => {
+        const sourceCache = createSourceCache({});
+        expect(sourceCache.hasErroredTiles()).toBe(false);
+    });
+
+    test('false when every held tile loaded', () => {
+        const sourceCache = createSourceCache({});
+        const tile = sourceCache.addTile(new OverscaledTileID(0, 0, 0, 0, 0));
+        tile.state = 'loaded';
+        expect(sourceCache.hasErroredTiles()).toBe(false);
+    });
+
+    test('true when any held tile errored', () => {
+        const sourceCache = createSourceCache({});
+        sourceCache.addTile(new OverscaledTileID(0, 0, 0, 0, 0)).state = 'loaded';
+        sourceCache.addTile(new OverscaledTileID(1, 0, 1, 0, 0)).state = 'errored';
+        expect(sourceCache.hasErroredTiles()).toBe(true);
+    });
+});
