@@ -166,6 +166,25 @@ export class MapSession {
             }
         }
         if (this._apiKey) this._installVisibilityHandler();
+
+        // BUY THE CREDENTIAL NOW, not when the first tile needs signing.
+        //
+        // `transformRequest` is synchronous, so a tile that arrives before a credential exists goes
+        // out UNSIGNED — and an unsigned tile still carries the style's `?token=`, which the gateway
+        // bills through the v1 cookie path. Every tile in that window is therefore a separate map
+        // load. Measured against staging from an empty meter: one page load cost 4-11 billed units,
+        // all of them v1-path rows, because the lazy create in `signUrl` did not land until ten to
+        // twelve seconds after the map started requesting tiles.
+        //
+        // Nothing makes this self-correcting, either: those unsigned tiles return 200, not 401, so
+        // the 401-driven refresh never fires. The map looks perfect while it overbills.
+        //
+        // Only possible when the origin was PINNED by configuration. Without it the origin is
+        // learned from the first https tile URL, and there is nowhere safe to POST the key yet.
+        //
+        // `!this._sig` keeps a repeat `configure()` from buying a second window: with a credential
+        // already held, `refreshNow()` would take the renew branch and bill again.
+        if (this._apiKey && this._origin && !this._sig) this.refreshNow();
     }
 
     /** True once an API key has been configured. Everything else is inert until then. */

@@ -145,8 +145,8 @@ describe('invariant 5 — never send the API key to an unvalidated origin', () =
     });
 
     test('the create request goes to the pinned origin only', async () => {
-        mapSession.configure({apiKey: 'SECRET', gatewayOrigin: ORIGIN});
         const {calls} = stubTransport();
+        mapSession.configure({apiKey: 'SECRET', gatewayOrigin: ORIGIN});
         mapSession.refreshNow();
         await vi.waitFor(() => expect(calls).toHaveLength(1));
         expect(calls[0].startsWith(`${ORIGIN}/v2/map-sessions?token=SECRET`)).toBe(true);
@@ -324,10 +324,46 @@ describe('invariant 6 — bounded consecutive hard failures, with a way back', (
     });
 });
 
+describe('the credential is bought eagerly, before any tile can be requested', () => {
+    // transformRequest is synchronous, so a tile arriving before a credential exists goes out
+    // UNSIGNED -- and an unsigned tile still carries the style's ?token=, which the gateway bills
+    // through the v1 cookie path. Every tile in that window is a separate map load. Measured
+    // against staging from an empty meter, one page load cost 4-11 billed units before this.
+    test('configure() with a pinned origin buys a credential immediately', () => {
+        const {calls} = stubTransport();
+        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
+        expect(calls).toHaveLength(1);
+        expect(calls[0].startsWith(`${ORIGIN}/v2/map-sessions?token=KEY`)).toBe(true);
+    });
+
+    test('no eager create without a pinned origin — there is nowhere safe to send the key', () => {
+        const {calls} = stubTransport();
+        mapSession.configure({apiKey: 'KEY'});
+        expect(calls).toHaveLength(0);
+    });
+
+    test('no eager create when a credential is already held — that would buy a second window', () => {
+        mapSession.seedCredential('acct-1', 'sess-1', 'SIG1', nowSeconds() + 100, nowSeconds() + 200);
+        const {calls} = stubTransport();
+        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
+        expect(calls).toHaveLength(0);
+    });
+
+    test('the eager create still coalesces with the tiles that follow it', async () => {
+        const {calls, pending} = stubTransport(null);
+        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
+        for (let i = 0; i < 20; i++) mapSession.signUrl(`${ORIGIN}/planet/12/2094/${1400 + i}.mvt?token=JWT`);
+        expect(calls).toHaveLength(1);
+        pending[0]({status: 200, body: body()});
+        await vi.waitFor(() => expect(mapSession._sig).toBe('SIG1'));
+        expect(calls).toHaveLength(1);
+    });
+});
+
 describe('invariant 9 — concurrent creates coalesce onto one request', () => {
     test('many simultaneous cold-start tiles buy exactly one session', async () => {
-        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
         const {calls, pending} = stubTransport(null);
+        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
         for (let i = 0; i < 20; i++) mapSession.signUrl(`${ORIGIN}/planet/12/2094/${1362 + i}.mvt?token=JWT`);
         expect(calls).toHaveLength(1);
         pending[0]({status: 200, body: body()});
@@ -336,8 +372,8 @@ describe('invariant 9 — concurrent creates coalesce onto one request', () => {
     });
 
     test('a wedged in-flight request is released once it is stale, so refreshing resumes', async () => {
-        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
         const {calls} = stubTransport(null);
+        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
         mapSession.refreshNow();
         expect(calls).toHaveLength(1);
         mapSession.refreshNow();
@@ -491,8 +527,8 @@ describe('composition with a user-supplied transformRequest', () => {
 
 describe('one session per page', () => {
     test('two RequestManagers, standing in for two Maps, share one credential and one create', async () => {
-        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
         const {calls, pending} = stubTransport(null);
+        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
         const a = new RequestManager();
         const b = new RequestManager();
         a.transformRequest(TILE, ResourceType.Tile);
@@ -526,6 +562,11 @@ describe('errored tiles are retried once a credential exists', () => {
 describe('onTileResponse — the inbound hook', () => {
     beforeEach(() => {
         mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
+        // configure() buys the first credential eagerly, so the coalescing flag is already
+        // raised by the time a test body runs. Stand that create down, so each test observes
+        // the refresh IT triggers rather than coalescing onto the startup one.
+        mapSession._refreshInFlight = false;
+        mapSession._refreshInFlightSince = 0;
     });
 
     test('a 200 carrying rollover headers adopts them', () => {
