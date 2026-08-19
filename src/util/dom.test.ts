@@ -39,5 +39,23 @@ describe('DOM', () => {
             const output = DOM.sanitize(input);
             expect(output).toBe('<div><a>click me</a></div>');
         });
+
+        // The following two cover maplibre-gl-js PR #8189 (fixed upstream in v6.4.1). The bug is
+        // specifically about ADJACENCY: `elem.attributes` is a live NamedNodeMap, so removing one
+        // attribute shifted the next one into the index the iterator had already passed, and it
+        // was never examined. A single dangerous attribute was always removed correctly, which is
+        // why every pre-existing test above still passed with the bug present.
+        test('should remove multiple consecutive dangerous attributes', () => {
+            const input = '<details open onload="1" ontoggle="alert(1)">x</details>';
+            const output = DOM.sanitize(input);
+            expect(output).not.toContain('onload');
+            expect(output).not.toContain('ontoggle');
+        });
+
+        test('should remove dangerous attributes that follow a removed attribute', () => {
+            const input = '<a href=\'javascript:alert(1)\' onclick=\'alert(1)\'>click me</a>';
+            const output = DOM.sanitize(input);
+            expect(output).toBe('<a>click me</a>');
+        });
     });
 });
