@@ -9,7 +9,7 @@
         "attribution": "<a href=\"https://mapmetrics.org/\">MapMetrics</a> © <a href=\"https://openstreetmap.org\">OpenStreetMap</a>",
         "type": "vector",
         "tiles": [
-                "https://twilight-bush-94ef.jim9710.workers.dev/20250110/{z}/{x}/{y}.mvt?token=.."
+                "https://gateway.mapmetrics-atlas.net/{tileset}/{z}/{x}/{y}.mvt?token=YOUR_API_KEY"
     ],
         "maxzoom": 15
       }

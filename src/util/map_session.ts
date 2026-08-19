@@ -15,7 +15,7 @@ export const CREDENTIAL_PARAMS = ['u', 's', 'e', 'a', 'k', 'sig'] as const;
  *
  * ```
  * https://gateway.mapmetrics-atlas.net/planet20251013/12/2094/1362.mvt?token=<JWT>
- * https://gateway-mapatlas-staging.jim9710.workers.dev/v2/tiles/12/2094/1362.mvt
+ * https://gateway-staging.example.com/v2/tiles/12/2094/1362.mvt
  * ```
  *
  * satisfy this one predicate, so no style has to change and no list of known prefixes has to be

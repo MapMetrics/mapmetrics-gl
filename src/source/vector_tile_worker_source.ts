@@ -13,10 +13,6 @@ import type {
     WorkerTileResult
 } from '../source/worker_source';
 
-import type {
-    RequestParameters
-} from '../util/ajax';
-
 import type {IActor} from '../util/actor';
 import type {StyleLayerIndex} from '../style/style_layer_index';
 import type {VectorTile} from '@mapbox/vector-tile';
@@ -35,25 +31,6 @@ type FetchingState = {
 
 export type AbortVectorData = () => void;
 export type LoadVectorData = (params: WorkerTileParameters, abortController: AbortController) => Promise<LoadVectorTileResult | null>;
-
-/**
- * Ensures request credentials are properly set for MapMetrics domains
- */
-function ensureMapmetricsCredentials(request: RequestParameters): RequestParameters {
-    if (request.url && 
-        (request.url.includes('mapmetrics.org') || request.url.includes('gateway.mapmetrics1.org')) && 
-        request.credentials !== 'include' &&
-        !request.url.includes('/fonts/') &&  // Don't require credentials for font requests
-        !request.url.includes('/basemaps-assets/fonts/')) {  // Don't require credentials for font requests
-        
-        // Create a new request parameters object with credentials set
-        return {
-            ...request,
-            credentials: 'include' // Always include credentials for MapMetrics domains
-        };
-    }
-    return request;
-}
 
 /**
  * The {@link WorkerSource} implementation that supports {@link VectorTileSource}.
@@ -88,15 +65,6 @@ export class VectorTileWorkerSource implements WorkerSource {
      * Loads a vector tile
      */
     async loadVectorTile(params: WorkerTileParameters, abortController: AbortController): Promise<LoadVectorTileResult> {
-        // Ensure credentials and headers for MapMetrics tile requests
-        if (params.request && params.request.url && params.request.url.includes('mapmetrics.org')) {
-            params.request.credentials = 'include';
-            params.request.headers = {
-                'Accept': 'application/x-protobuf',
-                'Origin': 'https://localhost:8000'
-            };
-        }
-        
         const response = await getArrayBuffer(params.request, abortController);
         try {
             const vectorTile = new vt.VectorTile(new Protobuf(response.data));

@@ -1,4 +1,5 @@
 import { extend, isWorker } from "./util";
+import {isMapMetricsGatewayUrl} from './mapmetrics_hosts';
 import { createAbortError } from "./abort_error";
 import { getProtocol } from "../source/protocol_crud";
 import { MessageType } from "./actor_messages";
@@ -197,8 +198,11 @@ function makeXMLHttpRequest(
                 xhr.setRequestHeader("Accept", "application/json");
             }
         }
-        // Enable credentials for MapMetrics domains to allow cookie setting
-        xhr.withCredentials = requestParameters.url.includes('gateway.mapmetrics-atlas.net');
+        // Enable credentials for MapMetrics gateways to allow cookie setting.
+        // NOTE: no font/sprite carve-out here, deliberately. This is the transport layer and it
+        // preserves today's live behaviour: every gateway request carries credentials. The
+        // carve-outs live in the callers that FORCE credentials onto a request that did not ask.
+        xhr.withCredentials = isMapMetricsGatewayUrl(requestParameters.url);
         xhr.onerror = () => {
             console.error(`🍪 XHR error for ${requestParameters.url.substring(0, 50)}...`, xhr.status, xhr.statusText);
             reject(new Error(xhr.statusText));
@@ -257,7 +261,7 @@ async function makeFetchRequest(
     const request = new Request(requestParameters.url, {
         method: requestParameters.method || "GET",
         body: requestParameters.body,
-        credentials: requestParameters.url.includes('gateway.mapmetrics-atlas.net') ? 'include' : undefined,
+        credentials: isMapMetricsGatewayUrl(requestParameters.url) ? 'include' : undefined,
         headers: requestParameters.headers,
         cache: requestParameters.cache,
         referrer: getReferrer(),
@@ -326,8 +330,9 @@ export const makeRequest = function (
     abortController: AbortController
 ): Promise<GetResourceResponse<any>> {
     const url = requestParameters.url;
-    const isMapMetricsRequest = url.includes('gateway.mapmetrics.org') || 
-                               url.includes('gateway.mapmetrics-atlas.net') ||
+    // Transport selection, not a credential decision: gateway hosts plus two tile path shapes
+    // that may be served from a customer's own domain.
+    const isMapMetricsRequest = isMapMetricsGatewayUrl(url) ||
                                url.includes('/rtile/') ||
                                url.includes('/vector-tile/');
     
