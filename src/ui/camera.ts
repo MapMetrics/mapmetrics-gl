@@ -39,7 +39,7 @@ export type PointLike = Point | [number, number];
  * ```ts
  * let map = new Map({
  *   container: 'map',
- *   style: `https://gateway.mapmetrics.org/styles/light.json?token=${accessToken}`,,
+ *   style: `https://gateway.mapmetrics-atlas.net/styles/?fileName=<YOUR_ACCOUNT_ID>/<YOUR_STYLE>.json&token=${accessToken}`,
  *   center: [-73.5804, 45.53483],
  *   pitch: 60,
  *   bearing: -60,

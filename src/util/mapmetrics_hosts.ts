@@ -19,10 +19,11 @@
  * session cookie.
  *
  * - `gateway.mapmetrics-atlas.net` is the live production gateway.
- * - `gateway.mapmetrics.org` does not currently resolve, but it is the host named throughout the
- *   README, the docs and the {@link configureMapSession} example, so it is retained as the
- *   documented/legacy production name. Listing a non-resolving host costs nothing: no request is
- *   ever made to it.
+ * - `gateway.mapmetrics.org` is NXDOMAIN — it does not resolve at all. It used to be named
+ *   throughout the README, the docs and the {@link configureMapSession} example; those have since
+ *   been corrected to the live host. It is retained here only as the legacy production name, so
+ *   that anyone still holding an old copy of the docs is not silently un-authenticated. Listing a
+ *   non-resolving host costs nothing: no request is ever made to it.
  *
  * Deliberately NOT listed: `gateway.mapmetrics1.org` (does not resolve, appears in no
  * documentation, and was only ever named by two of the four old copies — an artefact, not a host).

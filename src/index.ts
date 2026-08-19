@@ -89,7 +89,7 @@ function setWorkerUrl(value: string) { config.WORKER_URL = value; }
  * @example
  * ```ts
  * // Only needed if the style is not gateway-hosted, or to pin the origin explicitly:
- * mapmetricsgl.configureMapSession({apiKey: MY_KEY, gatewayOrigin: 'https://gateway.mapmetrics.org'});
+ * mapmetricsgl.configureMapSession({apiKey: MY_KEY, gatewayOrigin: 'https://gateway.mapmetrics-atlas.net'});
  * // Opt out and stay on the previous behaviour:
  * mapmetricsgl.configureMapSession({enabled: false});
  * ```

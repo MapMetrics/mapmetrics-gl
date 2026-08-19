@@ -180,7 +180,12 @@ export class DOM {
 	 * @param elem - The element
 	 */
     private static removeAttributes(elem: Element) {
-        for (const {name, value} of elem.attributes) {
+        // `elem.attributes` is a LIVE NamedNodeMap. Calling `removeAttribute` during iteration
+        // shifts every later attribute down one index, so the iterator skips the attribute
+        // directly after each removed one — meaning a second dangerous attribute adjacent to a
+        // first one survived sanitisation and executed. Snapshot before iterating.
+        // Upstream maplibre-gl-js PR #8189, fixed there in v6.4.1.
+        for (const {name, value} of Array.from(elem.attributes)) {
             if (!DOM.isPossiblyDangerous(name, value)) continue;
             elem.removeAttribute(name);
         }

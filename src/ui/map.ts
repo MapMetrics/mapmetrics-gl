@@ -1867,7 +1867,7 @@ export class Map extends Camera {
      * ```ts
      * map.setStyle("https://demotiles.maplibre.org/style.json");
      *
-     * map.setStyle(`https://gateway.mapmetrics.org/styles/light.json?token=${accessToken}`,, {
+     * map.setStyle(`https://gateway.mapmetrics-atlas.net/styles/?fileName=<YOUR_ACCOUNT_ID>/<YOUR_STYLE>.json&token=${accessToken}`, {
      *   transformStyle: (previousStyle, nextStyle) => ({
      *       ...nextStyle,
      *       sources: {

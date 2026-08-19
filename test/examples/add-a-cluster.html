@@ -5,10 +5,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link
             rel="stylesheet"
-            href="https://gateway.mapmetrics.org/assets/css/mapmetrics-gl.css"
+            href="https://unpkg.com/@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.css"
         />
-        <script src="https://gateway.mapmetrics.org/assets/js/mapmetrics-gl.js"></script>
-        <script src="https://gateway.mapmetrics.org/assets/js/pmtiles.js"></script>
+        <script src="https://unpkg.com/@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.js"></script>
+        <script src="https://unpkg.com/pmtiles@4.5.0/dist/pmtiles.js"></script>
         <style>
             html,
             body {
@@ -32,17 +32,17 @@
             mapmetrics.addProtocol("pmtiles", protocol.tile);
             const map = new mapmetrics.Map({
                 container: "map",
-                style: `https://gateway.mapmetrics.org/styles/light.json?token=${accessToken}`,
+                style: `https://gateway.mapmetrics-atlas.net/styles/?fileName=<YOUR_ACCOUNT_ID>/<YOUR_STYLE>.json&token=${accessToken}`,
                 center: [-103.59179687498357, 40.66995747013945],
                 zoom: 3,
             });
             mapmetrics.setRTLTextPlugin(
-                "https://gateway.mapmetrics.org/assets/js/mapmetrics-gl-rtl-text.min.js"
+                "https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js"
             );
             map.on("load", () => {
                 map.addSource("earthquakes", {
                     type: "geojson",
-                    data: "https://gateway.mapmetrics.org/assets/earthquakes.geojson",
+                    data: "https://maplibre.org/maplibre-gl-js/docs/assets/earthquakes.geojson",
                     cluster: true,
                     clusterMaxZoom: 14,
                     clusterRadius: 50,

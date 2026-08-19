@@ -10,9 +10,9 @@
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link
             rel="stylesheet"
-            href="https://gateway.mapmetrics.org/assets/dist/mapmetrics.css"
+            href="https://unpkg.com/@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.css"
         />
-        <script src="https://gateway.mapmetrics.org/assets/dist/mapmetrics.js"></script>
+        <script src="https://unpkg.com/@mapmetrics/mapmetrics-gl/dist/mapmetrics-gl.js"></script>
         <style>
             body {
                 margin: 0;
@@ -77,7 +77,7 @@
                 // Heatmap layers also work with a vector tile source.
                 map.addSource("earthquakes", {
                     type: "geojson",
-                    data: "https://gateway.mapmetrics.org/assets/earthquakes.geojson",
+                    data: "https://maplibre.org/maplibre-gl-js/docs/assets/earthquakes.geojson",
                 });
 
                 map.addLayer({

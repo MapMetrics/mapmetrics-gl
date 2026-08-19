@@ -14,8 +14,8 @@
         "maxzoom": 15
       }
     },
-    "sprite": "https://gateway.mapmetrics.org/basemaps-assets/sprites/v4/light",
-    "glyphs": "https://gateway.mapmetrics.org/basemaps-assets/fonts/{fontstack}/{range}.pbf",
+    "sprite": "https://cdn.mapmetrics-atlas.net/basemaps-assets/sprites/v4/light",
+    "glyphs": "https://cdn.mapmetrics-atlas.net/basemaps-assets/fonts/{fontstack}/{range}.pbf",
     "layers": [
       {
         "id": "background",

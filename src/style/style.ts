@@ -163,7 +163,7 @@ export type StyleSetterOptions = {
  *
  * @example
  * ```ts
- * map.setStyle(`https://gateway.mapmetrics.org/styles/light.json?token=${accessToken}`,, {
+ * map.setStyle(`https://gateway.mapmetrics-atlas.net/styles/?fileName=<YOUR_ACCOUNT_ID>/<YOUR_STYLE>.json&token=${accessToken}`, {
  *   transformStyle: (previousStyle, nextStyle) => ({
  *       ...nextStyle,
  *       // make relative sprite path like "../sprite" absolute
