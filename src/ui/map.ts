@@ -3253,7 +3253,6 @@ export class Map extends Camera {
         // Auto-remove quickly if tile detection fails
         setTimeout(() => {
             if (this._tileLoadingStates[tileKey] === gridOverlay) {
-                console.log(`Auto-removing grid for tile: ${tileKey}`);
                 this._removeTileGrid(tileKey);
             }
         }, 300);
@@ -3370,15 +3369,11 @@ export class Map extends Camera {
         const minZoom = Math.max(0, currentZoom - 5);
         const maxZoom = Math.min(22, currentZoom + 5);
 
-        console.log(`[Tile Preload] Starting: zoom ${minZoom} to ${maxZoom} (current: ${currentZoom})`);
-
         // Preload each zoom level sequentially with minimal delay
         let zoomLevel = minZoom;
-        let tilesRequested = 0;
 
         const preloadNextZoomLevel = () => {
             if (zoomLevel > maxZoom || !this.style) {
-                console.log(`[Tile Preload] Complete: ${tilesRequested} tile requests queued`);
                 return;
             }
 
@@ -3396,19 +3391,14 @@ export class Map extends Camera {
                 // Force render to queue tile requests
                 this._update(false);
 
-                // Count tiles (rough estimate)
-                tilesRequested += Math.pow(2, Math.max(0, zoomLevel - currentZoom + 2));
-
                 // Restore original zoom immediately
                 this.jumpTo({
                     center: originalCenter,
                     zoom: originalZoom
                 });
 
-                console.log(`[Tile Preload] Level ${zoomLevel} queued`);
-
             } catch (e) {
-                console.warn(`[Tile Preload] Error at level ${zoomLevel}:`, e);
+                warnOnce(`[Tile Preload] Error at level ${zoomLevel}: ${e}`);
             }
 
             // Move to next zoom level
@@ -3436,11 +3426,9 @@ export class Map extends Camera {
 
         // Extract colors from the actual style layers
         const styleColors = this._extractStyleLayerColors();
-        console.log('[MapMetrics] Style colors extracted:', styleColors);
 
         // Create grid colors based on the extracted style colors
         const colors = this._createGridColorsFromStyle(styleColors);
-        console.log('[MapMetrics] Grid pattern colors:', colors);
 
         // Create two grid patterns for pulsing effect (large and small) - dramatic difference
         const largeSizeGrid = 28;
@@ -3481,8 +3469,6 @@ export class Map extends Camera {
             // Get image data and add it to the map
             const imageData = ctx.getImageData(0, 0, size, size);
 
-            console.log(`[MapMetrics] Creating pattern: ${patternName}, size: ${size}x${size}`);
-
             // Remove existing image first if it exists, then add new one
             if (this.hasImage(patternName)) {
                 this.removeImage(patternName);
@@ -3492,7 +3478,6 @@ export class Map extends Camera {
 
         // Create the pattern that we'll update for pulsing
         createGridPattern(largeSizeGrid, 'grid-pulse-pattern');
-        console.log('[MapMetrics] Grid pulse pattern created');
 
         // Store colors for pulse animation
         this._gridColors = {
@@ -3503,9 +3488,8 @@ export class Map extends Camera {
         // Set initial pattern
         try {
             this.setPaintProperty('background', 'background-pattern', 'grid-pulse-pattern');
-            console.log('[MapMetrics] Initial background pattern set');
         } catch (e) {
-            console.log('[MapMetrics] Error setting initial pattern:', e);
+            warnOnce(`[MapMetrics] Error setting initial background pattern: ${e}`);
         }
 
         // Start pulsing animation between grid sizes
@@ -3560,10 +3544,10 @@ export class Map extends Camera {
 
                 // Update the existing pattern image
                 this.updateImage('grid-pulse-pattern', imageData);
-                console.log('[MapMetrics] Grid pulse updated to size:', size);
                 this.triggerRepaint();
             } catch (e) {
-                console.log('[MapMetrics] Grid pulse error:', e);
+                // Runs on a 600ms interval; warnOnce keeps a persistent failure from flooding the console.
+                warnOnce(`[MapMetrics] Grid pulse error: ${e}`);
             }
         }, 600);
     }
@@ -3763,7 +3747,6 @@ export class Map extends Camera {
         }
 
         const downloadedTiles = new Set<string>();
-        let tilesLoaded = 0;
 
         // Identify tiles that have been DOWNLOADED (have texture or are in 'loaded' state)
         for (const sourceCache of Object.values(this.style.sourceCaches)) {
@@ -3775,17 +3758,13 @@ export class Map extends Camera {
                 // Check if tile has been downloaded (has texture or is loaded)
                 if (tile && (tile.texture || tile.state === 'loaded' || (tile.hasData && tile.hasData()))) {
                     downloadedTiles.add(tileKey);
-                    tilesLoaded++;
                 }
             }
         }
 
-        console.log(`Found ${tilesLoaded} downloaded tiles, ${Object.keys(this._tileLoadingStates).length} grids active`);
-
         // First, remove grids for any tiles that have been downloaded
         for (const tileKey in this._tileLoadingStates) {
             if (downloadedTiles.has(tileKey)) {
-                console.log(`Removing grid for downloaded tile: ${tileKey}`);
                 this._removeTileGrid(tileKey);
             }
         }

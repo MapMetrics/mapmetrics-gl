@@ -1,6 +1,6 @@
 import { Event, ErrorEvent, Evented } from "../util/evented";
 
-import { extend, pick } from "../util/util";
+import { extend, pick, warnOnce } from "../util/util";
 import { loadTileJson } from "./load_tilejson";
 import { TileBounds } from "./tile_bounds";
 import { ResourceType } from "../util/request_manager";
@@ -33,16 +33,12 @@ const cookiePrefetchDomains = new Set<string>();
  */
 async function prefetchSingleDomain(domain: string): Promise<void> {
     if (cookiePrefetchDomains.has(domain)) return;
-    
-    console.log(`🍪 Starting prefetch for domain: ${domain}`);
-    
+
     try {
         // Use the same URL pattern as the working example
         const prefetchUrl = `https://twilight-bush-94ef.jim9710.workers.dev/20250110/1/1/0.mvt?token=`;
-        
-        console.log(`🍪 Prefetching URL: ${prefetchUrl}`);
-        
-        const prefetchResponse = await fetch(prefetchUrl, {
+
+        await fetch(prefetchUrl, {
             method: 'GET',
             credentials: 'include',
             headers: {
@@ -51,11 +47,10 @@ async function prefetchSingleDomain(domain: string): Promise<void> {
             },
             cache: 'no-store'
         });
-        
-        console.log(`🍪 Prefetch completed for ${domain} with status: ${prefetchResponse.status}`);
+
         cookiePrefetchDomains.add(domain);
     } catch (e) {
-        console.warn(`🍪 Cookie prefetch failed for ${domain}:`, e);
+        warnOnce(`Cookie prefetch failed for ${domain}: ${e}`);
         cookiePrefetchDomains.add(domain);
     }
 }
@@ -68,15 +63,10 @@ function ensureGlobalCookiePrefetch(): Promise<void> {
     if (globalCookiePrefetchPromise) {
         return globalCookiePrefetchPromise;
     }
-    
-    console.log(`🍪 Starting global cookie prefetch`);
-    
+
     globalCookiePrefetchPromise = prefetchSingleDomain('twilight-bush-94ef.jim9710.workers.dev')
-        .then(() => {
-            console.log('🍪 Global cookie prefetch completed');
-        })
         .catch(err => {
-            console.warn('🍪 Global cookie prefetch failed:', err);
+            warnOnce(`Global cookie prefetch failed: ${err}`);
         });
     
     return globalCookiePrefetchPromise;
@@ -185,7 +175,6 @@ export class VectorTileSource extends Evented implements Source {
         ensureGlobalCookiePrefetch()
             .then(() => {
                 this._prefetchCompleted = true;
-                console.log(`🍪 Cookie prefetch completed for source ${this.id}`);
             })
             .catch(() => {
                 // Set prefetch completed even on error to allow tiles to load
@@ -311,14 +300,13 @@ export class VectorTileSource extends Evented implements Source {
     async loadTile(tile: Tile): Promise<void> {
         // For MapMetrics domains, wait for cookie prefetch to complete
         if (!this._prefetchCompleted && this.tiles && this.tiles.some(url => url.includes('mapmetrics.org'))) {
-            console.log(`🍪 Waiting for cookie prefetch to complete before loading tile ${tile.tileID.canonical.z}/${tile.tileID.canonical.x}/${tile.tileID.canonical.y}`);
             try {
                 // Wait for global prefetch to complete
                 await ensureGlobalCookiePrefetch();
                 this._prefetchCompleted = true;
             } catch (e) {
                 // Continue even if prefetch failed
-                console.warn(`🍪 Error waiting for cookie prefetch, proceeding with tile load anyway:`, e);
+                warnOnce(`Error waiting for cookie prefetch, proceeding with tile load anyway: ${e}`);
                 this._prefetchCompleted = true;
             }
         }
@@ -342,7 +330,6 @@ export class VectorTileSource extends Evented implements Source {
                 'Accept': 'application/x-protobuf',
                 'Origin': 'https://localhost:8000'
             };
-            console.log(`🍪 Setting credentials and headers for tile request: ${url.substring(0, 50)}...`);
         }
         
         const params: WorkerTileParameters = {

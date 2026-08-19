@@ -221,10 +221,6 @@ function makeXMLHttpRequest(
                         return;
                     }
                 }
-                // Log cookie information
-                if (typeof document !== 'undefined') {
-                    console.log(`🍪 Current cookies: ${document.cookie}`);
-                }
                 resolve({
                     data,
                     cacheControl: xhr.getResponseHeader("Cache-Control"),
@@ -294,11 +290,6 @@ async function makeFetchRequest(
         );
     }
 
-    // Log cookie information
-    if (typeof document !== 'undefined') {
-        console.log(`🍪 Current cookies: ${document.cookie}`);
-    }
-
     let parsePromise: Promise<any>;
     if (
         requestParameters.type === "arrayBuffer" ||
@@ -350,12 +341,10 @@ export const makeRequest = function (
             ...requestParameters.headers,
             'Accept': 'application/x-protobuf'
         };
-        console.log(`🍪 Setting headers for request: ${url}`);
     }
 
     // For MapMetrics domains, rtile and vector tile requests, always use XMLHttpRequest
     if (isMapMetricsRequest) {
-        console.log(`🍪 Using XMLHttpRequest for MapMetrics domain, rtile or vector tile: ${url.substring(0, 50)}...`);
         return makeXMLHttpRequest(requestParameters, abortController);
     }
 

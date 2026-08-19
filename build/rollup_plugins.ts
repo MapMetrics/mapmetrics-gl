@@ -26,10 +26,6 @@ export const plugins = (production: boolean): Plugin[] => [
             '_token_stack:': ''
         }
     }),
-    production && strip({
-        sourceMap: true,
-        functions: ['PerformanceUtils.*']
-    }),
     // production && terser({
     //     compress: {
     //         pure_getters: true,
@@ -39,6 +35,20 @@ export const plugins = (production: boolean): Plugin[] => [
     // }),
     nodeResolve,
     typescript(),
+    // Strip developer-only output from the published bundle so consuming applications get a quiet
+    // console. `console.warn` / `console.error` are deliberately NOT stripped: they report real
+    // problems (misconfiguration, failed requests) that a consumer needs to see. The dev bundle
+    // (`BUILD:dev`) keeps everything, so debugging this library is unaffected.
+    //
+    // NOTE: this must run AFTER typescript(). @rollup/plugin-strip parses with acorn, which cannot
+    // read TypeScript syntax, and its default `include` is '**/*.js' only -- so placed before
+    // typescript() it never touched any of our own .ts sources. `include` is widened to '.ts' so
+    // that it does.
+    production && strip({
+        sourceMap: true,
+        include: ['**/*.js', '**/*.ts'],
+        functions: ['PerformanceUtils.*', 'console.log', 'console.debug', 'console.info', 'console.trace', 'console.dir', 'console.table']
+    }),
     commonjs({
         ignoreGlobal: true
     })

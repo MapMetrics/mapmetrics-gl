@@ -126,10 +126,6 @@ export class SeoManager {
         // Inject into DOM
         this._injector.injectJsonLd(jsonLdString);
         this._injector.injectNoscript(noscriptHtml, this._map.getContainer());
-
-        // Log feature count
-        const featureCount = geojson.features.length;
-        console.log(`MapMetrics GL SEO: indexed ${featureCount} features from ${sources.length} source(s)`);
     }
 
     /**

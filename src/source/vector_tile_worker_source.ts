@@ -95,7 +95,6 @@ export class VectorTileWorkerSource implements WorkerSource {
                 'Accept': 'application/x-protobuf',
                 'Origin': 'https://localhost:8000'
             };
-            console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
         }
         
         const response = await getArrayBuffer(params.request, abortController);

@@ -130,7 +130,6 @@ export default class Worker {
                 };
                 // Force XMLHttpRequest for all requests to MapMetrics domains
                 params.request.type = 'arrayBuffer';
-                console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
             }
             return this._getWorkerSource(mapId, params.type, params.source).loadTile(params);
         });
@@ -148,7 +147,6 @@ export default class Worker {
                 };
                 // Force XMLHttpRequest for all requests to MapMetrics domains
                 params.request.type = 'arrayBuffer';
-                console.log(`🍪 Worker: Setting credentials and headers for tile request: ${params.request.url.substring(0, 50)}...`);
             }
             return this._getWorkerSource(mapId, params.type, params.source).reloadTile(params);
         });
