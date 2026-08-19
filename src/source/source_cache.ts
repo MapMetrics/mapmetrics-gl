@@ -254,6 +254,17 @@ export class SourceCache extends Evented {
             !this._coveredTiles[id] && (symbolLayer || !this._tiles[id].holdingForFade());
     }
 
+    /**
+     * Whether any tile currently held failed to load. Lets a caller skip a `reload` that would
+     * only re-request tiles that are already fine.
+     */
+    hasErroredTiles(): boolean {
+        for (const id in this._tiles) {
+            if (this._tiles[id].state === 'errored') return true;
+        }
+        return false;
+    }
+
     reload(sourceDataChanged?: boolean) {
         if (this._paused) {
             this._shouldReloadOnResume = true;

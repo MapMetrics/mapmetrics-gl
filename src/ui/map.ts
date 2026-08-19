@@ -4111,13 +4111,22 @@ export class Map extends Camera {
     }
 
     /**
-     * Reloads every source, including the tiles that previously errored. Called when a v2
-     * map-session credential is adopted so tiles that went out unsigned are re-requested signed.
+     * Re-requests tiles that failed before a v2 map-session credential existed, so they go out
+     * signed. Called on every credential adoption.
+     *
+     * Only sources actually holding an `errored` tile are reloaded. A credential is adopted on
+     * every renewal too — roughly every 30 minutes for a map in continuous use — and
+     * `SourceCache.reload(true)` resets the tile cache and re-requests every tile it holds, not
+     * just the failed ones. Reloading unconditionally would therefore re-download the whole
+     * viewport twice an hour to no purpose: tiles already on screen are valid under the old
+     * credential, and tiles requested after this point pick up the new one anyway.
      */
     _reloadErroredTiles() {
         if (this._removed || !this.style) return;
         for (const id in this.style.sourceCaches) {
-            this.style.sourceCaches[id].reload(true);
+            const sourceCache = this.style.sourceCaches[id];
+            if (!sourceCache.hasErroredTiles()) continue;
+            sourceCache.reload(true);
         }
     }
 
