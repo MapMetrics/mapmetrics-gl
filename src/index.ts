@@ -17,6 +17,7 @@ import Point from '@mapbox/point-geometry';
 import {MercatorCoordinate} from './geo/mercator_coordinate';
 import {Evented, type ErrorEvent, Event} from './util/evented';
 import {config} from './util/config';
+import {mapSession, type MapSessionOptions} from './util/map_session';
 import {rtlMainThreadPluginFactory} from './source/rtl_text_plugin_main_thread';
 import {WorkerPool} from './util/worker_pool';
 import {prewarm, clearPrewarmedResources} from './util/global_worker_pool';
@@ -65,6 +66,23 @@ function getMaxParallelImageRequests() { return config.MAX_PARALLEL_IMAGE_REQUES
 function setMaxParallelImageRequests(numRequests: number) { config.MAX_PARALLEL_IMAGE_REQUESTS = numRequests; }
 function getWorkerUrl() { return config.WORKER_URL; }
 function setWorkerUrl(value: string) { config.WORKER_URL = value; }
+/**
+ * Enables v2 map-session authentication.
+ *
+ * The gateway bills one map load per 30-minute window of use. With an API key configured the SDK
+ * buys a short-lived, maps-only, account-bound credential and signs the tile URLs the style already
+ * emits with it, instead of putting a permanent full-scope key on every request. Until this is
+ * called nothing changes: tiles go out exactly as they do today.
+ *
+ * All `Map` instances on the page share ONE session, otherwise each map would buy its own window.
+ * @param options - see {@link MapSessionOptions}. Pass `gatewayOrigin` to pin the origin the API key
+ * may be POSTed to; without it the origin is learned once from the first https tile URL.
+ * @example
+ * ```ts
+ * mapmetricsgl.configureMapSession({apiKey: MY_KEY, gatewayOrigin: 'https://gateway.mapmetrics.org'});
+ * ```
+ */
+function configureMapSession(options: MapSessionOptions) { mapSession.configure(options); }
 function importScriptInWorkers(workerUrl: string) { return getGlobalDispatcher().broadcast(MessageType.importScript, workerUrl); }
 
 export {
@@ -148,5 +166,7 @@ export {
     removeProtocol,
     addSourceType,
     importScriptInWorkers,
-    createTileMesh
+    createTileMesh,
+    configureMapSession,
+    mapSession
 };

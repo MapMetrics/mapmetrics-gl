@@ -5,6 +5,7 @@ import packageJSON from '../../package.json' with {type: 'json'};
 import {type GetResourceResponse, getJSON} from '../util/ajax';
 import {ImageRequest} from '../util/image_request';
 import {RequestManager, ResourceType} from '../util/request_manager';
+import {mapSession} from '../util/map_session';
 import {Style, type StyleSwapOptions} from '../style/style';
 import {EvaluationParameters} from '../style/evaluation_parameters';
 import {Painter} from '../render/painter';
@@ -548,6 +549,8 @@ export class Map extends Camera {
      * image queue throttling handle. To be used later when clean up
      */
     _imageQueueHandle: number;
+    /** Removes this map's v2 map-session credential listener. See {@link mapSession}. */
+    _mapSessionUnsubscribe: (() => void) | null = null;
 
     /**
      * The map's {@link ScrollZoomHandler}, which implements zooming in and out with a scroll wheel or trackpad.
@@ -686,6 +689,10 @@ export class Map extends Camera {
 
         this._markers = new Set();
         this._imageQueueHandle = ImageRequest.addThrottleControl(() => this.isMoving());
+        // Tiles that 401'd before a v2 map-session credential existed are left in the `errored`
+        // state and this SDK never retries them on its own, so without this nudge nothing would
+        // ever be signed. Inert unless map sessions are configured.
+        this._mapSessionUnsubscribe = mapSession.addCredentialListener(() => this._reloadErroredTiles());
 
         this._requestManager = new RequestManager(resolvedOptions.transformRequest);
 
@@ -4084,6 +4091,8 @@ export class Map extends Camera {
         }
 
         ImageRequest.removeThrottleControl(this._imageQueueHandle);
+        this._mapSessionUnsubscribe?.();
+        this._mapSessionUnsubscribe = null;
 
         this._resizeObserver?.disconnect();
         const extension = this.painter.context.gl.getExtension('WEBGL_lose_context');
@@ -4099,6 +4108,17 @@ export class Map extends Camera {
 
         this._removed = true;
         this.fire(new Event('remove'));
+    }
+
+    /**
+     * Reloads every source, including the tiles that previously errored. Called when a v2
+     * map-session credential is adopted so tiles that went out unsigned are re-requested signed.
+     */
+    _reloadErroredTiles() {
+        if (this._removed || !this.style) return;
+        for (const id in this.style.sourceCaches) {
+            this.style.sourceCaches[id].reload(true);
+        }
     }
 
     /**

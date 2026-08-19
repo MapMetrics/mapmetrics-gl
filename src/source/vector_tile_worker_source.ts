@@ -105,7 +105,8 @@ export class VectorTileWorkerSource implements WorkerSource {
                 vectorTile,
                 rawData: response.data,
                 cacheControl: response.cacheControl,
-                expires: response.expires
+                expires: response.expires,
+                mapSessionHeaders: response.mapSessionHeaders
             };
         } catch (ex) {
             const bytes = new Uint8Array(response.data);
@@ -147,6 +148,9 @@ export class VectorTileWorkerSource implements WorkerSource {
             const cacheControl = {} as ExpiryData;
             if (response.expires) cacheControl.expires = response.expires;
             if (response.cacheControl) cacheControl.cacheControl = response.cacheControl;
+            // Carried back to the main thread, where the v2 map session lives: a rollover credential
+            // arrives on a tile response and the tile is fetched here, on a worker thread.
+            if (response.mapSessionHeaders) cacheControl.mapSessionHeaders = response.mapSessionHeaders;
 
             const resourceTiming = {} as {resourceTiming: any};
             if (perf) {

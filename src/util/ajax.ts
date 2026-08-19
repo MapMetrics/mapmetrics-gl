@@ -14,7 +14,31 @@ export const GLOBAL_DISPATCHER_ID = "global-dispatcher";
 export type ExpiryData = {
     cacheControl?: string | null;
     expires?: Date | string | null;
+    /**
+     * Lower-cased `x-map-session-*` response headers, present only when the gateway rolled the v2
+     * map-session credential over. The gateway lists them in `Access-Control-Expose-Headers`, so
+     * they are readable cross-origin. Rides the same plumbing as the expiry data because tiles are
+     * fetched on a worker thread and this is the only channel back to the main thread, where the
+     * session lives.
+     */
+    mapSessionHeaders?: {[_: string]: string} | null;
 };
+
+/**
+ * The `x-map-session-*` response headers, or undefined when the response carried none.
+ * @param getHeader - reads one response header by name
+ * @returns the rollover headers, lower-cased, or undefined
+ */
+export function collectMapSessionHeaders(getHeader: (name: string) => string | null): {[_: string]: string} | undefined {
+    const sig = getHeader('X-Map-Session-Sig');
+    if (!sig) return undefined;
+    const headers: {[_: string]: string} = {'x-map-session-sig': sig};
+    for (const name of ['Id', 'Exp', 'Ends', 'Key-Id']) {
+        const value = getHeader(`X-Map-Session-${name}`);
+        if (value) headers[`x-map-session-${name.toLowerCase()}`] = value;
+    }
+    return headers;
+}
 
 /**
  * A `RequestParameters` object to be returned from Map.options.transformRequest callbacks.
@@ -205,6 +229,7 @@ function makeXMLHttpRequest(
                     data,
                     cacheControl: xhr.getResponseHeader("Cache-Control"),
                     expires: xhr.getResponseHeader("Expires"),
+                    mapSessionHeaders: collectMapSessionHeaders((name) => xhr.getResponseHeader(name)),
                 });
             } else {
                 const body = new Blob([xhr.response], {
@@ -293,6 +318,7 @@ async function makeFetchRequest(
         data: result,
         cacheControl: response.headers.get("Cache-Control"),
         expires: response.headers.get("Expires"),
+        mapSessionHeaders: collectMapSessionHeaders((name) => response.headers.get(name)),
     };
 }
 

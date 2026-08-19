@@ -4,6 +4,7 @@ import { extend, pick } from "../util/util";
 import { loadTileJson } from "./load_tilejson";
 import { TileBounds } from "./tile_bounds";
 import { ResourceType } from "../util/request_manager";
+import {mapSession} from '../util/map_session';
 
 import type { Source } from "./source";
 import type { OverscaledTileID } from "./tile_id";
@@ -380,6 +381,10 @@ export class VectorTileSource extends Evented implements Source {
             if (tile.aborted) {
                 return;
             }
+            // The v2 map-session response hook. `params.request.url` is the URL WE SENT — signed or
+            // not — which is what decides whether a 401 is about the credential we hold and whether
+            // rollover headers may be adopted. A no-op unless map sessions are configured.
+            mapSession.onTileResponse(params.request.url, 200, data && data.mapSessionHeaders);
             this._afterTileLoadWorkerResponse(tile, data);
         } catch (err) {
             delete tile.abortController;
@@ -387,6 +392,7 @@ export class VectorTileSource extends Evented implements Source {
             if (tile.aborted) {
                 return;
             }
+            mapSession.onTileResponse(params.request.url, (err && err.status) || 0);
             if (err && err.status !== 404) {
                 throw err;
             }
