@@ -8,7 +8,10 @@ import {
 } from './map_session';
 import {RequestManager, ResourceType} from './request_manager';
 
-const ORIGIN = 'https://gateway.example.com';
+// An ALLOW-LISTED gateway host, because the origin guards now require one -- but deliberately the
+// one that does NOT resolve. Using the live host makes any test that forgets to stub `transport`
+// issue a REAL request to production, which then lands asynchronously inside a later test.
+const ORIGIN = 'https://gateway.mapmetrics.org';
 const TILE = `${ORIGIN}/planet20251013/12/2094/1362.mvt?token=JWT`;
 
 function nowSeconds() {
@@ -126,6 +129,21 @@ describe('invariant 5 — never send the API key to an unvalidated origin', () =
         mapSession.signUrl(TILE);
         expect(mapSession._origin).toBe(ORIGIN);
         mapSession.signUrl('https://evil.example.net/12/2094/1362.mvt');
+        expect(mapSession._origin).toBe(ORIGIN);
+    });
+
+    test('a NON-gateway https tile URL never becomes the learned origin', () => {
+        // The learned origin decides where the API key is POSTed AND which hosts get signed
+        // tiles. A style document picks its own tile URLs, so trust-on-first-use over plain
+        // https let any host named there become the destination for a configured key.
+        mapSession.configure({apiKey: 'KEY'});
+        mapSession.signUrl('https://evil.example.net/planet/12/2094/1362.mvt');
+        expect(mapSession._origin).toBeNull();
+    });
+
+    test('a gateway https tile URL still IS learned, so zero-config keeps working', () => {
+        mapSession.configure({apiKey: 'KEY'});
+        mapSession.signUrl(TILE);
         expect(mapSession._origin).toBe(ORIGIN);
     });
 
@@ -594,5 +612,241 @@ describe('onTileResponse — the inbound hook', () => {
         mapSession._tile401Refreshes = 2;
         mapSession.onTileResponse(TILE, 200);
         expect(mapSession._tile401Refreshes).toBe(2);
+    });
+});
+
+// =====================================================================================
+// v2 by DEFAULT — learning the key and origin from the style request
+// =====================================================================================
+
+/** A real gateway host, per MAPMETRICS_GATEWAY_HOSTS. `ORIGIN` above deliberately is not one. */
+const GW = 'https://gateway.mapmetrics-atlas.net';
+/** The shape a production style URL actually has. */
+const GW_STYLE = `${GW}/styles/?fileName=abc-123/NightGrid.json&token=JWT-FROM-STYLE`;
+const GW_TILE = `${GW}/planet20251013/12/2094/1362.mvt?token=JWT-FROM-STYLE`;
+
+describe('v2 by default — learning from a gateway style URL', () => {
+    test('a gateway style URL with a token enables v2 and mints exactly once', () => {
+        const {calls} = stubTransport();
+        const manager = new RequestManager();
+        manager.transformRequest(GW_STYLE, ResourceType.Style);
+
+        expect(mapSession.isEnabled()).toBe(true);
+        expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
+        expect(mapSession._origin).toBe(GW);
+        // Eagerly, not lazily: the credential must be bought before the first tile is requested.
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toBe(`${GW}/v2/map-sessions?token=JWT-FROM-STYLE`);
+    });
+
+    test('THE SECURITY GUARD: a NON-gateway style URL is ignored entirely', () => {
+        const {calls} = stubTransport();
+        const manager = new RequestManager();
+        // A style is a document a third party may control. If this ever learns, that third party
+        // has been handed the customer's key to POST wherever it likes.
+        manager.transformRequest('https://evil.example.com/style.json?token=JWT-FROM-STYLE', ResourceType.Style);
+
+        expect(mapSession.isEnabled()).toBe(false);
+        expect(mapSession._apiKey).toBeNull();
+        expect(mapSession._origin).toBeNull();
+        expect(calls).toHaveLength(0);
+    });
+
+    test('THE SECURITY GUARD is a whole-hostname match, not a substring one', () => {
+        const {calls} = stubTransport();
+        const manager = new RequestManager();
+        // Every one of these contains a gateway hostname as a substring.
+        for (const url of [
+            'https://gateway.mapmetrics-atlas.net.evil.example/style.json?token=T',
+            'https://evil.example/?next=gateway.mapmetrics-atlas.net&token=T',
+            'https://notgateway.mapmetrics.org/style.json?token=T'
+        ]) {
+            manager.transformRequest(url, ResourceType.Style);
+        }
+        expect(mapSession._apiKey).toBeNull();
+        expect(calls).toHaveLength(0);
+    });
+
+    test('a plaintext gateway style URL is not learned from — the key would be POSTed over http', () => {
+        const {calls} = stubTransport();
+        mapSession.learnFromStyleUrl('http://gateway.mapmetrics-atlas.net/styles/?token=T');
+        expect(mapSession._apiKey).toBeNull();
+        expect(calls).toHaveLength(0);
+    });
+
+    test('an explicitly configured apiKey beats a later gateway style URL', () => {
+        const {calls} = stubTransport();
+        mapSession.configure({apiKey: 'CONFIGURED', gatewayOrigin: ORIGIN});
+        expect(calls).toHaveLength(1);
+
+        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+
+        expect(mapSession._apiKey).toBe('CONFIGURED');
+        expect(mapSession._origin).toBe(ORIGIN);
+        // And no second window was bought.
+        expect(calls).toHaveLength(1);
+    });
+
+    test('an explicitly configured apiKey wins even when NO gatewayOrigin was pinned', () => {
+        const {calls} = stubTransport();
+        // The origin guard cannot cover this one: with no gatewayOrigin the origin is still null,
+        // so only the apiKey guard stands between a configured key and a style-supplied one.
+        mapSession.configure({apiKey: 'CONFIGURED'});
+        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+
+        expect(mapSession._apiKey).toBe('CONFIGURED');
+        expect(mapSession._origin).toBeNull();
+        expect(calls).toHaveLength(0);
+    });
+
+    test('configure({apiKey: \'\'}) records the INTENT and still blocks style learning', () => {
+        const {calls} = stubTransport();
+        // An application that explicitly passed a key — even an empty/undefined one it meant to
+        // fill in later — has said it supplies its own. A style must not substitute a different one.
+        mapSession.configure({apiKey: ''});
+        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+
+        expect(mapSession._apiKey).toBeNull();
+        expect(mapSession.isEnabled()).toBe(false);
+        expect(calls).toHaveLength(0);
+    });
+
+    test('an explicitly configured gatewayOrigin alone still beats a style URL', () => {
+        const {calls} = stubTransport();
+        // No key, so nothing was minted; but the origin was chosen deliberately and a style
+        // document does not get to revisit that choice.
+        mapSession.configure({gatewayOrigin: ORIGIN});
+        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+
+        expect(mapSession._apiKey).toBeNull();
+        expect(mapSession._origin).toBe(ORIGIN);
+        expect(calls).toHaveLength(0);
+    });
+
+    test('LEARN ONCE: a second style load neither re-learns nor re-mints', () => {
+        const {calls} = stubTransport();
+        const manager = new RequestManager();
+        manager.transformRequest(GW_STYLE, ResourceType.Style);
+        expect(calls).toHaveLength(1);
+
+        // Style switching is supported; it must not re-point the key mid-session.
+        manager.transformRequest(`${GW}/styles/?fileName=xyz/Other.json&token=SECOND-JWT`, ResourceType.Style);
+
+        expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
+        expect(calls).toHaveLength(1);
+    });
+
+    test('a gateway style URL with NO token changes nothing and does not throw', () => {
+        const {calls} = stubTransport();
+        expect(() => {
+            new RequestManager().transformRequest(`${GW}/styles/?fileName=abc/NightGrid.json`, ResourceType.Style);
+        }).not.toThrow();
+        expect(mapSession.isEnabled()).toBe(false);
+        expect(mapSession._apiKey).toBeNull();
+        expect(mapSession._origin).toBeNull();
+        expect(calls).toHaveLength(0);
+    });
+
+    test('a token-less style leaves the door open for a later one that has a token', () => {
+        const {calls} = stubTransport();
+        const manager = new RequestManager();
+        manager.transformRequest(`${GW}/styles/?fileName=abc/NightGrid.json`, ResourceType.Style);
+        expect(calls).toHaveLength(0);
+        manager.transformRequest(GW_STYLE, ResourceType.Style);
+        expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
+        expect(calls).toHaveLength(1);
+    });
+
+    test('a non-Style resource type never learns, however gateway-shaped it is', () => {
+        const {calls} = stubTransport();
+        const manager = new RequestManager();
+        manager.transformRequest(GW_STYLE, ResourceType.Source);
+        manager.transformRequest(GW_TILE, ResourceType.Tile);
+        expect(mapSession._apiKey).toBeNull();
+        expect(calls).toHaveLength(0);
+    });
+
+    test('the app\'s own transformRequest still runs first and its result is preserved', () => {
+        const {calls} = stubTransport();
+        const app = vi.fn((url: string) => ({url: `${url}&app=1`, headers: {'X-App': 'yes'}, credentials: 'include' as const}));
+        const manager = new RequestManager(app);
+
+        const params = manager.transformRequest(GW_STYLE, ResourceType.Style);
+
+        expect(app).toHaveBeenCalledWith(GW_STYLE, ResourceType.Style);
+        // Nothing the application produced was clobbered.
+        expect(params.url).toBe(`${GW_STYLE}&app=1`);
+        expect(params.headers).toEqual({'X-App': 'yes'});
+        expect(params.credentials).toBe('include');
+        // ...and learning still happened off the back of it.
+        expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
+        expect(calls).toHaveLength(1);
+    });
+
+    test('an app that rewrites a gateway style to its own CDN still bills correctly', () => {
+        const {calls} = stubTransport();
+        const manager = new RequestManager(() => ({url: 'https://cdn.example.com/style.json'}));
+        const params = manager.transformRequest(GW_STYLE, ResourceType.Style);
+        // The request really does go to the CDN...
+        expect(params.url).toBe('https://cdn.example.com/style.json');
+        // ...but the original URL was a gateway URL, so the key is still learned from it.
+        expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
+        expect(calls).toHaveLength(1);
+    });
+
+    test('an app that rewrites a bare style path ONTO the gateway is learned from', () => {
+        const {calls} = stubTransport();
+        const manager = new RequestManager(() => ({url: GW_STYLE}));
+        manager.transformRequest('/style.json', ResourceType.Style);
+        expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
+        expect(calls).toHaveLength(1);
+    });
+
+    test('the learned credential then signs tiles, merging with the style token', async () => {
+        stubTransport();
+        const manager = new RequestManager();
+        manager.transformRequest(GW_STYLE, ResourceType.Style);
+        await Promise.resolve();
+
+        const signed = new URL(manager.transformRequest(GW_TILE, ResourceType.Tile).url);
+        // Invariant 7: the style's own token survives alongside the credential.
+        expect(signed.searchParams.get('token')).toBe('JWT-FROM-STYLE');
+        expect(signed.searchParams.get('u')).toBe('acct-1');
+        expect(signed.searchParams.get('s')).toBe('sess-1');
+        expect(signed.searchParams.get('sig')).toBe('SIG1');
+    });
+});
+
+describe('v2 by default — the opt-out', () => {
+    test('configure({enabled:false}) stops a style URL being learned from', () => {
+        const {calls} = stubTransport();
+        mapSession.configure({enabled: false});
+        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+
+        expect(mapSession._apiKey).toBeNull();
+        expect(mapSession.isEnabled()).toBe(false);
+        expect(calls).toHaveLength(0);
+    });
+
+    test('enabled:false is a master switch: even an explicit apiKey signs nothing', () => {
+        const {calls} = stubTransport();
+        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN, enabled: false});
+        mapSession.seedCredential('acct-1', 'sess-1', 'SIG1', nowSeconds() + 1200, nowSeconds() + 1800);
+
+        expect(mapSession.isEnabled()).toBe(false);
+        expect(mapSession.signUrl(TILE)).toBe(TILE);
+        expect(calls).toHaveLength(0);
+    });
+
+    test('enabled:true re-enables an opted-out session', () => {
+        const {calls} = stubTransport();
+        mapSession.configure({enabled: false});
+        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+        expect(calls).toHaveLength(0);
+
+        mapSession.configure({enabled: true});
+        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+        expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
+        expect(calls).toHaveLength(1);
     });
 });
