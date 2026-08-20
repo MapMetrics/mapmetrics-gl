@@ -141,6 +141,22 @@ the list there and nowhere else.
 | `src/style/style.test.ts` | ~66 | Test adjustments. |
 | `src/source/source_cache.test.ts` | ~18 | Tests for `hasErroredTiles()`. |
 
+### 2.5 SECURITY patch — replay this or the vulnerability returns
+
+| File | Δ | What changed |
+|---|---|---|
+| `src/util/dom.ts` | ~4 | **XSS fix, upstream PR #8189 / commit `1da69f3cd` (v6.4.1).** `DOM.sanitize` skipped an attribute when two dangerous attributes were ADJACENT, so the second survived and executed (e.g. `ontoggle` on `<details open>`). Ported verbatim in `07a70ba` — the fork's function was byte-identical to upstream's pre-fix version. |
+| `src/util/dom.test.ts` | ~40 | The two tests that prove it. **All 6 pre-existing sanitize tests pass with the fix reverted**, which is why the old suite could never have caught this. |
+
+**NOT PRESENT IN v5.24.0.** The fix landed in the v6 line, so a re-vendor onto v5.24.0 does NOT get
+it for free and MUST replay it. Verified: `#8071`, `#8004` and `#8189` are all absent from v5.24.0.
+
+> This entry was missing from the first version of this manifest. The XSS fix and the manifest landed
+> in the same batch as separate commits, so the manifest never listed the patch beside it — and a
+> re-vendor would have silently reintroduced the vulnerability. Caught by the v5.24.0 patch-inventory
+> reconciliation, which found it as an "unlisted" real divergence. **The lesson: a patch and its
+> manifest entry must land in the SAME commit.**
+
 ### 2.4 Files that differ with ZERO semantic change — take from upstream wholesale
 
 Do **not** hand-merge these. Take the upstream version, apply the rename, done. Hand-merging them is
@@ -154,6 +170,14 @@ how a real patch elsewhere gets lost in the noise.
 `src/shaders/atmosphere.fragment.glsl`.
 
 ---
+
+### 2.6 Known DEFECTS in the current fork — fix during the re-vendor, do not preserve
+
+| File | What is wrong |
+|---|---|
+| `src/ui/events.ts` | The fork is **MISSING** upstream `MapEventType` members `dataabort` and `sourcedataabort`. This looks like an accidental deletion during a previous vendor drop, not a deliberate patch. Take the upstream version. Filed under §2.4 ("zero semantic change") by the first inventory — exactly the trap that section warns about. |
+| `src/source/source.ts` | Carries `expandTileCoverage?: number`, a real fork addition, but was also filed under §2.4. It is a REAL patch and belongs with §2.3. |
+| `src/css/svg/mapmetricsgl-globe.svg` | Dead: unreferenced duplicate. The rename changed the filename SHAPE (`maplibregl-ctrl-globe.svg` → `mapmetricsgl-globe.svg`), not just the prefix, so nothing points at it. Delete rather than replay. |
 
 ## 3. ⚠️ These fail SILENTLY if dropped
 
