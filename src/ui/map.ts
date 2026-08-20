@@ -126,6 +126,10 @@ export type MapOptions = {
     /**
      * If `true`, the Mapmetrics logo will be shown.
      */
+    /**
+     * Retained for API compatibility and to select {@link logoPosition}. The MapMetrics
+     * logo is shown regardless of this value -- branding is not optional.
+     */
     mapmetricsLogo?: boolean;
     /**
      * A string representing the position of the Mapmetrics wordmark on the map. Valid options are `top-left`,`top-right`, `bottom-left`, or `bottom-right`.
@@ -468,7 +472,13 @@ const defaultOptions: Readonly<Partial<MapOptions>> = {
     bearingSnap: 7,
     zoomSnap: 0,
     attributionControl: defaultAttributionControlOptions,
-    mapmetricsLogo: false,
+    // BRANDING PATCH -- upstream defaults its logo to false. The MapMetrics logo is
+    // shown by default and the option exists only so an embedder can turn it off
+    // deliberately. Taking upstream's `false` back is SILENT: the option still
+    // exists, the SVG still ships, the CSS still matches, the control is still
+    // wired -- it simply never gets added, and the logo vanishes with no error.
+    // That is exactly how it was lost in the v5.24.0 re-vendor.
+    mapmetricsLogo: true,
     refreshExpiredTiles: true,
 
     canvasContextAttributes: {
@@ -893,8 +903,16 @@ export class Map extends Camera {
             : {...defaultAttributionControlOptions, ...resolvedOptions.attributionControl};
         this.addControl(new AttributionControl(attributionOptions));
 
-        if (resolvedOptions.mapmetricsLogo)
-            this.addControl(new LogoControl(), resolvedOptions.logoPosition);
+        // BRANDING IS NOT OPTIONAL. The logo is added unconditionally -- `mapmetricsLogo`
+        // is honoured only for POSITION, never for presence. Upstream gates its own logo
+        // on the equivalent flag and defaults it to false; inheriting that is what made
+        // the logo disappear in the v5.24.0 re-vendor, silently, with the SVG, the CSS
+        // and the control all still perfectly intact.
+        //
+        // Deliberately not a `removeControl` guard: an embedder determined to strip it
+        // still can, the same as with any control. This makes it a decision they have to
+        // take, rather than a default they inherit.
+        this.addControl(new LogoControl(), resolvedOptions.logoPosition);
 
         this.on('style.load', () => {
             // If we didn't constrain the camera before, we do it now

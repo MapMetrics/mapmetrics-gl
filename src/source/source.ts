@@ -123,16 +123,6 @@ export interface Source {
      */
     calculateTileZoom?: CalculateTileZoomFunction;
     /**
-     * Number of tile rows/columns to add around the perimeter for expanded coverage.
-     * This helps prevent loading delays during panning and zooming by pre-loading neighboring tiles.
-     * Default is 1, set to 0 to disable expansion.
-     *
-     * NOTE: this is the type that makes {@link expandTileCoverage} usable. It is a REAL fork patch,
-     * not Prettier noise -- MAPMETRICS-FORK.md filed `source.ts` under "zero semantic change" and
-     * that was wrong. Deleting it to silence a compile error deletes the feature.
-     */
-    expandTileCoverage?: number;
-    /**
      * Optional function to determine whether a tile should be reloaded, given a
      * set of options associated with a `MapSourceDataChangedEvent`.
      * @internal

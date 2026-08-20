@@ -160,7 +160,6 @@ the list there and nowhere else.
 
 | File | Δ | What changed |
 |---|---|---|
-| `src/geo/projection/covering_tiles.ts` | ~69 | `expandTileCoverage(tiles, bufferSize)` — pads coverage with neighbours for smoother pan/zoom. Affects tile volume, so it affects cost. |
 | `src/ui/handler/scroll_zoom.ts` | ~65 | `defaultZoomRate` **1/100 → 1/1000**, `wheelZoomRate` 1/450 → 1/1000, `maxScalePerFrame` 2 → 2.2; wheel zoom-out defers via `waitForZoomOutTiles(zoom, 500)`. |
 | `src/ui/control/navigation_control.ts` | ~63 | `_handleZoomOut` gates the button on `waitForZoomOutTiles(target, 300)`, disabling it meanwhile. |
 | `src/ui/handler/keyboard.ts` | ~24 | `cameraAnimation` async; zoom-out awaits `waitForZoomOutTiles(target, 4000)`. |
@@ -177,7 +176,6 @@ the list there and nowhere else.
 | `src/tile/tile_manager.test.ts` | ~18 | Tests for `hasErroredTiles()`. **Re-created here**: upstream #6635 deleted `source_cache.test.ts` (2,127 lines) outright, so these had no file to land on. They are the only automated evidence for §3 item 5. |
 | `src/util/dom.ts` | ~2 | **Security.** `DOM.removeAttributes` snapshots the live `NamedNodeMap` via `Array.from(...)` before mutating it. Upstream PR **#8189**, fixed upstream in v6.4.1 and **NOT present in v5.24.0** — so it must be replayed, and there is no double-apply risk. |
 | `src/util/dom.test.ts` | ~18 | The two regression tests for the above. They are specifically about *adjacency*: a single dangerous attribute was always removed correctly, which is why every other test in that file passed with the bug present. |
-| `src/source/source.ts` | ~6 | `expandTileCoverage?: number` on the source options type. This is the type that makes the `covering_tiles.ts` patch compile — it is a **real patch**, not Prettier noise. |
 
 ### 2.4 Files that differ with ZERO semantic change — take from upstream wholesale
 
@@ -193,7 +191,6 @@ how a real patch elsewhere gets lost in the noise.
 
 **Two files were removed from this list at the v5.24.0 re-vendor, and the reasons are opposite:**
 
-* `src/source/source.ts` — **has a real patch** (`expandTileCoverage?: number`, now in §2.3). Filing it
   here was the exact failure mode this section warns about, inverted. A hand-merger who takes
   upstream's file and then meets a compile error in `covering_tiles.ts` will be tempted to "fix" it by
   deleting the feature.
@@ -234,6 +231,30 @@ Items 1–8 and 13 break **billing or auth** rather than rendering. Items 1, 2, 
 money with *no visible symptom whatsoever*. Item 12 is a licence exposure and item 14 is an XSS.
 
 ---
+
+### 3.1 ⚠️ BRANDING IS MANDATORY — and a grep marker CANNOT see it
+
+`src/ui/map.ts` adds `LogoControl` **unconditionally**. `mapmetricsLogo` selects POSITION only,
+never presence, and its default is irrelevant.
+
+**This was lost in the v5.24.0 re-vendor and nothing caught it.** Upstream gates its own logo on the
+equivalent option and defaults it to `false`; the re-vendor inherited that one word. The SVG shipped,
+the CSS matched, `logo_control.ts` kept its patch, the option stayed declared, the control stayed
+imported and wired — and **all 47 grep markers passed**. The only way to see it was to look at a map.
+
+A marker cannot check a DEFAULT or an absent call. Two tests can, and both must survive a re-vendor:
+
+| test | asserts |
+|---|---|
+| `src/ui/control/logo_control.test.ts` — `'appears by default'`, `'is STILL displayed when the mapmetricsLogo property is false'`, `'BRANDING IS NOT OPTIONAL'` | upstream's versions of the first two assert `toHaveLength(0)`. **They are deliberately inverted here.** Taking upstream's file wholesale silently restores opt-in branding. |
+| `src/ui/map_tests/map_control.test.ts` — `DEFAULT_CONTROL_COUNT = 2` | upstream's value is different; the constant is the only evidence that both the mandatory attribution AND the mandatory logo are attached at `Map` level |
+
+Mutation-verified 2026-08-20: re-gating the logo on `resolvedOptions.mapmetricsLogo` fails **5**
+tests. Before these existed it failed none.
+
+**The general lesson, and it applies beyond the logo:** grep markers verify that code is PRESENT.
+They cannot verify that a default is correct, that a call is unconditional, or that anything happens
+at all. Every patch whose whole effect is a default or a conditional needs a test, not a marker.
 
 ## 4. Grep markers — one per patch
 
@@ -286,7 +307,6 @@ before its consumers.
 
 | # | Marker | Expect |
 |---|---|---|
-| 25 | `grep -c 'export function expandTileCoverage' src/geo/projection/covering_tiles.ts` | 1 |
 | 26 | `grep -c 'defaultZoomRate = 1 / 1000' src/ui/handler/scroll_zoom.ts` | 1 — **not `1 / 100`** |
 | 27 | `grep -c 'waitForZoomOutTiles' src/ui/handler/scroll_zoom.ts` | ≥1 |
 | 28 | `grep -c '_handleZoomOut' src/ui/control/navigation_control.ts` | ≥1 |
@@ -308,7 +328,6 @@ before its consumers.
 | # | Marker | Expect |
 |---|---|---|
 | 41 | `grep -c 'Array.from(elem.attributes)' src/util/dom.ts` | 1 — the #8189 XSS fix (§3 item 14). **Absent from v5.24.0; an upgrade will not bring it** |
-| 42 | `grep -c 'expandTileCoverage?: number' src/source/source.ts` | 1 — the type `covering_tiles.ts` needs to compile |
 | 43 | `grep -c 'async transformRequest(url: string, type: ResourceType)' src/util/request_manager.ts` | 1 — **must be `async`** |
 | 44 | `grep -c 'awaits an async transformRequest before signing' src/util/map_session.test.ts` | 1 — **the test must exist.** This marker proves the test is present; only the test itself proves the `await` is. See §3 item 13 |
 | 45 | `grep -c 'hasErroredTiles' src/tile/tile_manager.test.ts` | ≥1 — re-created; `source_cache.test.ts` no longer exists upstream |
@@ -420,6 +439,12 @@ Two caveats, stated plainly rather than papered over:
   still owed** and is the only thing that exercises gateway rollover end to end.
 
 ---
+
+## 5.5 REMOVED — do NOT reinstate
+
+| What | Why |
+|---|---|
+| `expandTileCoverage()` in `src/geo/projection/covering_tiles.ts`, and `expandTileCoverage?: number` on the source options type in `src/source/source.ts` | A fork feature that padded tile coverage with neighbouring tiles for smoother panning. **It was defined but NEVER CALLED** — no call site existed anywhere in `src/`. Removed 2026-08-20 by product decision. If a future re-vendor's normalised diff surfaces this as a "missing patch", it is not missing: it was deleted deliberately. Do not replay it. |
 
 ## 6. Known defects and open decisions, as of the v5.24.0 re-vendor
 

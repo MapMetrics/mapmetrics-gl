@@ -22,20 +22,24 @@ beforeEach(() => {
 });
 
 describe('LogoControl', () => {
-    test('does not appear by default', async () => {
+    test('appears by default -- upstream asserts the opposite', async () => {
+        // Upstream's version of this test expects 0: its logo is opt-IN. In this fork branding
+        // is mandatory, so the assertion is inverted deliberately. If a future re-vendor takes
+        // upstream's file wholesale, this inversion is lost and the logo silently disappears.
         const map = createMap(undefined, undefined);
         await map.once('load');
         expect(map.getContainer().querySelectorAll(
             '.mapmetricsgl-ctrl-logo'
-        )).toHaveLength(0);
+        )).toHaveLength(1);
     });
 
-    test('is not displayed when the mapmetricsLogo property is false', async () => {
+    test('is STILL displayed when the mapmetricsLogo property is false', async () => {
+        // `mapmetricsLogo` selects POSITION, never presence.
         const map = createMap(undefined, false);
         await map.once('load');
         expect(map.getContainer().querySelectorAll(
             '.mapmetricsgl-ctrl-logo'
-        )).toHaveLength(0);
+        )).toHaveLength(1);
     });
 
     test('appears in bottom-left when mapmetricsLogo is true and logoPosition is undefined', async () => {
@@ -100,4 +104,16 @@ describe('LogoControl', () => {
         const logo = container.querySelector('.mapmetricsgl-ctrl-logo');
         expect(logo).toHaveProperty('rel', 'noopener nofollow');
     });
+});
+
+test('BRANDING IS NOT OPTIONAL: the logo is added even when mapmetricsLogo is false', () => {
+    // `mapmetricsLogo` selects POSITION, never presence. Upstream gates its own logo on the
+    // equivalent option and defaults it to FALSE; the v5.24.0 re-vendor inherited that default
+    // and the logo silently disappeared -- SVG present, CSS correct, control wired, option
+    // declared, and all 47 manifest grep markers passing. Nothing could see it but a human
+    // looking at the map. This test is the thing that sees it.
+    const map = createMap(undefined, false);
+    const logos = map.getContainer().querySelectorAll('.mapmetricsgl-ctrl-logo');
+    expect(logos).toHaveLength(1);
+    map.remove();
 });

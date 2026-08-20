@@ -8,15 +8,21 @@ import {type IControl} from '../control/control';
  * `createMap` test helper passes -- only resets it to `defaultAttributionControlOptions`
  * rather than omitting it. Upstream MapLibre starts with an EMPTY `_controls` array here.
  *
- * The count is 1 rather than 2 because the same helper also passes `mapmetricsLogo: false`,
- * which IS honoured; a default `new Map()` additionally carries a `LogoControl`.
+ * The count is 2 because BRANDING IS NOT OPTIONAL: the `LogoControl` is added
+ * unconditionally, so `mapmetricsLogo: false` -- which the shared `createMap` helper passes --
+ * no longer suppresses it. `mapmetricsLogo` now selects POSITION only.
+ *
+ * That flag WAS honoured until 2026-08-20. Upstream gates its own logo on the equivalent
+ * option and defaults it to false, and the v5.24.0 re-vendor inherited that default: the logo
+ * silently vanished while the SVG, the CSS and the control were all still perfectly intact,
+ * and all 47 manifest grep markers passed. Hence unconditional, and hence this count.
  *
  * This constant is the ONLY automated evidence that the non-removable attribution
  * (MAPMETRICS-FORK.md §3 item 12, a licence/contractual obligation) is wired up at the `Map`
  * level. If a re-vendor takes upstream's `map_control.test.ts`, that obligation loses its last
  * check here -- and a map that renders perfectly is not evidence it survived.
  */
-const DEFAULT_CONTROL_COUNT = 1;
+const DEFAULT_CONTROL_COUNT = 2;
 
 beforeEach(() => {
     beforeMapTest();
