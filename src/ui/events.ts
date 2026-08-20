@@ -7,104 +7,433 @@ import type {MapGeoJSONFeature} from '../util/vectortile_to_geojson';
 
 import type {Map} from './map';
 import type {LngLat} from '../geo/lng_lat';
-import type {
-    ProjectionSpecification,
-    SourceSpecification,
-} from '@maplibre/maplibre-gl-style-spec';
+import type {ProjectionSpecification, SourceSpecification} from '@maplibre/maplibre-gl-style-spec';
+import {type GeoJSONSourceShouldReloadTileOptions} from '../source/geojson_source';
 
 /**
  * An event from the mouse relevant to a specific layer.
  *
  * @group Event Related
  */
-export type MapLayerMouseEvent = MapMouseEvent & {
-    features?: MapGeoJSONFeature[];
-};
+export type MapLayerMouseEvent = MapMouseEvent & { features?: MapGeoJSONFeature[] };
 
 /**
  * An event from a touch device relevant to a specific layer.
  *
  * @group Event Related
  */
-export type MapLayerTouchEvent = MapTouchEvent & {
-    features?: MapGeoJSONFeature[];
-};
+export type MapLayerTouchEvent = MapTouchEvent & { features?: MapGeoJSONFeature[] };
 
 /**
  * The source event data type
  */
 export type MapSourceDataType = 'content' | 'metadata' | 'visibility' | 'idle';
+
+/**
+ * `MapLayerEventType` - a mapping between the event name and the event.
+ * !!! note
+ *     These events are compatible with the optional `layerId` parameter.
+ * If `layerId` is included as the second argument in {@link Map.on}, the event listener will fire only when the
+ * event action contains a visible portion of the specified layer.
+ * The following example can be used for all the events.
+ *
+ * @group Event Related
+ * @example
+ * ```ts
+ * // Initialize the map
+ * let map = new Map({ // map options });
+ * // Set an event listener for a specific layer
+ * map.on('the-event-name', 'poi-label', (e) => {
+ *   console.log('An event has occurred on a visible portion of the poi-label layer');
+ * });
+ * ```
+ */
 export type MapLayerEventType = {
+    /**
+     * Fired when a pointing device (usually a mouse) is pressed and released contains a visible portion of the specified layer.
+     *
+     * @see [Measure distances](https://maplibre.org/maplibre-gl-js/docs/examples/measure-distances/)
+     * @see [Center the map on a clicked symbol](https://maplibre.org/maplibre-gl-js/docs/examples/center-the-map-on-a-clicked-symbol/)
+     */
     click: MapLayerMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is pressed and released twice contains a visible portion of the specified layer.
+     *
+     * !!! note
+     *     Under normal conditions, this event will be preceded by two `click` events.
+     */
     dblclick: MapLayerMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is pressed while inside a visible portion of the specified layer.
+     * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/)
+     */
     mousedown: MapLayerMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is released while inside a visible portion of the specified layer.
+     * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/)
+     */
     mouseup: MapLayerMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is moved while the cursor is inside a visible portion of the specified layer.
+     * As you move the cursor across the layer, the event will fire every time the cursor changes position within that layer.
+     *
+     * @see [Get coordinates of the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/)
+     * @see [Highlight features under the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-hover-effect/)
+     * @see [Display a popup on over](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-hover/)
+     * @see [Animate symbol to follow the mouse](https://maplibre.org/maplibre-gl-js/docs/examples/animate-symbol-to-follow-the-mouse/)
+     */
     mousemove: MapLayerMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) enters a visible portion of a specified layer from
+     * outside that layer or outside the map canvas.
+     *
+     * @see [Center the map on a clicked symbol](https://maplibre.org/maplibre-gl-js/docs/examples/center-the-map-on-a-clicked-symbol/)
+     * @see [Display a popup on click](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-click/)
+     */
     mouseenter: MapLayerMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) leaves a visible portion of a specified layer, or leaves
+     * the map canvas.
+     *
+     * @see [Highlight features under the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-hover-effect/)
+     * @see [Display a popup on click](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-click/)
+     */
     mouseleave: MapLayerMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is moved inside a visible portion of the specified layer.
+     *
+     * @see [Get coordinates of the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/)
+     * @see [Highlight features under the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-hover-effect/)
+     * @see [Display a popup on hover](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-hover/)
+     */
     mouseover: MapLayerMouseEvent;
+    /**
+     * Fired when a point device (usually a mouse) leaves the visible portion of the specified layer.
+     */
     mouseout: MapLayerMouseEvent;
+    /**
+     * Fired when the right button of the mouse is clicked or the context menu key is pressed within visible portion of the specified layer.
+     */
     contextmenu: MapLayerMouseEvent;
+    /**
+     * Fired when a [`touchstart`](https://developer.mozilla.org/en-US/docs/Web/Events/touchstart) event occurs within the visible portion of the specified layer.
+     * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/)
+     */
     touchstart: MapLayerTouchEvent;
+    /**
+     * Fired when a [`touchend`](https://developer.mozilla.org/en-US/docs/Web/Events/touchend) event occurs within the visible portion of the specified layer.
+     * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/)
+     */
     touchend: MapLayerTouchEvent;
+    /**
+     * Fired when a [`touchstart`](https://developer.mozilla.org/en-US/docs/Web/Events/touchstart) event occurs within the visible portion of the specified layer.
+     * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/)
+     */
     touchcancel: MapLayerTouchEvent;
 };
+
+/**
+ * `MapEventType` - a mapping between the event name and the event value.
+ * These events are used with the {@link Map.on} method.
+ * When using a `layerId` with {@link Map.on} method, please refer to {@link MapLayerEventType}.
+ * The following example can be used for all the events.
+ *
+ * @group Event Related
+ * @example
+ * ```ts
+ * // Initialize the map
+ * let map = new Map({ // map options });
+ * // Set an event listener
+ * map.on('the-event-name', () => {
+ *   console.log('An event has occurred!');
+ * });
+ * ```
+ */
 export type MapEventType = {
+    /**
+     * Fired when an error occurs. This is GL JS's primary error reporting
+     * mechanism. We use an event instead of `throw` to better accommodate
+     * asynchronous operations. If no listeners are bound to the `error` event, the
+     * error will be printed to the console.
+     */
     error: ErrorEvent;
+    /**
+     * Fired immediately after all necessary resources have been downloaded
+     * and the first visually complete rendering of the map has occurred.
+     *
+     * @see [Draw GeoJSON points](https://maplibre.org/maplibre-gl-js/docs/examples/draw-geojson-points/)
+     * @see [Add live realtime data](https://maplibre.org/maplibre-gl-js/docs/examples/add-live-realtime-data/)
+     * @see [Animate a point](https://maplibre.org/maplibre-gl-js/docs/examples/animate-a-point/)
+     */
     load: MapmetricsEvent;
+    /**
+     * Fired after the last frame rendered before the map enters an
+     * "idle" state:
+     *
+     * - No camera transitions are in progress
+     * - All currently requested tiles have loaded
+     * - All fade/transition animations have completed
+     */
     idle: MapmetricsEvent;
+    /**
+     * Fired immediately after the map has been removed with {@link Map.remove}.
+     */
     remove: MapmetricsEvent;
+    /**
+     * Fired whenever the map is drawn to the screen, as the result of
+     *
+     * - a change to the map's position, zoom, pitch, or bearing
+     * - a change to the map's style
+     * - a change to a GeoJSON source
+     * - the loading of a vector tile, GeoJSON file, glyph, or sprite
+     */
     render: MapmetricsEvent;
+    /**
+     * Fired immediately after the map has been resized.
+     */
     resize: MapmetricsEvent;
+    /**
+     * Fired when the WebGL context is lost.
+     */
     webglcontextlost: MapContextEvent;
+    /**
+     * Fired when the WebGL context is restored.
+     */
     webglcontextrestored: MapContextEvent;
+    /**
+     * Fired when any map data (style, source, tile, etc) begins loading or
+     * changing asynchronously. All `dataloading` events are followed by a `data`,
+     * `dataabort` or `error` event.
+     */
     dataloading: MapDataEvent;
+    /**
+     * Fired when any map data loads or changes. See {@link MapDataEvent} for more information.
+     * @see [Display HTML clusters with custom properties](https://maplibre.org/maplibre-gl-js/docs/examples/display-html-clusters-with-custom-properties/)
+     */
     data: MapDataEvent;
     tiledataloading: MapDataEvent;
+    /**
+     * Fired when one of the map's sources begins loading or changing asynchronously.
+     * All `sourcedataloading` events are followed by a `sourcedata`, `sourcedataabort` or `error` event.
+     */
     sourcedataloading: MapSourceDataEvent;
+    /**
+     * Fired when the map's style begins loading or changing asynchronously.
+     * All `styledataloading` events are followed by a `styledata`
+     * or `error` event.
+     */
     styledataloading: MapStyleDataEvent;
+    /**
+     * Fired when one of the map's sources loads or changes, including if a tile belonging
+     * to a source loads or changes.
+     */
     sourcedata: MapSourceDataEvent;
+    /**
+     * Fired when the map's style loads or changes.
+     */
     styledata: MapStyleDataEvent;
+    /**
+     * Fired when an icon or pattern needed by the style is missing. The missing image can
+     * be added with {@link Map.addImage} within this event listener callback to prevent the image from
+     * being skipped. This event can be used to dynamically generate icons and patterns.
+     * @see [Generate and add a missing icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/generate-and-add-a-missing-icon-to-the-map/)
+     */
     styleimagemissing: MapStyleImageMissingEvent;
+    /**
+     * Fired when a request for one of the map's sources' tiles or data is aborted.
+     */
+    dataabort: MapDataEvent;
+    /**
+     * Fired when a request for one of the map's sources' data is aborted.
+     */
+    sourcedataabort: MapSourceDataEvent;
+    /**
+     * Fired when the user cancels a "box zoom" interaction, or when the bounding box does not meet the minimum size threshold.
+     * See {@link BoxZoomHandler}.
+     */
     boxzoomcancel: MapmetricsZoomEvent;
+    /**
+     * Fired when a "box zoom" interaction starts. See {@link BoxZoomHandler}.
+     */
+    boxzoomstart: MapmetricsZoomEvent;
+    /**
+     * Fired when a "box zoom" interaction ends.  See {@link BoxZoomHandler}.
+     */
+    boxzoomend: MapmetricsZoomEvent;
+    /**
+     * Fired when a [`touchcancel`](https://developer.mozilla.org/en-US/docs/Web/Events/touchcancel) event occurs within the map.
+     */
+    touchcancel: MapTouchEvent;
+    /**
+     * Fired when a [`touchmove`](https://developer.mozilla.org/en-US/docs/Web/Events/touchmove) event occurs within the map.
+     * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/)
+     */
     touchmove: MapTouchEvent;
+    /**
+     * Fired when a [`touchend`](https://developer.mozilla.org/en-US/docs/Web/Events/touchend) event occurs within the map.
+     * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/)
+     */
     touchend: MapTouchEvent;
+    /**
+     * Fired when a [`touchstart`](https://developer.mozilla.org/en-US/docs/Web/Events/touchstart) event occurs within the map.
+     * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/)
+     */
     touchstart: MapTouchEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is pressed and released at the same point on the map.
+     *
+     * @see [Measure distances](https://maplibre.org/maplibre-gl-js/docs/examples/measure-distances/)
+     * @see [Center the map on a clicked symbol](https://maplibre.org/maplibre-gl-js/docs/examples/center-the-map-on-a-clicked-symbol/)
+     */
     click: MapMouseEvent;
+    /**
+     * Fired when the right button of the mouse is clicked or the context menu key is pressed within the map.
+     */
     contextmenu: MapMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is pressed and released twice at the same point on the map in rapid succession.
+     *
+     * !!! note
+     *     Under normal conditions, this event will be preceded by two `click` events.
+     */
     dblclick: MapMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is moved while the cursor is inside the map.
+     * As you move the cursor across the map, the event will fire every time the cursor changes position within the map.
+     *
+     * @see [Get coordinates of the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/)
+     * @see [Highlight features under the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-hover-effect/)
+     * @see [Display a popup on over](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-hover/)
+     */
     mousemove: MapMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is released within the map.
+     *
+     * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/)
+     */
     mouseup: MapMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is pressed within the map.
+     *
+     * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-point/)
+     */
     mousedown: MapMouseEvent;
+    /**
+     * Fired when a point device (usually a mouse) leaves the map's canvas.
+     */
     mouseout: MapMouseEvent;
+    /**
+     * Fired when a pointing device (usually a mouse) is moved within the map.
+     * As you move the cursor across a web page containing a map,
+     * the event will fire each time it enters the map or any child elements.
+     *
+     * @see [Get coordinates of the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/)
+     * @see [Highlight features under the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-hover-effect/)
+     * @see [Display a popup on hover](https://maplibre.org/maplibre-gl-js/docs/examples/display-a-popup-on-hover/)
+     */
     mouseover: MapMouseEvent;
-    movestart: MapmetricsEvent<
-        MouseEvent | TouchEvent | WheelEvent | undefined
-    >;
+    /**
+     * Fired just before the map begins a transition from one
+     * view to another, as the result of either user interaction or methods such as {@link Map.jumpTo}.
+     *
+     */
+    movestart: MapmetricsEvent<MouseEvent | TouchEvent | WheelEvent | undefined>;
+    /**
+     * Fired repeatedly during an animated transition from one view to
+     * another, as the result of either user interaction or methods such as {@link Map.flyTo}.
+     *
+     * @see [Display HTML clusters with custom properties](https://maplibre.org/maplibre-gl-js/docs/examples/display-html-clusters-with-custom-properties/)
+     */
     move: MapmetricsEvent<MouseEvent | TouchEvent | WheelEvent | undefined>;
+    /**
+     * Fired just after the map completes a transition from one
+     * view to another, as the result of either user interaction or methods such as {@link Map.jumpTo}.
+     *
+     * @see [Display HTML clusters with custom properties](https://maplibre.org/maplibre-gl-js/docs/examples/display-html-clusters-with-custom-properties/)
+     */
     moveend: MapmetricsEvent<MouseEvent | TouchEvent | WheelEvent | undefined>;
-    zoomstart: MapmetricsEvent<
-        MouseEvent | TouchEvent | WheelEvent | undefined
-    >;
+    /**
+     * Fired just before the map begins a transition from one zoom level to another,
+     * as the result of either user interaction or methods such as {@link Map.flyTo}.
+     */
+    zoomstart: MapmetricsEvent<MouseEvent | TouchEvent | WheelEvent | undefined>;
+    /**
+     * Fired repeatedly during an animated transition from one zoom level to another,
+     * as the result of either user interaction or methods such as {@link Map.flyTo}.
+     */
     zoom: MapmetricsEvent<MouseEvent | TouchEvent | WheelEvent | undefined>;
+    /**
+     * Fired just after the map completes a transition from one zoom level to another,
+     * as the result of either user interaction or methods such as {@link Map.flyTo}.
+     */
     zoomend: MapmetricsEvent<MouseEvent | TouchEvent | WheelEvent | undefined>;
+    /**
+     * Fired when a "drag to rotate" interaction starts. See {@link DragRotateHandler}.
+     */
     rotatestart: MapmetricsEvent<MouseEvent | TouchEvent | undefined>;
+    /**
+     * Fired repeatedly during a "drag to rotate" interaction. See {@link DragRotateHandler}.
+     */
     rotate: MapmetricsEvent<MouseEvent | TouchEvent | undefined>;
+    /**
+     * Fired when a "drag to rotate" interaction ends. See {@link DragRotateHandler}.
+     */
     rotateend: MapmetricsEvent<MouseEvent | TouchEvent | undefined>;
+    /**
+     * Fired when a "drag to pan" interaction starts. See {@link DragPanHandler}.
+     */
     dragstart: MapmetricsEvent<MouseEvent | TouchEvent | undefined>;
+    /**
+     * Fired repeatedly during a "drag to pan" interaction. See {@link DragPanHandler}.
+     */
     drag: MapmetricsEvent<MouseEvent | TouchEvent | undefined>;
+    /**
+     * Fired when a "drag to pan" interaction ends. See {@link DragPanHandler}.
+     * @see [Create a draggable marker](https://maplibre.org/maplibre-gl-js/docs/examples/create-a-draggable-marker/)
+     */
     dragend: MapmetricsEvent<MouseEvent | TouchEvent | undefined>;
+    /**
+     * Fired whenever the map's pitch (tilt) begins a change as
+     * the result of either user interaction or methods such as {@link Map.flyTo} .
+     */
     pitchstart: MapmetricsEvent<MouseEvent | TouchEvent | undefined>;
+    /**
+     * Fired repeatedly during the map's pitch (tilt) animation between
+     * one state and another as the result of either user interaction
+     * or methods such as {@link Map.flyTo}.
+     */
     pitch: MapmetricsEvent<MouseEvent | TouchEvent | undefined>;
+    /**
+     * Fired immediately after the map's pitch (tilt) finishes changing as
+     * the result of either user interaction or methods such as {@link Map.flyTo}.
+     */
     pitchend: MapmetricsEvent<MouseEvent | TouchEvent | undefined>;
+    /**
+     * Fired when a [`wheel`](https://developer.mozilla.org/en-US/docs/Web/Events/wheel) event occurs within the map.
+     */
     wheel: MapWheelEvent;
+    /**
+     * Fired when terrain is changed
+     */
     terrain: MapTerrainEvent;
+    /**
+     * Fired whenever the cooperativeGestures option prevents a gesture from being handled by the map.
+     * This is useful for showing your own UI when this happens.
+     */
     cooperativegestureprevented: MapmetricsEvent<WheelEvent | TouchEvent> & {
         gestureType: 'wheel_zoom' | 'touch_pan';
     };
+    /**
+     * Fired when map's projection is modified in other ways than by map being moved.
+     */
     projectiontransition: MapProjectionEvent;
 };
 
+/**
+ * The base event for Mapmetrics
+ *
+ * @group Event Related
+ */
 export type MapmetricsEvent<TOrig = unknown> = {
     type: keyof MapEventType | keyof MapLayerEventType;
     target: Map;
@@ -132,7 +461,7 @@ export type MapSourceDataEvent = MapmetricsEvent & {
      */
     isSourceLoaded: boolean;
     /**
-     * The [style spec representation of the source](#sources) if the event has a `dataType` of `source`.
+     * The [style spec representation of the source](https://maplibre.org/maplibre-style-spec/#sources) if the event has a `dataType` of `source`.
      */
     source: SourceSpecification;
     sourceId: string;
@@ -143,6 +472,12 @@ export type MapSourceDataEvent = MapmetricsEvent & {
      * the event is related to loading of a tile.
      */
     tile: any;
+
+    /**
+     * Options to determine whether a tile should be reloaded.
+     * @internal
+     */
+    shouldReloadTileOptions: GeoJSONSourceShouldReloadTileOptions;
 };
 /**
  * `MapMouseEvent` is the event type for mouse-related map events.
@@ -160,24 +495,11 @@ export type MapSourceDataEvent = MapmetricsEvent & {
  * });
  * ```
  */
-export class MapMouseEvent
-    extends Event
-    implements MapmetricsEvent<MouseEvent>
-{
+export class MapMouseEvent extends Event implements MapmetricsEvent<MouseEvent> {
     /**
      * The event type
      */
-    type:
-        | 'mousedown'
-        | 'mouseup'
-        | 'click'
-        | 'dblclick'
-        | 'mousemove'
-        | 'mouseover'
-        | 'mouseenter'
-        | 'mouseleave'
-        | 'mouseout'
-        | 'contextmenu';
+    type: 'mousedown' | 'mouseup' | 'click' | 'dblclick' | 'mousemove' | 'mouseover' | 'mouseenter' | 'mouseleave' | 'mouseout' | 'contextmenu';
 
     /**
      * The `Map` object that fired the event.
@@ -223,12 +545,8 @@ export class MapMouseEvent
 
     _defaultPrevented: boolean;
 
-    constructor(
-        type: string,
-        map: Map,
-        originalEvent: MouseEvent,
-        data: any = {}
-    ) {
+    constructor(type: string, map: Map, originalEvent: MouseEvent, data: any = {}) {
+        originalEvent = originalEvent instanceof MouseEvent ? originalEvent : new MouseEvent(type, originalEvent);
         const point = DOM.mousePos(map.getCanvas(), originalEvent);
         const lngLat = map.unproject(point);
         super(type, extend({point, lngLat, originalEvent}, data));
@@ -242,10 +560,7 @@ export class MapMouseEvent
  *
  * @group Event Related
  */
-export class MapTouchEvent
-    extends Event
-    implements MapmetricsEvent<TouchEvent>
-{
+export class MapTouchEvent extends Event implements MapmetricsEvent<TouchEvent> {
     /**
      * The event type.
      */
@@ -276,13 +591,13 @@ export class MapTouchEvent
      * The array of pixel coordinates corresponding to a
      * [touch event's `touches`](https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent/touches) property.
      */
-    points: Array<Point>;
+    points: Point[];
 
     /**
      * The geographical locations on the map corresponding to a
      * [touch event's `touches`](https://developer.mozilla.org/en-US/docs/Web/API/TouchEvent/touches) property.
      */
-    lngLats: Array<LngLat>;
+    lngLats: LngLat[];
 
     /**
      * Prevents subsequent default processing of the event by the map.
@@ -307,10 +622,7 @@ export class MapTouchEvent
     _defaultPrevented: boolean;
 
     constructor(type: string, map: Map, originalEvent: TouchEvent) {
-        const touches =
-            type === 'touchend'
-                ? originalEvent.changedTouches
-                : originalEvent.touches;
+        const touches = type === 'touchend' ? originalEvent.changedTouches : originalEvent.touches;
         const points = DOM.touchPos(map.getCanvasContainer(), touches);
         const lngLats = points.map((t) => map.unproject(t));
         const point = points.reduce((prev, curr, i, arr) => {
@@ -394,7 +706,7 @@ export type MapmetricsZoomEvent = {
  * `dataType`s are:
  *
  * - `'source'`: The non-tile data associated with any source
- * - `'style'`: The [style]() used by the map
+ * - `'style'`: The [style](https://maplibre.org/maplibre-style-spec/) used by the map
  *
  * Possible values for `sourceDataType`s are:
  *
@@ -449,9 +761,13 @@ export type MapProjectionEvent = {
     type: 'projectiontransition';
     /**
      * Specifies the name of the new projection.
-     * Additionally includes 'globe-mercator' to describe globe that has internally switched to mercator.
+     * For example:
+     *
+     *  - `globe` to describe globe that has internally switched to mercator
+     *  - `vertical-perspective` to describe a globe that doesn't change to mercator
+     *  - `mercator` to describe mercator projection
      */
-    newProjection: ProjectionSpecification['type'] | 'globe-mercator';
+    newProjection: ProjectionSpecification['type'];
 };
 
 /**
@@ -469,7 +785,7 @@ export type MapContextEvent = {
  *
  * @group Event Related
  *
- * @see [Generate and add a missing icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/add-image-missing-generated/)
+ * @see [Generate and add a missing icon to the map](https://maplibre.org/maplibre-gl-js/docs/examples/generate-and-add-a-missing-icon-to-the-map/)
  */
 export type MapStyleImageMissingEvent = MapmetricsEvent & {
     type: 'styleimagemissing';

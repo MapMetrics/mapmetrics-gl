@@ -13,7 +13,7 @@
   "zoom": 16,
   "pitch": 30,
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "maxzoom": 14,
       "tiles": [
@@ -33,7 +33,7 @@
     {
       "id": "road",
       "type": "line",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "road",
       "paint": {
           "line-color": "#888",
@@ -43,7 +43,7 @@
     {
       "id": "text",
       "type": "symbol",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "road_label",
       "layout": {
         "symbol-placement": "line",

@@ -49,24 +49,43 @@ import os
 import re
 import sys
 
-SKIP_DIRS = {'.git', 'node_modules'}
+# 'revendor' excludes THIS DIRECTORY. Running the script over `build/` walked into
+# build/revendor and renamed rename.py itself, turning `rename_path` into a no-op
+# (`replace('mapmetricsgl', 'mapmetricsgl')`) and corrupting normdiff.py the same way.
+SKIP_DIRS = {'.git', 'node_modules', 'revendor'}
 BINARY_EXT = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot',
               '.webp', '.pbf', '.mp4', '.webm', '.DS_Store'}
 
-SPEC = '@maplibre/maplibre-gl-style-spec'
+# Any `@maplibre/...` specifier is a REAL npm package and must survive the rename.
+# Do NOT reduce this to an allow-list of one: v5.24.0 added `@maplibre/vt-pbf`,
+# `@maplibre/geojson-vt` and `@maplibre/mlt` since v5.2.0, and a single-package exemption
+# silently renamed all three into `@mapmetrics/*` packages that do not exist.
+NPM_SCOPE = re.compile(r'@maplibre/[A-Za-z0-9._-]+')
+# Upstream documentation links. The fork KEEPS these -- measured against the fork's own src/:
+# 76 `maplibre.org` doc URLs survive, against 3 `mapmetrics.org` ones which are the brand
+# homepage. They point at real pages; renamed `mapmetrics.org/mapmetrics-gl-js/...` URLs 404.
 DOC_URL = re.compile(r'https?://maplibre\.org[^\s\'")\]>]*')
 
 
 def rename_text(s: str) -> str:
-    s = s.replace(SPEC, '\x00SPEC\x00')
-    s = DOC_URL.sub(lambda m: '\x00U' + m.group(0) + '\x00', s)
+    # Protect exempt spans behind placeholders that contain NO renameable substring.
+    # An earlier version wrapped the original text in sentinels but left `maplibre` VISIBLE
+    # inside them, so the doc-URL exemption silently did nothing and every upstream doc link
+    # was rewritten to a 404. Placeholders must be opaque.
+    keep = []
+
+    def _stash(m):
+        keep.append(m.group(0))
+        return '\x00{}\x00'.format(len(keep) - 1)
+
+    s = NPM_SCOPE.sub(_stash, s)
+    s = DOC_URL.sub(_stash, s)
     s = s.replace('maplibregl', 'mapmetricsgl')
     s = s.replace('MapLibreGL', 'MapMetricsGL')
     s = s.replace('MapLibre', 'Mapmetrics')
     s = s.replace('maplibre', 'mapmetrics')
     s = s.replace('MAPLIBRE', 'MAPMETRICS')
-    s = s.replace('\x00SPEC\x00', SPEC)
-    s = re.sub(r'\x00U(.*?)\x00', r'\1', s)
+    s = re.sub(r'\x00(\d+)\x00', lambda m: keep[int(m.group(1))], s)
     return s
 
 
@@ -75,6 +94,11 @@ def rename_path(p: str) -> str:
 
 
 def walk(root):
+    # os.walk() on a FILE yields nothing at all, so passing a single path used to be a silent
+    # no-op that looked like success ("0 files rewritten"). Handle it explicitly.
+    if os.path.isfile(root):
+        yield root
+        return
     for dp, dn, fn in os.walk(root):
         dn[:] = [d for d in dn if d not in SKIP_DIRS]
         for f in fn:

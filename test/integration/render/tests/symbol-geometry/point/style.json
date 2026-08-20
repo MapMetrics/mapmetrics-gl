@@ -47,7 +47,7 @@
       "source": "geometry",
       "layout": {
         "icon-image": "rocket-12",
-        "text-field": "MapLibre",
+        "text-field": "Mapmetrics",
         "text-font": [
           "Open Sans Semibold",
           "Arial Unicode MS Bold"

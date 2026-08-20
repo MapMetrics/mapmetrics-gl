@@ -13,7 +13,7 @@ import expectedImagesHorizontal from './tests/text-shaping-images-horizontal.jso
 import expectedNewLine from './tests/text-shaping-newline.json' with {type: 'json'};
 import expectedNewLinesInMiddle from './tests/text-shaping-newlines-in-middle.json' with {type: 'json'};
 import expectedBreakBeforeBracket from './tests/text-shaping-break-before-bracket.json' with {type: 'json'};
-// Prefer zero width spaces when breaking lines. Zero width spaces are used by MapLibre data sources as a hint that
+// Prefer zero width spaces when breaking lines. Zero width spaces are used by Mapmetrics data sources as a hint that
 // a position is ideal for breaking.
 import expectedZeroWidthSpaceBreak from './tests/text-shaping-zero-width-space.json' with {type: 'json'};
 
@@ -159,6 +159,24 @@ describe('shaping', () => {
         const shaped = shapeText(horizontalFormatted, glyphs, glyphPositions, images, fontStack, 5 * oneEm, oneEm, 'center', 'center', 0, [0, 0], WritingMode.vertical, true, layoutTextSize, layoutTextSizeThisZoom);
         if (UPDATE) fs.writeFileSync(path.resolve(__dirname, './tests/text-shaping-images-vertical.json'), JSON.stringify(shaped, null, 2));
         expect(shaped).toEqual(expectedImagesVertical);
+    });
+
+    test('Rotated punctuation in vertical layout', () => {
+        const shaped = shapeText(Formatted.fromString('()'), glyphs, glyphPositions, images, fontStack, 5 * oneEm, oneEm, 'center', 'center', 0, [0, 0], WritingMode.vertical, true, layoutTextSize, layoutTextSizeThisZoom);
+        const positionedGlyphs = (shaped as Shaping).positionedLines[0].positionedGlyphs;
+        expect(positionedGlyphs[0].glyph).toBe(0xfe35);
+        expect(positionedGlyphs[1].glyph).toBe(0xfe36);
+    });
+
+    test('Characters beyond the Basic Multilingual Plane', () => {
+        const shaped = shapeText(Formatted.fromString('🗺️🌐'), glyphs, glyphPositions, images, fontStack, 5 * oneEm, oneEm, 'center', 'center', 0, [0, 0], WritingMode.horizontal, false, layoutTextSize, layoutTextSizeThisZoom);
+        const positionedGlyphs = (shaped as Shaping).positionedLines[0].positionedGlyphs;
+        expect(positionedGlyphs[0].glyph).toBe(0x1f5fa);
+        expect(positionedGlyphs[0].x).toBe(-31.5);
+        expect(positionedGlyphs[1].glyph).toBe(0xfe0f);
+        expect(positionedGlyphs[1].x).toBe(-10.5);
+        expect(positionedGlyphs[2].glyph).toBe(0x1f310);
+        expect(positionedGlyphs[2].x).toBe(10.5);
     });
 
     test('text vertical align', () => {

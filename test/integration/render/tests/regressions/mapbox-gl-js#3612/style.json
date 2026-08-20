@@ -11,7 +11,7 @@
   ],
   "zoom": 15,
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "maxzoom": 14,
       "tiles": [
@@ -32,7 +32,7 @@
     {
       "id": "literal",
       "type": "symbol",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "poi_label",
       "filter": [
         "==",
@@ -56,7 +56,7 @@
     {
       "id": "translucent",
       "type": "fill",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "landuse",
       "filter": ["==", "class", "park"],
       "paint": {
@@ -67,7 +67,7 @@
     {
       "id": "opaque",
       "type": "fill",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "landuse",
       "filter": ["==", "class", "pitch"],
       "paint": {

@@ -4,12 +4,15 @@ import resolve from '@rollup/plugin-node-resolve';
 import replace from '@rollup/plugin-replace';
 import commonjs from '@rollup/plugin-commonjs';
 import terser from '@rollup/plugin-terser';
-import strip from '@rollup/plugin-strip';
 import {type Plugin} from 'rollup';
 import json from '@rollup/plugin-json';
+import {visualizer} from 'rollup-plugin-visualizer';
+
+const {BUNDLE} = process.env;
+const stats = BUNDLE === 'stats';
 
 // Common set of plugins/transformations shared across different rollup
-// builds (main maplibre bundle, style-spec package, benchmarks bundle)
+// builds (main mapmetrics bundle, style-spec package, benchmarks bundle)
 
 export const nodeResolve = resolve({
     browser: true,
@@ -18,6 +21,7 @@ export const nodeResolve = resolve({
 
 export const plugins = (production: boolean): Plugin[] => [
     json(),
+    // https://github.com/zaach/jison/issues/351
     replace({
         preventAssignment: true,
         include: /\/jsonlint-lines-primitives\/lib\/jsonlint.js/,
@@ -26,16 +30,6 @@ export const plugins = (production: boolean): Plugin[] => [
             '_token_stack:': ''
         }
     }),
-    // Minify the production bundle. This runs on the staging AMD chunks, which
-    // `rollup.config.ts` then concatenates into the UMD dist (that second pass has
-    // `treeshake: false` and no transforms), so minifying here covers the published
-    // artifact. `rollup.config.csp.ts` uses this same plugin list directly.
-    //
-    // This was commented out in 70ffb2c, the squashed initial import of the fork - no commit
-    // ever records a reason, and re-enabling it leaves `test-build` (which evals the bundle)
-    // and the unit suite green. It is NOT safe to disable again casually: without it the
-    // published bundle is ~2.5 MB instead of ~0.9 MB, i.e. ~1.6 MB of dead weight on exactly
-    // the mobile connections this SDK targets.
     production && terser({
         compress: {
             pure_getters: true,
@@ -45,24 +39,24 @@ export const plugins = (production: boolean): Plugin[] => [
     }),
     nodeResolve,
     typescript(),
-    // Strip developer-only output from the published bundle so consuming applications get a quiet
-    // console. `console.warn` / `console.error` are deliberately NOT stripped: they report real
-    // problems (misconfiguration, failed requests) that a consumer needs to see. The dev bundle
-    // (`BUILD:dev`) keeps everything, so debugging this library is unaffected.
-    //
-    // NOTE: this must run AFTER typescript(). @rollup/plugin-strip parses with acorn, which cannot
-    // read TypeScript syntax, and its default `include` is '**/*.js' only -- so placed before
-    // typescript() it never touched any of our own .ts sources. `include` is widened to '.ts' so
-    // that it does.
-    production && strip({
-        sourceMap: true,
-        include: ['**/*.js', '**/*.ts'],
-        functions: ['PerformanceUtils.*', 'console.log', 'console.debug', 'console.info', 'console.trace', 'console.dir', 'console.table']
-    }),
     commonjs({
+        // global keyword handling causes Webpack compatibility issues, so we disabled it:
+        // https://github.com/mapbox/mapbox-gl-js/pull/6956
         ignoreGlobal: true
-    })
-].filter(Boolean) as Plugin[];
+    }),
+    // generate bundle stats in multiple formats (treemap, sunburst, etc...)
+    ...(stats ? (['treemap', 'sunburst', 'flamegraph', 'network'] as const).map(template =>
+        visualizer({
+            template,
+            title: `gl-js-${template}`,
+            filename: `staging/${template}.html`,
+            gzipSize: true,
+            brotliSize: true,
+            sourcemap: true,
+            open: true
+        })
+    ) : [])
+].filter(Boolean);
 
 export const watchStagingPlugin: Plugin = {
     name: 'watch-external',

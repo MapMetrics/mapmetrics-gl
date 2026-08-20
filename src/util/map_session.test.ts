@@ -81,9 +81,9 @@ describe('additive by default', () => {
         expect(mapSession._origin).toBeNull();
     });
 
-    test('RequestManager passes URLs through unchanged when unconfigured', () => {
+    test('RequestManager passes URLs through unchanged when unconfigured', async () => {
         const manager = new RequestManager();
-        expect(manager.transformRequest(TILE, ResourceType.Tile)).toEqual({url: TILE});
+        expect((await manager.transformRequest(TILE, ResourceType.Tile))).toEqual({url: TILE});
     });
 });
 
@@ -560,29 +560,69 @@ describe('composition with a user-supplied transformRequest', () => {
         mapSession.seedCredential('acct-1', 'sess-1', 'SIG1', nowSeconds() + 1200, nowSeconds() + 1800);
     });
 
-    test('the application callback runs and its headers, credentials and URL rewrite survive', () => {
+    test('the application callback runs and its headers, credentials and URL rewrite survive', async () => {
         const manager = new RequestManager((url) => ({
             url: url.replace('planet20251013', 'planet-rewritten'),
             headers: {'x-app': '1'},
             credentials: 'include'
         }));
-        const result = manager.transformRequest(TILE, ResourceType.Tile);
+        const result = (await manager.transformRequest(TILE, ResourceType.Tile));
         expect(result.headers).toEqual({'x-app': '1'});
         expect(result.credentials).toBe('include');
         expect(result.url).toContain('planet-rewritten');
         expect(new URL(result.url).searchParams.get('sig')).toBe('SIG1');
     });
 
-    test('a callback that rewrites to a foreign origin is respected and NOT signed', () => {
+    test('a callback that rewrites to a foreign origin is respected and NOT signed', async () => {
         const manager = new RequestManager(() => ({url: 'https://cdn.example.net/12/2094/1362.mvt'}));
-        const result = manager.transformRequest(TILE, ResourceType.Tile);
+        const result = (await manager.transformRequest(TILE, ResourceType.Tile));
         expect(result.url).toBe('https://cdn.example.net/12/2094/1362.mvt');
     });
 
-    test('setTransformRequest cannot clobber signing', () => {
+    test('setTransformRequest cannot clobber signing', async () => {
         const manager = new RequestManager();
         manager.setTransformRequest((url) => ({url}));
-        expect(new URL(manager.transformRequest(TILE, ResourceType.Tile).url).searchParams.get('sig')).toBe('SIG1');
+        expect(new URL((await manager.transformRequest(TILE, ResourceType.Tile)).url).searchParams.get('sig')).toBe('SIG1');
+    });
+
+    // THIS IS THE REGRESSION NET FOR THE ASYNC transformRequest HAZARD.
+    //
+    // Upstream #7184 lets `transformRequest` return a Promise. If someone "simplifies"
+    // `RequestManager.transformRequest` back to the synchronous form -- dropping the `await` on
+    // the application callback -- then `params` here is a Promise, `params.url` is `undefined`,
+    // `signUrl(undefined)` returns undefined, and the signed value is written to an expando on the
+    // Promise. The URL actually fetched is whatever the promise resolves to: UNSIGNED. Nothing
+    // throws, the map renders, `tsc` stays clean, and every tile bills on the expensive v1 path.
+    //
+    // Grep marker 15 only asserts that `mapSession.signUrl` APPEARS in request_manager.ts, and it
+    // appears in the broken version too. Only this test can see the difference. Do not delete it,
+    // and do not rewrite it to use a synchronous callback.
+    test('awaits an async transformRequest before signing', async () => {
+        const manager = new RequestManager(async (url) => {
+            await Promise.resolve();
+            return {url, headers: {'x-app': 'async'}};
+        });
+
+        const params = await manager.transformRequest(TILE, ResourceType.Tile);
+
+        // A Promise would have `undefined` here, and `typeof params.url` would be 'undefined'.
+        expect(typeof params.url).toBe('string');
+        expect(params.headers).toEqual({'x-app': 'async'});
+        // The whole point: the signing params reached the URL that will actually be requested.
+        expect(new URL(params.url).searchParams.get('sig')).toBe('SIG1');
+        expect(new URL(params.url).searchParams.get('u')).toBe('acct-1');
+        // And the result is a plain object, not a thenable that a caller would have to unwrap twice.
+        expect((params as any).then).toBeUndefined();
+    });
+
+    test('an async transformRequest that rewrites the URL is still awaited, and the rewrite wins', async () => {
+        const manager = new RequestManager(async (url) => {
+            await Promise.resolve();
+            return {url: url.replace('planet20251013', 'planet-async')};
+        });
+        const params = await manager.transformRequest(TILE, ResourceType.Tile);
+        expect(params.url).toContain('planet-async');
+        expect(new URL(params.url).searchParams.get('sig')).toBe('SIG1');
     });
 });
 
@@ -592,13 +632,13 @@ describe('one session per page', () => {
         mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
         const a = new RequestManager();
         const b = new RequestManager();
-        a.transformRequest(TILE, ResourceType.Tile);
-        b.transformRequest(TILE, ResourceType.Tile);
+        (await a.transformRequest(TILE, ResourceType.Tile));
+        (await b.transformRequest(TILE, ResourceType.Tile));
         expect(calls).toHaveLength(1);
         pending[0]({status: 200, body: body()});
         await vi.waitFor(() => expect(mapSession._sig).toBe('SIG1'));
-        const signedA = new URL(a.transformRequest(TILE, ResourceType.Tile).url);
-        const signedB = new URL(b.transformRequest(TILE, ResourceType.Tile).url);
+        const signedA = new URL((await a.transformRequest(TILE, ResourceType.Tile)).url);
+        const signedB = new URL((await b.transformRequest(TILE, ResourceType.Tile)).url);
         expect(signedA.searchParams.get('s')).toBe(signedB.searchParams.get('s'));
     });
 });
@@ -669,10 +709,10 @@ const GW_STYLE = `${GW}/styles/?fileName=abc-123/NightGrid.json&token=JWT-FROM-S
 const GW_TILE = `${GW}/planet20251013/12/2094/1362.mvt?token=JWT-FROM-STYLE`;
 
 describe('v2 by default — learning from a gateway style URL', () => {
-    test('a gateway style URL with a token enables v2 and mints exactly once', () => {
+    test('a gateway style URL with a token enables v2 and mints exactly once', async () => {
         const {calls} = stubTransport();
         const manager = new RequestManager();
-        manager.transformRequest(GW_STYLE, ResourceType.Style);
+        (await manager.transformRequest(GW_STYLE, ResourceType.Style));
 
         expect(mapSession.isEnabled()).toBe(true);
         expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
@@ -682,12 +722,12 @@ describe('v2 by default — learning from a gateway style URL', () => {
         expect(calls[0]).toBe(`${GW}/v2/map-sessions?token=JWT-FROM-STYLE`);
     });
 
-    test('THE SECURITY GUARD: a NON-gateway style URL is ignored entirely', () => {
+    test('THE SECURITY GUARD: a NON-gateway style URL is ignored entirely', async () => {
         const {calls} = stubTransport();
         const manager = new RequestManager();
         // A style is a document a third party may control. If this ever learns, that third party
         // has been handed the customer's key to POST wherever it likes.
-        manager.transformRequest('https://evil.example.com/style.json?token=JWT-FROM-STYLE', ResourceType.Style);
+        (await manager.transformRequest('https://evil.example.com/style.json?token=JWT-FROM-STYLE', ResourceType.Style));
 
         expect(mapSession.isEnabled()).toBe(false);
         expect(mapSession._apiKey).toBeNull();
@@ -695,7 +735,7 @@ describe('v2 by default — learning from a gateway style URL', () => {
         expect(calls).toHaveLength(0);
     });
 
-    test('THE SECURITY GUARD is a whole-hostname match, not a substring one', () => {
+    test('THE SECURITY GUARD is a whole-hostname match, not a substring one', async () => {
         const {calls} = stubTransport();
         const manager = new RequestManager();
         // Every one of these contains a gateway hostname as a substring.
@@ -704,7 +744,7 @@ describe('v2 by default — learning from a gateway style URL', () => {
             'https://evil.example/?next=gateway.mapmetrics-atlas.net&token=T',
             'https://notgateway.mapmetrics.org/style.json?token=T'
         ]) {
-            manager.transformRequest(url, ResourceType.Style);
+            (await manager.transformRequest(url, ResourceType.Style));
         }
         expect(mapSession._apiKey).toBeNull();
         expect(calls).toHaveLength(0);
@@ -717,12 +757,12 @@ describe('v2 by default — learning from a gateway style URL', () => {
         expect(calls).toHaveLength(0);
     });
 
-    test('an explicitly configured apiKey beats a later gateway style URL', () => {
+    test('an explicitly configured apiKey beats a later gateway style URL', async () => {
         const {calls} = stubTransport();
         mapSession.configure({apiKey: 'CONFIGURED', gatewayOrigin: ORIGIN});
         expect(calls).toHaveLength(1);
 
-        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+        (await new RequestManager().transformRequest(GW_STYLE, ResourceType.Style));
 
         expect(mapSession._apiKey).toBe('CONFIGURED');
         expect(mapSession._origin).toBe(ORIGIN);
@@ -730,91 +770,91 @@ describe('v2 by default — learning from a gateway style URL', () => {
         expect(calls).toHaveLength(1);
     });
 
-    test('an explicitly configured apiKey wins even when NO gatewayOrigin was pinned', () => {
+    test('an explicitly configured apiKey wins even when NO gatewayOrigin was pinned', async () => {
         const {calls} = stubTransport();
         // The origin guard cannot cover this one: with no gatewayOrigin the origin is still null,
         // so only the apiKey guard stands between a configured key and a style-supplied one.
         mapSession.configure({apiKey: 'CONFIGURED'});
-        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+        (await new RequestManager().transformRequest(GW_STYLE, ResourceType.Style));
 
         expect(mapSession._apiKey).toBe('CONFIGURED');
         expect(mapSession._origin).toBeNull();
         expect(calls).toHaveLength(0);
     });
 
-    test('configure({apiKey: \'\'}) records the INTENT and still blocks style learning', () => {
+    test('configure({apiKey: \'\'}) records the INTENT and still blocks style learning', async () => {
         const {calls} = stubTransport();
         // An application that explicitly passed a key — even an empty/undefined one it meant to
         // fill in later — has said it supplies its own. A style must not substitute a different one.
         mapSession.configure({apiKey: ''});
-        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+        (await new RequestManager().transformRequest(GW_STYLE, ResourceType.Style));
 
         expect(mapSession._apiKey).toBeNull();
         expect(mapSession.isEnabled()).toBe(false);
         expect(calls).toHaveLength(0);
     });
 
-    test('an explicitly configured gatewayOrigin alone still beats a style URL', () => {
+    test('an explicitly configured gatewayOrigin alone still beats a style URL', async () => {
         const {calls} = stubTransport();
         // No key, so nothing was minted; but the origin was chosen deliberately and a style
         // document does not get to revisit that choice.
         mapSession.configure({gatewayOrigin: ORIGIN});
-        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+        (await new RequestManager().transformRequest(GW_STYLE, ResourceType.Style));
 
         expect(mapSession._apiKey).toBeNull();
         expect(mapSession._origin).toBe(ORIGIN);
         expect(calls).toHaveLength(0);
     });
 
-    test('LEARN ONCE: a second style load neither re-learns nor re-mints', () => {
+    test('LEARN ONCE: a second style load neither re-learns nor re-mints', async () => {
         const {calls} = stubTransport();
         const manager = new RequestManager();
-        manager.transformRequest(GW_STYLE, ResourceType.Style);
+        (await manager.transformRequest(GW_STYLE, ResourceType.Style));
         expect(calls).toHaveLength(1);
 
         // Style switching is supported; it must not re-point the key mid-session.
-        manager.transformRequest(`${GW}/styles/?fileName=xyz/Other.json&token=SECOND-JWT`, ResourceType.Style);
+        (await manager.transformRequest(`${GW}/styles/?fileName=xyz/Other.json&token=SECOND-JWT`, ResourceType.Style));
 
         expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
         expect(calls).toHaveLength(1);
     });
 
-    test('a gateway style URL with NO token changes nothing and does not throw', () => {
+    test('a gateway style URL with NO token changes nothing and does not throw', async () => {
         const {calls} = stubTransport();
-        expect(() => {
-            new RequestManager().transformRequest(`${GW}/styles/?fileName=abc/NightGrid.json`, ResourceType.Style);
-        }).not.toThrow();
+        await expect(
+            new RequestManager().transformRequest(`${GW}/styles/?fileName=abc/NightGrid.json`, ResourceType.Style)
+        ).resolves.toBeDefined();
         expect(mapSession.isEnabled()).toBe(false);
         expect(mapSession._apiKey).toBeNull();
         expect(mapSession._origin).toBeNull();
         expect(calls).toHaveLength(0);
     });
 
-    test('a token-less style leaves the door open for a later one that has a token', () => {
+    test('a token-less style leaves the door open for a later one that has a token', async () => {
         const {calls} = stubTransport();
         const manager = new RequestManager();
-        manager.transformRequest(`${GW}/styles/?fileName=abc/NightGrid.json`, ResourceType.Style);
+        (await manager.transformRequest(`${GW}/styles/?fileName=abc/NightGrid.json`, ResourceType.Style));
         expect(calls).toHaveLength(0);
-        manager.transformRequest(GW_STYLE, ResourceType.Style);
+        (await manager.transformRequest(GW_STYLE, ResourceType.Style));
         expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
         expect(calls).toHaveLength(1);
     });
 
-    test('a non-Style resource type never learns, however gateway-shaped it is', () => {
+    test('a non-Style resource type never learns, however gateway-shaped it is', async () => {
         const {calls} = stubTransport();
         const manager = new RequestManager();
-        manager.transformRequest(GW_STYLE, ResourceType.Source);
-        manager.transformRequest(GW_TILE, ResourceType.Tile);
+        (await manager.transformRequest(GW_STYLE, ResourceType.Source));
+        (await manager.transformRequest(GW_TILE, ResourceType.Tile));
         expect(mapSession._apiKey).toBeNull();
         expect(calls).toHaveLength(0);
     });
 
-    test('the app\'s own transformRequest still runs first and its result is preserved', () => {
+    test('the app\'s own transformRequest still runs first and its result is preserved', async () => {
         const {calls} = stubTransport();
         const app = vi.fn((url: string) => ({url: `${url}&app=1`, headers: {'X-App': 'yes'}, credentials: 'include' as const}));
         const manager = new RequestManager(app);
 
-        const params = manager.transformRequest(GW_STYLE, ResourceType.Style);
+        const params = (await manager.transformRequest(GW_STYLE, ResourceType.Style));
 
         expect(app).toHaveBeenCalledWith(GW_STYLE, ResourceType.Style);
         // Nothing the application produced was clobbered.
@@ -826,10 +866,10 @@ describe('v2 by default — learning from a gateway style URL', () => {
         expect(calls).toHaveLength(1);
     });
 
-    test('an app that rewrites a gateway style to its own CDN still bills correctly', () => {
+    test('an app that rewrites a gateway style to its own CDN still bills correctly', async () => {
         const {calls} = stubTransport();
         const manager = new RequestManager(() => ({url: 'https://cdn.example.com/style.json'}));
-        const params = manager.transformRequest(GW_STYLE, ResourceType.Style);
+        const params = (await manager.transformRequest(GW_STYLE, ResourceType.Style));
         // The request really does go to the CDN...
         expect(params.url).toBe('https://cdn.example.com/style.json');
         // ...but the original URL was a gateway URL, so the key is still learned from it.
@@ -837,10 +877,10 @@ describe('v2 by default — learning from a gateway style URL', () => {
         expect(calls).toHaveLength(1);
     });
 
-    test('an app that rewrites a bare style path ONTO the gateway is learned from', () => {
+    test('an app that rewrites a bare style path ONTO the gateway is learned from', async () => {
         const {calls} = stubTransport();
         const manager = new RequestManager(() => ({url: GW_STYLE}));
-        manager.transformRequest('/style.json', ResourceType.Style);
+        (await manager.transformRequest('/style.json', ResourceType.Style));
         expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
         expect(calls).toHaveLength(1);
     });
@@ -848,10 +888,10 @@ describe('v2 by default — learning from a gateway style URL', () => {
     test('the learned credential then signs tiles, merging with the style token', async () => {
         stubTransport();
         const manager = new RequestManager();
-        manager.transformRequest(GW_STYLE, ResourceType.Style);
+        (await manager.transformRequest(GW_STYLE, ResourceType.Style));
         await Promise.resolve();
 
-        const signed = new URL(manager.transformRequest(GW_TILE, ResourceType.Tile).url);
+        const signed = new URL((await manager.transformRequest(GW_TILE, ResourceType.Tile)).url);
         // Invariant 7: the style's own token survives alongside the credential.
         expect(signed.searchParams.get('token')).toBe('JWT-FROM-STYLE');
         expect(signed.searchParams.get('u')).toBe('acct-1');
@@ -861,10 +901,10 @@ describe('v2 by default — learning from a gateway style URL', () => {
 });
 
 describe('v2 by default — the opt-out', () => {
-    test('configure({enabled:false}) stops a style URL being learned from', () => {
+    test('configure({enabled:false}) stops a style URL being learned from', async () => {
         const {calls} = stubTransport();
         mapSession.configure({enabled: false});
-        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+        (await new RequestManager().transformRequest(GW_STYLE, ResourceType.Style));
 
         expect(mapSession._apiKey).toBeNull();
         expect(mapSession.isEnabled()).toBe(false);
@@ -881,14 +921,14 @@ describe('v2 by default — the opt-out', () => {
         expect(calls).toHaveLength(0);
     });
 
-    test('enabled:true re-enables an opted-out session', () => {
+    test('enabled:true re-enables an opted-out session', async () => {
         const {calls} = stubTransport();
         mapSession.configure({enabled: false});
-        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+        (await new RequestManager().transformRequest(GW_STYLE, ResourceType.Style));
         expect(calls).toHaveLength(0);
 
         mapSession.configure({enabled: true});
-        new RequestManager().transformRequest(GW_STYLE, ResourceType.Style);
+        (await new RequestManager().transformRequest(GW_STYLE, ResourceType.Style));
         expect(mapSession._apiKey).toBe('JWT-FROM-STYLE');
         expect(calls).toHaveLength(1);
     });

@@ -10,12 +10,19 @@ import type {SymbolBucket} from '../data/bucket/symbol_bucket';
 import type {
     GlyphOffsetArray,
     SymbolLineVertexArray,
-    SymbolDynamicLayoutArray
+    SymbolDynamicLayoutArray,
+    PlacedSymbol,
 } from '../data/array_types.g';
 import {WritingMode} from '../symbol/shaping';
 import {findLineIntersection} from '../util/util';
-import {type UnwrappedTileID} from '../source/tile_id';
+import {type UnwrappedTileID} from '../tile/tile_id';
 import {type StructArray} from '../util/struct_array';
+import {fastInvertSkewMat4} from '../util/fast_maths';
+
+/**
+ * Pre-allocate objects to avoid online allocation
+ */
+const tmpMat4 = mat4.create();
 
 /**
  * The result of projecting a point to the screen, with some additional information about the projection.
@@ -83,7 +90,7 @@ export type PointProjection = {
  *
  *
  * # Custom projection handling
- * Note that since MapLibre now supports more than one projection, the transformation
+ * Note that since Mapmetrics now supports more than one projection, the transformation
  * to viewport pixel space and GL clip space now *must* go through the projection's (`transform`'s)
  * `projectTileCoordinates` function, since it might do nontrivial transformations.
  *
@@ -344,7 +351,7 @@ export function placeFirstAndLastGlyph(
     lineOffsetX: number,
     lineOffsetY: number,
     flip: boolean,
-    symbol: any,
+    symbol: PlacedSymbol,
     rotateToLine: boolean,
     projectionContext: SymbolProjectionContext): FirstAndLastGlyphPlacement {
     const glyphEndIndex = symbol.glyphStartIndex + symbol.numGlyphs;
@@ -404,7 +411,7 @@ type GlyphLinePlacementResult = OrientationChangeType & {
 type GlyphLinePlacementArgs = {
     projectionContext: SymbolProjectionContext;
     pitchedLabelPlaneMatrixInverse: mat4;
-    symbol: any; // PlacedSymbolStruct
+    symbol: PlacedSymbol;
     fontSize: number;
     flip: boolean;
     keepUpright: boolean;
@@ -465,9 +472,13 @@ function placeGlyphsAlongLine(args: GlyphLinePlacementArgs): GlyphLinePlacementR
 
         placedGlyphs = [firstAndLastGlyph.first];
         for (let glyphIndex = symbol.glyphStartIndex + 1; glyphIndex < glyphEndIndex - 1; glyphIndex++) {
-            // Since first and last glyph fit on the line, we're sure that the rest of the glyphs can be placed
-            placedGlyphs.push(placeGlyphAlongLine(fontScale * glyphOffsetArray.getoffsetX(glyphIndex), lineOffsetX, lineOffsetY, flip, symbol.segment,
-                lineStartIndex, lineEndIndex, projectionContext, rotateToLine));
+            // Since first and last glyph fit on the line, try placing the rest of the glyphs.
+            const placedGlyph = placeGlyphAlongLine(fontScale * glyphOffsetArray.getoffsetX(glyphIndex), lineOffsetX, lineOffsetY, flip, symbol.segment,
+                lineStartIndex, lineEndIndex, projectionContext, rotateToLine);
+            if (!placedGlyph) {
+                return {notEnoughRoom: true};
+            }
+            placedGlyphs.push(placedGlyph);
         }
         placedGlyphs.push(firstAndLastGlyph.last);
     } else {
@@ -637,7 +648,7 @@ export function projectLineVertexToLabelPlane(index: number, projectionContext: 
 
     if (projection.signedDistanceFromCamera > 0) {
         cache.projections[index] = projection.point;
-        cache.anyProjectionOccluded = cache.anyProjectionOccluded || projection.isOccluded;
+        cache.anyProjectionOccluded ||= projection.isOccluded;
         return projection.point;
     }
 
@@ -681,7 +692,7 @@ function projectFromLabelPlaneToClipSpace(x: number, y: number, projectionContex
     } else {
         return {
             x: (x / projectionContext.width) * 2.0 - 1.0,
-            y: (y / projectionContext.height) * 2.0 - 1.0
+            y: 1.0 - (y / projectionContext.height) * 2.0
         };
     }
 }
@@ -768,7 +779,7 @@ type PlacedGlyph = {
     /**
      * The label-plane path used to reach this glyph: used only for collision detection
      */
-    path: Array<Point>;
+    path: Point[];
 };
 
 /*
@@ -828,7 +839,7 @@ export function placeGlyphAlongLine(
     let distanceFromAnchor = 0;
     let currentSegmentDistance = 0;
     const absOffsetX = Math.abs(combinedOffsetX);
-    const pathVertices: Array<Point> = [];
+    const pathVertices: Point[] = [];
 
     let currentLineSegment: Point;
     while (distanceFromAnchor + currentSegmentDistance <= absOffsetX) {
@@ -869,8 +880,7 @@ export function placeGlyphAlongLine(
                 prevToCurrentOffsetNormal = transformToOffsetNormal(prevToCurrent, lineOffsetY, direction);
             }
             // Initialize offsetPrev on our first iteration, after that it will be pre-calculated
-            if (!offsetPreviousVertex)
-                offsetPreviousVertex = previousVertex.add(prevToCurrentOffsetNormal);
+            offsetPreviousVertex ||= previousVertex.add(prevToCurrentOffsetNormal);
 
             offsetIntersectionPoint = findOffsetIntersectionPoint(currentIndex, prevToCurrentOffsetNormal, currentVertex, lineStartIndex, lineEndIndex, offsetPreviousVertex, lineOffsetY, projectionContext, syntheticVertexArgs);
 
@@ -925,9 +935,9 @@ export function xyTransformMat4(out: vec4, a: vec4, m: mat4) {
  * Returns a new array of the projected points.
  * Does not modify the input array.
  */
-export function projectPathSpecialProjection(projectedPath: Array<Point>, projectionContext: SymbolProjectionContext): Array<PointProjection> {
-    const inverseLabelPlaneMatrix = mat4.create();
-    mat4.invert(inverseLabelPlaneMatrix, projectionContext.pitchedLabelPlaneMatrix);
+export function projectPathSpecialProjection(projectedPath: Point[], projectionContext: SymbolProjectionContext): PointProjection[] {
+    const inverseLabelPlaneMatrix = tmpMat4;
+    fastInvertSkewMat4(inverseLabelPlaneMatrix, projectionContext.pitchedLabelPlaneMatrix);
     return projectedPath.map(p => {
         const backProjected = projectWithMatrix(p.x, p.y, inverseLabelPlaneMatrix, projectionContext.getElevation);
         const projected = projectionContext.transform.projectTileCoordinates(
@@ -947,7 +957,7 @@ export function projectPathSpecialProjection(projectedPath: Array<Point>, projec
  * and returns it.
  * Does not modify the input array.
  */
-export function pathSlicedToLongestUnoccluded(path: Array<PointProjection>): Array<PointProjection> {
+export function pathSlicedToLongestUnoccluded(path: PointProjection[]): PointProjection[] {
     let longestUnoccludedStart = 0;
     let longestUnoccludedLength = 0;
     let currentUnoccludedStart = 0;

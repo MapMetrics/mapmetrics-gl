@@ -33,8 +33,8 @@ const previous = releaseNotes[1];
 
 //  Print the release notes template.
 
-// const templatedReleaseNotes = `https://github.com/maplibre/maplibre-gl-js
-// [Changes](https://github.com/maplibre/maplibre-gl-js/compare/v${previous.version}...v${latest.version}) since [Mapmetrics GL JS v${previous.version}](https://github.com/maplibre/maplibre-gl-js/releases/tag/v${previous.version}):
+// const templatedReleaseNotes = `https://github.com/mapmetrics/mapmetrics-gl-js
+// [Changes](https://github.com/mapmetrics/mapmetrics-gl-js/compare/v${previous.version}...v${latest.version}) since [Mapmetrics GL JS v${previous.version}](https://github.com/mapmetrics/mapmetrics-gl-js/releases/tag/v${previous.version}):
 
 // ${latest.changelog}
 

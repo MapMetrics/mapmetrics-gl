@@ -11,7 +11,7 @@
   ],
   "zoom": 14,
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "maxzoom": 14,
       "tiles": [
@@ -30,13 +30,13 @@
     {
       "id": "butt",
       "type": "line",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "road",
       "layout": {
         "line-cap": "butt"
       },
       "paint": {
-        "line-width": 10,
+        "line-width": 8,
         "line-color": "#000",
         "line-opacity": 1
       }

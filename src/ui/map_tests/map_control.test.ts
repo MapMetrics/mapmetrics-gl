@@ -3,21 +3,27 @@ import {createMap, beforeMapTest} from '../../util/test/util';
 import {type IControl} from '../control/control';
 
 /**
- * MapMetrics fork behaviour: every `Map` is constructed with two mandatory controls
- * already attached - an `AttributionControl` (attribution cannot be disabled, so that
- * OpenStreetMap/ODbL attribution is always shown; `attributionControl: false` only
- * resets it to defaults) and a `LogoControl` (`mapmetricsLogo` defaults to `true`).
- * Upstream MapLibre starts with an empty `_controls` array when attribution is off.
- * Tests therefore index/count relative to these built-ins rather than from zero.
+ * MapMetrics fork behaviour: attribution is MANDATORY, so every `Map` is constructed with an
+ * `AttributionControl` already attached. `attributionControl: false` -- which the shared
+ * `createMap` test helper passes -- only resets it to `defaultAttributionControlOptions`
+ * rather than omitting it. Upstream MapLibre starts with an EMPTY `_controls` array here.
+ *
+ * The count is 1 rather than 2 because the same helper also passes `mapmetricsLogo: false`,
+ * which IS honoured; a default `new Map()` additionally carries a `LogoControl`.
+ *
+ * This constant is the ONLY automated evidence that the non-removable attribution
+ * (MAPMETRICS-FORK.md §3 item 12, a licence/contractual obligation) is wired up at the `Map`
+ * level. If a re-vendor takes upstream's `map_control.test.ts`, that obligation loses its last
+ * check here -- and a map that renders perfectly is not evidence it survived.
  */
-const DEFAULT_CONTROL_COUNT = 2;
+const DEFAULT_CONTROL_COUNT = 1;
 
 beforeEach(() => {
     beforeMapTest();
     global.fetch = null;
 });
 
-test('#addControl', () => {
+test('addControl', () => {
     const map = createMap();
     const control = {
         onAdd(_) {
@@ -30,7 +36,7 @@ test('#addControl', () => {
     expect(map._controls[DEFAULT_CONTROL_COUNT]).toBe(control);
 });
 
-test('#removeControl errors on invalid arguments', () => {
+test('removeControl errors on invalid arguments', () => {
     const map = createMap();
     const control = {} as any as IControl;
     const stub = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -41,7 +47,7 @@ test('#removeControl errors on invalid arguments', () => {
 
 });
 
-test('#removeControl', () => {
+test('removeControl', () => {
     const map = createMap();
     const control = {
         onAdd() {
@@ -57,7 +63,7 @@ test('#removeControl', () => {
 
 });
 
-test('#hasControl', () => {
+test('hasControl', () => {
     const map = createMap();
     function Ctrl() {}
     Ctrl.prototype = {

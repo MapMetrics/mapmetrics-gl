@@ -22,10 +22,10 @@ describe('generateJsonLd', () => {
         // Extract all JSON blocks from script tags
         const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
         expect(jsonMatches).not.toBeNull();
-        expect(jsonMatches!.length).toBeGreaterThanOrEqual(1);
+        expect(jsonMatches.length).toBeGreaterThanOrEqual(1);
 
         // Each block should contain valid JSON with @context
-        for (const match of jsonMatches!) {
+        for (const match of jsonMatches) {
             const jsonStr = match
                 .replace('<script type="application/ld+json">', '')
                 .replace('</script>', '');
@@ -42,7 +42,7 @@ describe('generateJsonLd', () => {
             sources: [{id: 'restaurants', schemaType: 'restaurant'}],
         });
 
-        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)!;
+        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
         const schemas = jsonMatches.map((m) => {
             const jsonStr = m
                 .replace('<script type="application/ld+json">', '')
@@ -67,7 +67,7 @@ describe('generateJsonLd', () => {
             sources: [{id: 'restaurants', schemaType: 'restaurant'}],
         });
 
-        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)!;
+        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
         const schemas = jsonMatches.map((m) => {
             const jsonStr = m
                 .replace('<script type="application/ld+json">', '')
@@ -94,7 +94,7 @@ describe('generateJsonLd', () => {
             sources: [{id: 'restaurants', schemaType: 'restaurant'}],
         });
 
-        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)!;
+        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
         const schemas = jsonMatches.map((m) => {
             const jsonStr = m
                 .replace('<script type="application/ld+json">', '')
@@ -117,7 +117,7 @@ describe('generateJsonLd', () => {
             options: {provider: false},
         });
 
-        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)!;
+        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
         const schemas = jsonMatches.map((m) => {
             const jsonStr = m
                 .replace('<script type="application/ld+json">', '')
@@ -137,7 +137,7 @@ describe('generateJsonLd', () => {
             sources: [{id: 'cycling', schemaType: 'cycling'}],
         });
 
-        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)!;
+        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
         const schemas = jsonMatches.map((m) => {
             const jsonStr = m
                 .replace('<script type="application/ld+json">', '')
@@ -159,7 +159,7 @@ describe('generateJsonLd', () => {
             sources: [{id: 'zones', schemaType: 'serviceArea'}],
         });
 
-        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)!;
+        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
         const schemas = jsonMatches.map((m) => {
             const jsonStr = m
                 .replace('<script type="application/ld+json">', '')
@@ -182,7 +182,7 @@ describe('generateJsonLd', () => {
             options: {featureLimit: 1},
         });
 
-        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)!;
+        const jsonMatches = result.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
         const schemas = jsonMatches.map((m) => {
             const jsonStr = m
                 .replace('<script type="application/ld+json">', '')

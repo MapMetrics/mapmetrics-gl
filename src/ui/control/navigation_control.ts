@@ -11,7 +11,7 @@ import type {IControl} from './control';
 /**
  * The {@link NavigationControl} options object
  */
-type NavigationControlOptions = {
+export type NavigationControlOptions = {
     /**
      * If `true` the compass button is included.
      */
@@ -47,7 +47,7 @@ const defaultOptions: NavigationControlOptions = {
  * let nav = new NavigationControl();
  * map.addControl(nav, 'top-left');
  * ```
- * @see [Display map navigation controls](https://maplibre.org/maplibre-gl-js/docs/examples/navigation/)
+ * @see [Display map navigation controls](https://maplibre.org/maplibre-gl-js/docs/examples/display-map-navigation-controls/)
  */
 export class NavigationControl implements IControl {
     _map: Map;
@@ -139,7 +139,7 @@ export class NavigationControl implements IControl {
 
     /** {@inheritDoc IControl.onRemove} */
     onRemove() {
-        DOM.remove(this._container);
+        this._container.remove();
         if (this.options.showZoom) {
             this._map.off('zoom', this._updateZoomButtons);
         }
@@ -159,7 +159,7 @@ export class NavigationControl implements IControl {
     }
 
     _createButton(className: string, fn: (e?: any) => unknown) {
-        const a = DOM.create('button', className, this._container) as HTMLButtonElement;
+        const a = DOM.create('button', className, this._container);
         a.type = 'button';
         a.addEventListener('click', fn);
         return a;
@@ -171,60 +171,39 @@ export class NavigationControl implements IControl {
         button.setAttribute('aria-label', str);
     };
 
+    /**
+     * Zoom-out gated on the destination zoom's tiles being ready, so the button does not drop the
+     * user onto a grey viewport. The button is disabled while waiting to swallow double-clicks.
+     * On timeout or error we zoom anyway -- this must never leave the control stuck.
+     */
     _handleZoomOut = (e: MouseEvent) => {
         const targetZoom = this._map.getZoom() - 1;
-        
-        // Check if we have a tile loading manager and tiles are ready
-        if (this._map.tileLoadingManager) {
-            // Disable the button temporarily to prevent multiple clicks
-            this._zoomOutButton.disabled = true;
-            
-            this._map.tileLoadingManager.waitForZoomOutTiles(targetZoom, 300).then((tilesLoaded) => {
-                if (tilesLoaded) {
-                    // Tiles are ready, use normal zoom out animation
-                    this._map.zoomOut({}, {originalEvent: e});
-                } else {
-                    // Tiles not ready, add delay before zoom out
-                    setTimeout(() => {
-                        this._map.zoomOut({}, {originalEvent: e});
-                    }, 500); // 300ms delay when tiles aren't ready
-                }
-                
-                // Re-enable the button
-                this._zoomOutButton.disabled = false;
-            }).catch(() => {
-                // If there's an error, fall back to normal zoom out
-                this._map.zoomOut({}, {originalEvent: e});
-                this._zoomOutButton.disabled = false;
-            });
-        } else {
-            // No tile loading manager, use smooth easeTo
+
+        if (!this._map.tileLoadingManager) {
             this._map.easeTo({
                 zoom: targetZoom,
                 duration: 300,
                 easing: (t) => t * (2 - t)
             }, {originalEvent: e});
+            return;
         }
-    };
 
-    _stepZoomOut(currentZoom: number, targetZoom: number, zoomStep: number, stepTimeout: number) {
-        const stepZoom = (targetZoom > currentZoom) ? zoomStep : -zoomStep;
-        const nextZoom = Math.min(this._map.getMaxZoom(), Math.max(this._map.getMinZoom(), currentZoom + stepZoom));
-        
-        // Use setZoom for immediate zoom without animation
-        this._map.setZoom(nextZoom);
-        
-        // Check if we've reached the target or need to continue
-        if ((stepZoom > 0 && nextZoom >= targetZoom) || (stepZoom < 0 && nextZoom <= targetZoom)) {
-            // We've reached or passed the target, set to exact target
-            this._map.setZoom(targetZoom);
-        } else {
-            // Continue to next step after timeout
-            setTimeout(() => {
-                this._stepZoomOut(nextZoom, targetZoom, zoomStep, stepTimeout);
-            }, stepTimeout);
-        }
-    }
+        this._zoomOutButton.disabled = true;
+        this._map.tileLoadingManager.waitForZoomOutTiles(targetZoom, 300).then((tilesLoaded) => {
+            if (tilesLoaded) {
+                this._map.zoomOut({}, {originalEvent: e});
+            } else {
+                // Tiles not ready: let a little more arrive before moving.
+                setTimeout(() => {
+                    this._map.zoomOut({}, {originalEvent: e});
+                }, 500);
+            }
+            this._zoomOutButton.disabled = false;
+        }).catch(() => {
+            this._map.zoomOut({}, {originalEvent: e});
+            this._zoomOutButton.disabled = false;
+        });
+    };
 }
 
 class MouseRotateWrapper {
@@ -232,16 +211,16 @@ class MouseRotateWrapper {
     map: Map;
     _clickTolerance: number;
     element: HTMLElement;
-    _rotatePitchHanlder: DragMoveHandler<DragRotateResult, MouseEvent | TouchEvent>;
+    _rotatePitchHandler: DragMoveHandler<DragRotateResult, MouseEvent | TouchEvent>;
     _startPos: Point;
     _lastPos: Point;
 
     constructor(map: Map, element: HTMLElement, pitch: boolean = false) {
         this._clickTolerance = 10;
         this.element = element;
-        
+
         const moveStateManager = new MouseOrTouchMoveStateManager();
-        this._rotatePitchHanlder = new DragHandler<DragRotateResult, MouseEvent | TouchEvent>({
+        this._rotatePitchHandler = new DragHandler<DragRotateResult, MouseEvent | TouchEvent>({
             clickTolerance: 3,
             move: (lastPoint: Point, currentPoint: Point) => {
                 const rect = element.getBoundingClientRect();
@@ -256,45 +235,45 @@ class MouseRotateWrapper {
         });
         this.map = map;
 
-        DOM.addEventListener(element, 'mousedown', this.mousedown);
-        DOM.addEventListener(element, 'touchstart', this.touchstart, {passive: false});
-        DOM.addEventListener(element, 'touchcancel', this.reset);
+        element.addEventListener('mousedown', this.mousedown);
+        element.addEventListener('touchstart', this.touchstart, {passive: false});
+        element.addEventListener('touchcancel', this.reset);
     }
 
     startMove(e: MouseEvent | TouchEvent, point: Point) {
-        this._rotatePitchHanlder.dragStart(e, point);
+        this._rotatePitchHandler.dragStart(e, point);
         DOM.disableDrag();
     }
 
     move(e: MouseEvent | TouchEvent, point: Point) {
         const map = this.map;
-        const {bearingDelta, pitchDelta} = this._rotatePitchHanlder.dragMove(e, point) || {};
+        const {bearingDelta, pitchDelta} = this._rotatePitchHandler.dragMove(e, point) || {};
         if (bearingDelta) map.setBearing(map.getBearing() + bearingDelta);
         if (pitchDelta) map.setPitch(map.getPitch() + pitchDelta);
     }
 
     off() {
         const element = this.element;
-        DOM.removeEventListener(element, 'mousedown', this.mousedown);
-        DOM.removeEventListener(element, 'touchstart', this.touchstart, {passive: false});
-        DOM.removeEventListener(window, 'touchmove', this.touchmove, {passive: false});
-        DOM.removeEventListener(window, 'touchend', this.touchend);
-        DOM.removeEventListener(element, 'touchcancel', this.reset);
+        element.removeEventListener('mousedown', this.mousedown);
+        element.removeEventListener('touchstart', this.touchstart);
+        window.removeEventListener('touchmove', this.touchmove);
+        window.removeEventListener('touchend', this.touchend);
+        element.removeEventListener('touchcancel', this.reset);
         this.offTemp();
     }
 
     offTemp() {
         DOM.enableDrag();
-        DOM.removeEventListener(window, 'mousemove', this.mousemove);
-        DOM.removeEventListener(window, 'mouseup', this.mouseup);
-        DOM.removeEventListener(window, 'touchmove', this.touchmove, {passive: false});
-        DOM.removeEventListener(window, 'touchend', this.touchend);
+        window.removeEventListener('mousemove', this.mousemove);
+        window.removeEventListener('mouseup', this.mouseup);
+        window.removeEventListener('touchmove', this.touchmove);
+        window.removeEventListener('touchend', this.touchend);
     }
 
     mousedown = (e: MouseEvent) => {
         this.startMove(e, DOM.mousePos(this.element, e));
-        DOM.addEventListener(window, 'mousemove', this.mousemove);
-        DOM.addEventListener(window, 'mouseup', this.mouseup);
+        window.addEventListener('mousemove', this.mousemove);
+        window.addEventListener('mouseup', this.mouseup);
     };
 
     mousemove = (e: MouseEvent) => {
@@ -302,7 +281,7 @@ class MouseRotateWrapper {
     };
 
     mouseup = (e: MouseEvent) => {
-        this._rotatePitchHanlder.dragEnd(e);
+        this._rotatePitchHandler.dragEnd(e);
         this.offTemp();
     };
 
@@ -312,8 +291,8 @@ class MouseRotateWrapper {
         } else {
             this._startPos = this._lastPos = DOM.touchPos(this.element, e.targetTouches)[0];
             this.startMove(e, this._startPos);
-            DOM.addEventListener(window, 'touchmove', this.touchmove, {passive: false});
-            DOM.addEventListener(window, 'touchend', this.touchend);
+            window.addEventListener('touchmove', this.touchmove, {passive: false});
+            window.addEventListener('touchend', this.touchend);
         }
     };
 
@@ -339,9 +318,10 @@ class MouseRotateWrapper {
     };
 
     reset = () => {
-        this._rotatePitchHanlder.reset();
+        this._rotatePitchHandler.reset();
         delete this._startPos;
         delete this._lastPos;
         this.offTemp();
     };
+
 }

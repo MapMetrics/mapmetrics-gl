@@ -12,12 +12,11 @@ function createMap(options?) {
 }
 
 /**
- * MapMetrics fork behaviour: `KeyboardHandler`'s camera animation is async and, for
- * zoom-OUT only, awaits `map.tileLoadingManager.waitForZoomOutTiles()` before calling
- * `easeTo`, so that zooming out does not flash grey un-loaded tiles. That means the
- * `easeTo` call lands a few microtasks after the keydown instead of synchronously.
- * Upstream MapLibre calls `easeTo` synchronously. This helper drains the microtask
- * queue so the assertions can stay otherwise identical to upstream's.
+ * MapMetrics fork behaviour: `KeyboardHandler`'s camera animation is ASYNC and, for zoom-OUT
+ * only, awaits `map.tileLoadingManager.waitForZoomOutTiles()` before calling `easeTo`, so that
+ * zooming out does not flash grey un-loaded tiles. The `easeTo` call therefore lands a few
+ * microtasks after the keydown instead of synchronously. Upstream MapLibre calls `easeTo`
+ * synchronously. This helper drains the queue so the assertions stay identical to upstream's.
  */
 const flushCameraAnimation = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 
@@ -220,6 +219,19 @@ describe('keyboard', () => {
 
     });
 
+    test('KeyboardHandler snaps to nearest zoomSnap', () => {
+        const map = createMap({zoom: 9.2, zoomSnap: 1.0});
+        const spy = vi.spyOn(map, 'easeTo');
+
+        simulate.keydown(map.getCanvas(), {keyCode: 187, key: 'Equal'}); // "+" key
+        expect(spy.mock.calls[0][0].zoom).toBe(10.0);
+
+        map.setZoomSnap(0.5);
+        map.setZoom(9.4);
+        simulate.keydown(map.getCanvas(), {keyCode: 187, key: 'Equal'});
+        expect(spy.mock.calls[1][0].zoom).toBe(10.5);
+    });
+
     test('KeyboardHandler zooms map in response to -/+ keys when disableRotation has been called', async () => {
         const map = createMap({zoom: 10, center: [0, 0]});
         const spy = vi.spyOn(map, 'easeTo');
@@ -246,5 +258,15 @@ describe('keyboard', () => {
         expect(spy).toHaveBeenCalledTimes(4);
         expect(spy.mock.calls[3][0].zoom).toBe(8);
 
+    });
+
+    test('KeyboardHandler snaps to nearest zoomSnap with shift key', () => {
+        const map = createMap({zoom: 9.4, zoomSnap: 0.5});
+        const spy = vi.spyOn(map, 'easeTo');
+
+        simulate.keydown(map.getCanvas(), {keyCode: 187, key: 'Equal', shiftKey: true});
+        expect(spy).toHaveBeenCalled();
+        expect(spy.mock.calls[0][0].zoom).toBe(11.5);
+        map.remove();
     });
 });

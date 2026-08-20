@@ -12,7 +12,7 @@
   "zoom": 17,
   "pitch": 60,
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "maxzoom": 14,
       "tiles": [
@@ -32,7 +32,7 @@
     {
       "id": "road",
       "type": "line",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "road",
       "paint": {
         "line-width": 20,

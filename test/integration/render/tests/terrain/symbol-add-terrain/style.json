@@ -2,9 +2,9 @@
     "version": 8,
     "sprite": "local://sprites/sprite",
     "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
-    "timeout": 60000,
     "metadata": {
         "test": {
+            "timeout": 60000,
             "height": 512,
             "width": 512,
             "operations": [
@@ -94,7 +94,7 @@
             "source": "geometry",
             "layout": {
                 "icon-image": "rocket-12",
-                "text-field": "MapLibre",
+                "text-field": "Mapmetrics",
                 "text-font": [
                     "Open Sans Semibold",
                     "Arial Unicode MS Bold"

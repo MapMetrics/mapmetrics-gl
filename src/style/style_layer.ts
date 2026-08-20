@@ -1,20 +1,25 @@
 import {filterObject} from '../util/util';
 
-import {latest as styleSpec, supportsPropertyExpression} from '@maplibre/maplibre-gl-style-spec';
+import {createVisibilityExpression, featureFilter, latest as styleSpec, supportsPropertyExpression} from '@maplibre/maplibre-gl-style-spec';
 import {
     validateStyle,
     validateLayoutProperty,
     validatePaintProperty,
     emitValidationErrors
 } from './validate_style';
-import {Evented} from '../util/evented';
-import {Layout, Transitionable, type Transitioning, type Properties, PossiblyEvaluated, PossiblyEvaluatedPropertyValue} from './properties';
+import {Evented, ErrorEvent} from '../util/evented';
+import {Layout, Transitionable, type Transitioning, type Properties, PossiblyEvaluated, PossiblyEvaluatedPropertyValue, TRANSITION_SUFFIX} from './properties';
 
-import type {Bucket} from '../data/bucket';
+import type {Bucket, BucketParameters} from '../data/bucket';
 import type Point from '@mapbox/point-geometry';
-import type {FeatureFilter, FeatureState,
+import type {
+    FeatureFilter,
+    FeatureState,
     LayerSpecification,
-    FilterSpecification} from '@maplibre/maplibre-gl-style-spec';
+    FilterSpecification,
+    VisibilitySpecification,
+    VisibilityExpression
+} from '@maplibre/maplibre-gl-style-spec';
 import type {TransitionParameters, PropertyValue} from './properties';
 import {type EvaluationParameters} from './evaluation_parameters';
 import type {CrossfadeParameters} from './evaluation_parameters';
@@ -24,20 +29,19 @@ import type {CustomLayerInterface} from './style_layer/custom_style_layer';
 import type {Map} from '../ui/map';
 import type {StyleSetterOptions} from './style';
 import {type mat4} from 'gl-matrix';
-import type {VectorTileFeature} from '@mapbox/vector-tile';
-
-const TRANSITION_SUFFIX = '-transition';
+import type {UnwrappedTileID} from '../tile/tile_id';
+import type {VectorTileFeatureLike} from '@maplibre/vt-pbf';
 
 export type QueryIntersectsFeatureParams = {
     /**
      * The geometry to check intersection with.
      * This geometry is in tile coordinates.
      */
-    queryGeometry: Array<Point>;
+    queryGeometry: Point[];
     /**
      * The feature to allow expression evaluation.
      */
-    feature: VectorTileFeature;
+    feature: VectorTileFeatureLike;
     /**
      * The feature state to allow expression evaluation.
      */
@@ -46,7 +50,7 @@ export type QueryIntersectsFeatureParams = {
      * The geometry of the feature.
      * This geometry is in tile coordinates.
      */
-    geometry: Array<Array<Point>>;
+    geometry: Point[][];
     /**
      * The current zoom level.
      */
@@ -64,7 +68,18 @@ export type QueryIntersectsFeatureParams = {
      * The pixel coordinates are relative to the center of the screen.
      */
     pixelPosMatrix: mat4;
+    /**
+     * The unwrapped tile ID for the tile being queried.
+     */
+    unwrappedTileID: UnwrappedTileID;
+    /**
+     * A function to get the elevation of a point in tile coordinates.
+     */
+    getElevation: undefined | ((x: number, y: number) => number);
 };
+
+const ERROR_PAINT_NOT_LAYOUT = ' is a PAINT property not a LAYOUT property. Use get/setPaintProperty instead?';
+const ERROR_LAYOUT_NOT_PAINT = ' is a LAYOUT property not a PAINT property. Use get/setLayoutProperty instead?';
 
 /**
  * A base class for style layers
@@ -78,7 +93,9 @@ export abstract class StyleLayer extends Evented {
     minzoom: number;
     maxzoom: number;
     filter: FilterSpecification | void;
-    visibility: 'visible' | 'none' | void;
+    visibility: VisibilitySpecification;
+    private _evaluatedVisibility: 'visible' | 'none' | void;
+
     _crossfadeParameters: CrossfadeParameters;
 
     _unevaluatedLayout: Layout<any>;
@@ -90,21 +107,28 @@ export abstract class StyleLayer extends Evented {
 
     _featureFilter: FeatureFilter;
 
+    _visibilityExpression: VisibilityExpression;
+
     readonly onAdd: ((map: Map) => void);
     readonly onRemove: ((map: Map) => void);
 
     queryRadius?(bucket: Bucket): number;
     queryIntersectsFeature?(params: QueryIntersectsFeatureParams): boolean | number;
+    createBucket?(parameters: BucketParameters<any>): Bucket;
+
+    private _globalState: Record<string, any>; // reference to global state
 
     constructor(layer: LayerSpecification | CustomLayerInterface, properties: Readonly<{
         layout?: Properties<any>;
         paint?: Properties<any>;
-    }>) {
+    }>, globalState: Record<string, any>) {
         super();
 
         this.id = layer.id;
         this.type = layer.type;
-        this._featureFilter = {filter: () => true, needGeometry: false};
+        this._globalState = globalState;
+        this._featureFilter = {filter: () => true, needGeometry: false, getGlobalStateRefs: () => new Set<string>()};
+        this._visibilityExpression = createVisibilityExpression(this.visibility, globalState);
 
         if (layer.type === 'custom') return;
 
@@ -118,14 +142,15 @@ export abstract class StyleLayer extends Evented {
             this.source = layer.source;
             this.sourceLayer = layer['source-layer'];
             this.filter = layer.filter;
+            this._featureFilter = featureFilter(layer.filter, globalState);
         }
 
         if (properties.layout) {
-            this._unevaluatedLayout = new Layout(properties.layout);
+            this._unevaluatedLayout = new Layout(properties.layout, globalState);
         }
 
         if (properties.paint) {
-            this._transitionablePaint = new Transitionable(properties.paint);
+            this._transitionablePaint = new Transitionable(properties.paint, globalState);
 
             for (const property in layer.paint) {
                 this.setPaintProperty(property, layer.paint[property], {validate: false});
@@ -140,6 +165,11 @@ export abstract class StyleLayer extends Evented {
         }
     }
 
+    setFilter(filter: FilterSpecification | void) {
+        this.filter = filter;
+        this._featureFilter = featureFilter(filter, this._globalState);
+    }
+
     getCrossfadeParameters() {
         return this._crossfadeParameters;
     }
@@ -148,41 +178,115 @@ export abstract class StyleLayer extends Evented {
         if (name === 'visibility') {
             return this.visibility;
         }
-
+        if (this._transitionablePaint?.hasProperty(name)) {
+            throw new Error(name + ERROR_PAINT_NOT_LAYOUT);
+        }
+        if (!this._unevaluatedLayout) {
+            throw new Error(`Cannot get layout property "${name}" on layer type "${this.type}" which has no layout properties.`);
+        }
         return this._unevaluatedLayout.getValue(name);
     }
 
-    setLayoutProperty(name: string, value: any, options: StyleSetterOptions = {}) {
-        if (value !== null && value !== undefined) {
-            const key = `layers.${this.id}.layout.${name}`;
-            if (this._validate(validateLayoutProperty, key, name, value, options)) {
-                return;
+    /**
+     * Get list of global state references that are used within layout or filter properties.
+     * This is used to determine if layer source need to be reloaded when global state property changes.
+     *
+     */
+    getLayoutAffectingGlobalStateRefs(): Set<string> {
+        const globalStateRefs = new Set<string>();
+
+        for (const globalStateRef of this._visibilityExpression.getGlobalStateRefs()) {
+            globalStateRefs.add(globalStateRef);
+        }
+
+        if (this._unevaluatedLayout) {
+            for (const propertyName in this._unevaluatedLayout._values) {
+                const value = this._unevaluatedLayout._values[propertyName];
+
+                for (const globalStateRef of value.getGlobalStateRefs()) {
+                    globalStateRefs.add(globalStateRef);
+                }
             }
         }
 
+        for (const globalStateRef of this._featureFilter.getGlobalStateRefs()) {
+            globalStateRefs.add(globalStateRef);
+        }
+
+        return globalStateRefs;
+    }
+
+    /**
+     * Get list of global state references that are used within paint properties.
+     * This is used to determine if layer needs to be repainted when global state property changes.
+     *
+     */
+    getPaintAffectingGlobalStateRefs(): globalThis.Map<string, Array<{name: string; value: any}>> {
+        const globalStateRefs = new globalThis.Map<string, Array<{name: string; value: any}>>();
+
+        if (this._transitionablePaint) {
+            for (const propertyName in this._transitionablePaint._values) {
+                const value = this._transitionablePaint._values[propertyName].value;
+
+                for (const globalStateRef of value.getGlobalStateRefs()) {
+                    const properties = globalStateRefs.get(globalStateRef) ?? [];
+                    properties.push({name: propertyName, value: value.value});
+                    globalStateRefs.set(globalStateRef, properties);
+                }
+            }
+        }
+
+        return globalStateRefs;
+    }
+
+    /**
+     * Get list of global state references that are used within visibility expression.
+     * This is used to determine if layer visibility needs to be updated when global state property changes.
+     */
+    getVisibilityAffectingGlobalStateRefs() {
+        return this._visibilityExpression.getGlobalStateRefs();
+    }
+
+    setLayoutProperty(name: string, value: any, options: StyleSetterOptions = {}) {
         if (name === 'visibility') {
             this.visibility = value;
+            this._visibilityExpression.setValue(value);
+            this.recalculateVisibility();
             return;
         }
+
+        if (this._transitionablePaint?.hasProperty(name)) {
+            this.fire(new ErrorEvent(new Error(name + ERROR_PAINT_NOT_LAYOUT)));
+            return;
+        }
+
+        if (value !== null && value !== undefined && this._validate(validateLayoutProperty, `layers.${this.id}.layout.${name}`, name, value, options))  return;
 
         this._unevaluatedLayout.setValue(name, value);
     }
 
     getPaintProperty(name: string) {
         if (name.endsWith(TRANSITION_SUFFIX)) {
-            return this._transitionablePaint.getTransition(name.slice(0, -TRANSITION_SUFFIX.length));
+            const baseName = name.slice(0, -TRANSITION_SUFFIX.length);
+            if (baseName === 'visibility' || this._unevaluatedLayout?.hasProperty(baseName)) {
+                throw new Error(name + ERROR_LAYOUT_NOT_PAINT);
+            }
+            return this._transitionablePaint.getTransition(baseName);
         } else {
+            if (name === 'visibility' || this._unevaluatedLayout?.hasProperty(name)) {
+                throw new Error(name + ERROR_LAYOUT_NOT_PAINT);
+            }
             return this._transitionablePaint.getValue(name);
         }
     }
 
     setPaintProperty(name: string, value: unknown, options: StyleSetterOptions = {}) {
-        if (value !== null && value !== undefined) {
-            const key = `layers.${this.id}.paint.${name}`;
-            if (this._validate(validatePaintProperty, key, name, value, options)) {
-                return false;
-            }
+        if (name === 'visibility' || (this._unevaluatedLayout?.hasProperty(name))) {
+            this.fire(new ErrorEvent(new Error(name + ERROR_LAYOUT_NOT_PAINT)));
+            return false;
         }
+
+        if (value !== null && value !== undefined && this._validate(validatePaintProperty, `layers.${this.id}.paint.${name}`, name, value, options)) return false;
 
         if (name.endsWith(TRANSITION_SUFFIX)) {
             this._transitionablePaint.setTransition(name.slice(0, -TRANSITION_SUFFIX.length), (value as any) || undefined);
@@ -201,7 +305,7 @@ export abstract class StyleLayer extends Evented {
 
             // if a cross-faded value is changed, we need to make sure the new icons get added to each tile's iconAtlas
             // so a call to _updateLayer is necessary, and we return true from this function so it gets called in
-            // Style#setPaintProperty
+            // Style.setPaintProperty
             return isDataDriven || wasDataDriven || isCrossFadedProperty || this._handleOverridablePaintPropertyUpdate(name, oldValue, newValue);
         }
     }
@@ -216,10 +320,10 @@ export abstract class StyleLayer extends Evented {
         return false;
     }
 
-    isHidden(zoom: number) {
-        if (this.minzoom && zoom < this.minzoom) return true;
+    isHidden(zoom: number = this.minzoom, roundMinZoom: boolean = false) {
+        if (this.minzoom && zoom < (roundMinZoom ? Math.floor(this.minzoom) : this.minzoom)) return true;
         if (this.maxzoom && zoom >= this.maxzoom) return true;
-        return this.visibility === 'none';
+        return this._evaluatedVisibility === 'none';
     }
 
     updateTransitions(parameters: TransitionParameters) {
@@ -230,7 +334,11 @@ export abstract class StyleLayer extends Evented {
         return this._transitioningPaint.hasTransition();
     }
 
-    recalculate(parameters: EvaluationParameters, availableImages: Array<string>) {
+    recalculateVisibility() {
+        this._evaluatedVisibility = this._visibilityExpression.evaluate();
+    }
+
+    recalculate(parameters: EvaluationParameters, availableImages: string[]) {
         if (parameters.getCrossfadeParameters) {
             this._crossfadeParameters = parameters.getCrossfadeParameters();
         }
@@ -252,12 +360,12 @@ export abstract class StyleLayer extends Evented {
             'minzoom': this.minzoom,
             'maxzoom': this.maxzoom,
             'filter': this.filter as FilterSpecification,
-            'layout': this._unevaluatedLayout && this._unevaluatedLayout.serialize(),
-            'paint': this._transitionablePaint && this._transitionablePaint.serialize()
+            'layout': this._unevaluatedLayout?.serialize(),
+            'paint': this._transitionablePaint?.serialize()
         };
 
         if (this.visibility) {
-            output.layout = output.layout || {};
+            output.layout ||= {};
             output.layout.visibility = this.visibility;
         }
 
@@ -269,7 +377,7 @@ export abstract class StyleLayer extends Evented {
     }
 
     _validate(validate: Function, key: string, name: string, value: unknown, options: StyleSetterOptions = {}) {
-        if (options && options.validate === false) {
+        if (options?.validate === false) {
             return false;
         }
         return emitValidationErrors(this, validate.call(validateStyle, {

@@ -4,7 +4,7 @@ import {createMap as globalCreateMap, beforeMapTest} from '../../util/test/util'
 import {NavigationControl} from './navigation_control';
 
 function createMap() {
-    return globalCreateMap({});
+    return globalCreateMap();
 }
 
 let map;
@@ -235,5 +235,17 @@ describe('NavigationControl', () => {
 
         expect(spySetPitch).toHaveBeenCalled();
         expect(spySetBearing).toHaveBeenCalled();
+    });
+
+    test('zoom buttons round to nearest zoomSnap if defined', () => {
+        map.setZoomSnap(1.0);
+        map.setZoom(9.7);
+        map.addControl(new NavigationControl());
+
+        const spy = vi.spyOn(map, 'zoomTo');
+        const zoomInButton = map.getContainer().querySelector('.mapmetricsgl-ctrl-zoom-in');
+        simulate.click(zoomInButton);
+
+        expect(spy).toHaveBeenCalledWith(11.0, expect.anything(), expect.anything());
     });
 });

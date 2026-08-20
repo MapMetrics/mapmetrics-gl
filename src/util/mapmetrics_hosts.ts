@@ -28,7 +28,7 @@
  * Deliberately NOT listed: `gateway.mapmetrics1.org` (does not resolve, appears in no
  * documentation, and was only ever named by two of the four old copies — an artefact, not a host).
  */
-export const MAPMETRICS_GATEWAY_HOSTS: ReadonlyArray<string> = [
+export const MAPMETRICS_GATEWAY_HOSTS: readonly string[] = [
     'gateway.mapmetrics-atlas.net',
     'gateway.mapmetrics.org'
 ];
@@ -40,7 +40,7 @@ export const MAPMETRICS_GATEWAY_HOSTS: ReadonlyArray<string> = [
  * non-wildcard CORS preflight for no benefit, and the callers that force credentials have always
  * carved them out.
  */
-const CREDENTIAL_EXEMPT_PATH_FRAGMENTS: ReadonlyArray<string> = [
+const CREDENTIAL_EXEMPT_PATH_FRAGMENTS: readonly string[] = [
     '/fonts/',
     '/basemaps-assets/fonts/',
     '/sprites/'
@@ -81,7 +81,7 @@ function hostnameOf(url: string): string | null {
  */
 export function isMapMetricsGatewayUrl(url: string): boolean {
     const host = hostnameOf(url);
-    return host !== null && MAPMETRICS_GATEWAY_HOSTS.indexOf(host) !== -1;
+    return host !== null && MAPMETRICS_GATEWAY_HOSTS.includes(host);
 }
 
 /**

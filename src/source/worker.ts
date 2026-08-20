@@ -7,6 +7,8 @@ import {GeoJSONWorkerSource, type LoadGeoJSONParameters} from './geojson_worker_
 import {isWorker} from '../util/util';
 import {shouldForceGatewayCredentials} from '../util/mapmetrics_hosts';
 import {addProtocol, removeProtocol} from './protocol_crud';
+import {makeRequest} from '../util/ajax';
+
 import {type PluginState} from './rtl_text_plugin_status';
 import type {
     WorkerSource,
@@ -15,7 +17,6 @@ import type {
     WorkerDEMTileParameters,
     TileParameters
 } from '../source/worker_source';
-
 import type {WorkerGlobalScopeInterface} from '../util/web_worker';
 import type {LayerSpecification} from '@maplibre/maplibre-gl-style-spec';
 import {
@@ -23,8 +24,36 @@ import {
     type ClusterIDAndSource,
     type GetClusterLeavesParams,
     type RemoveSourceParams,
-    type UpdateLayersParamaeters
+    type UpdateLayersParameters
 } from '../util/actor_messages';
+
+/**
+ * Force gateway credentials and the protobuf Accept header onto a worker-thread tile request.
+ *
+ * Worker-thread fetches do not go through the main thread's `RequestManager`, so without this the
+ * cookie is never sent and every legacy-path tile 401s or bills as anonymous -- silently. Fonts and
+ * sprites are excluded by {@link shouldForceGatewayCredentials}, because forcing credentials onto
+ * those breaks CORS and blanks the map.
+ *
+ * Called from BOTH the `loadTile` and `reloadTile` handlers. Dropping either call site produces
+ * identical, silent over-billing, which is why this is one shared helper rather than two copies
+ * that can drift apart.
+ *
+ * @param params - the worker tile parameters, mutated in place
+ */
+function forceGatewayTileRequest(params: WorkerTileParameters) {
+    if (!params.request || !shouldForceGatewayCredentials(params.request.url)) return;
+    params.request.credentials = 'include';
+    params.request.headers = {
+        ...params.request.headers,
+        'Accept': 'application/x-protobuf'
+    };
+    // Selects how the response body is PARSED (as an ArrayBuffer). It does NOT force
+    // XMLHttpRequest -- an older comment here claimed that and was never true, in v5.2.0 or
+    // v5.24.0: `makeRequest` prefers `fetch` whenever fetch/Request/AbortController exist,
+    // regardless of `type`. Transport selection happens in `makeRequest` itself.
+    params.request.type = 'arrayBuffer';
+}
 
 /**
  * The Worker class responsible for background thread related execution
@@ -33,7 +62,7 @@ export default class Worker {
     self: WorkerGlobalScopeInterface & ActorTarget;
     actor: Actor;
     layerIndexes: {[_: string]: StyleLayerIndex};
-    availableImages: {[_: string]: Array<string>};
+    availableImages: {[_: string]: string[]};
     externalWorkerSourceTypes: { [_: string]: WorkerSourceConstructor };
     /**
      * This holds a cache for the already created worker source instances.
@@ -60,6 +89,7 @@ export default class Worker {
         };
     };
     referrer: string;
+    globalStates: Map<string, Record<string, any>>;
 
     constructor(self: WorkerGlobalScopeInterface & ActorTarget) {
         this.self = self;
@@ -71,6 +101,8 @@ export default class Worker {
         this.workerSources = {};
         this.demWorkerSources = {};
         this.externalWorkerSourceTypes = {};
+
+        this.globalStates = new Map<string, Record<string, any>>();
 
         this.self.registerWorkerSource = (name: string, WorkerSource: WorkerSourceConstructor) => {
             if (this.externalWorkerSourceTypes[name]) {
@@ -84,9 +116,10 @@ export default class Worker {
 
         // This is invoked by the RTL text plugin when the download via the `importScripts` call has finished, and the code has been parsed.
         this.self.registerRTLTextPlugin = (rtlTextPlugin: RTLTextPlugin) => {
-
             rtlWorkerPlugin.setMethods(rtlTextPlugin);
         };
+
+        this.self.makeRequest = makeRequest;
 
         this.actor.registerMessageHandler(MessageType.loadDEMTile, (mapId: string, params: WorkerDEMTileParameters) => {
             return this._getDEMWorkerSource(mapId, params.source).loadTile(params);
@@ -112,35 +145,16 @@ export default class Worker {
             return (this._getWorkerSource(mapId, params.type, params.source) as GeoJSONWorkerSource).loadData(params);
         });
 
-        this.actor.registerMessageHandler(MessageType.getData, (mapId: string, params: LoadGeoJSONParameters) => {
-            return (this._getWorkerSource(mapId, params.type, params.source) as GeoJSONWorkerSource).getData();
-        });
-
+        // NOT made redundant by upstream #7451. That PR assigns `self.makeRequest` so third-party
+        // worker code (custom protocols, plugins) can issue requests; it says nothing about
+        // credentials, Accept headers or request type. Verified against v5.24.0 -- keep both halves.
         this.actor.registerMessageHandler(MessageType.loadTile, async (mapId: string, params: WorkerTileParameters) => {
-            // Ensure credentials and headers for MapMetrics gateway tile requests
-            if (params.request && shouldForceGatewayCredentials(params.request.url)) {
-                params.request.credentials = 'include';
-                params.request.headers = {
-                    ...params.request.headers,
-                    'Accept': 'application/x-protobuf'
-                };
-                // Force XMLHttpRequest for all requests to MapMetrics domains
-                params.request.type = 'arrayBuffer';
-            }
+            forceGatewayTileRequest(params);
             return this._getWorkerSource(mapId, params.type, params.source).loadTile(params);
         });
 
         this.actor.registerMessageHandler(MessageType.reloadTile, async (mapId: string, params: WorkerTileParameters) => {
-            // Ensure credentials and headers for MapMetrics gateway tile requests
-            if (params.request && shouldForceGatewayCredentials(params.request.url)) {
-                params.request.credentials = 'include';
-                params.request.headers = {
-                    ...params.request.headers,
-                    'Accept': 'application/x-protobuf'
-                };
-                // Force XMLHttpRequest for all requests to MapMetrics domains
-                params.request.type = 'arrayBuffer';
-            }
+            forceGatewayTileRequest(params);
             return this._getWorkerSource(mapId, params.type, params.source).reloadTile(params);
         });
 
@@ -153,9 +167,7 @@ export default class Worker {
         });
 
         this.actor.registerMessageHandler(MessageType.removeSource, async (mapId: string, params: RemoveSourceParams) => {
-            if (!this.workerSources[mapId] ||
-                !this.workerSources[mapId][params.type] ||
-                !this.workerSources[mapId][params.type][params.source]) {
+            if (!this.workerSources[mapId]?.[params.type]?.[params.source]) {
                 return;
             }
 
@@ -172,6 +184,7 @@ export default class Worker {
             delete this.availableImages[mapId];
             delete this.workerSources[mapId];
             delete this.demWorkerSources[mapId];
+            this.globalStates.delete(mapId);
         });
 
         this.actor.registerMessageHandler(MessageType.setReferrer, async (_mapId: string, params: string) => {
@@ -190,16 +203,32 @@ export default class Worker {
             return this._setImages(mapId, params);
         });
 
-        this.actor.registerMessageHandler(MessageType.updateLayers, async (mapId: string, params: UpdateLayersParamaeters) => {
-            this._getLayerIndex(mapId).update(params.layers, params.removedIds);
+        this.actor.registerMessageHandler(MessageType.updateLayers, async (mapId: string, params: UpdateLayersParameters) => {
+            this._getLayerIndex(mapId).update(params.layers, params.removedIds, this._getGlobalState(mapId));
         });
 
-        this.actor.registerMessageHandler(MessageType.setLayers, async (mapId: string, params: Array<LayerSpecification>) => {
-            this._getLayerIndex(mapId).replace(params);
+        this.actor.registerMessageHandler(MessageType.updateGlobalState, async (mapId: string, params: Record<string, any>) => {
+            const globalState = this._getGlobalState(mapId);
+            for (const key in params) {
+                globalState[key] = params[key];
+            }
+        });
+
+        this.actor.registerMessageHandler(MessageType.setLayers, async (mapId: string, params: LayerSpecification[]) => {
+            this._getLayerIndex(mapId).replace(params, this._getGlobalState(mapId));
         });
     }
 
-    private async _setImages(mapId: string, images: Array<string>): Promise<void> {
+    private _getGlobalState(mapId: string): Record<string, any> {
+        let state = this.globalStates.get(mapId);
+        if (!state) {
+            state = {};
+            this.globalStates.set(mapId, state);
+        }
+        return state;
+    }
+
+    private async _setImages(mapId: string, images: string[]): Promise<void> {
         this.availableImages[mapId] = images;
         for (const workerSource in this.workerSources[mapId]) {
             const ws = this.workerSources[mapId][workerSource];
@@ -210,25 +239,20 @@ export default class Worker {
     }
 
     private async _syncRTLPluginState(mapId: string, incomingState: PluginState): Promise<PluginState> {
-        const state = await rtlWorkerPlugin.syncState(incomingState, this.self.importScripts);
-        return state;
+        return await rtlWorkerPlugin.syncState(incomingState, this.self.importScripts);
     }
 
     private _getAvailableImages(mapId: string) {
         let availableImages = this.availableImages[mapId];
 
-        if (!availableImages) {
-            availableImages = [];
-        }
+        availableImages ||= [];
 
         return availableImages;
     }
 
     private _getLayerIndex(mapId: string) {
         let layerIndexes = this.layerIndexes[mapId];
-        if (!layerIndexes) {
-            layerIndexes = this.layerIndexes[mapId] = new StyleLayerIndex();
-        }
+        layerIndexes ||= this.layerIndexes[mapId] = new StyleLayerIndex();
         return layerIndexes;
     }
 
@@ -240,10 +264,8 @@ export default class Worker {
      * @returns a new instance or a cached one
      */
     private _getWorkerSource(mapId: string, sourceType: string, sourceName: string): WorkerSource {
-        if (!this.workerSources[mapId])
-            this.workerSources[mapId] = {};
-        if (!this.workerSources[mapId][sourceType])
-            this.workerSources[mapId][sourceType] = {};
+        this.workerSources[mapId] ||= {};
+        this.workerSources[mapId][sourceType] ||= {};
 
         if (!this.workerSources[mapId][sourceType][sourceName]) {
             // use a wrapped actor so that we can attach a target mapId param
@@ -277,12 +299,8 @@ export default class Worker {
      * @returns a new instance or a cached one
      */
     private _getDEMWorkerSource(mapId: string, sourceType: string) {
-        if (!this.demWorkerSources[mapId])
-            this.demWorkerSources[mapId] = {};
-
-        if (!this.demWorkerSources[mapId][sourceType]) {
-            this.demWorkerSources[mapId][sourceType] = new RasterDEMTileWorkerSource();
-        }
+        this.demWorkerSources[mapId] ||= {};
+        this.demWorkerSources[mapId][sourceType] ||= new RasterDEMTileWorkerSource();
 
         return this.demWorkerSources[mapId][sourceType];
     }

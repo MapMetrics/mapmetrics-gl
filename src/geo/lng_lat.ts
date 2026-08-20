@@ -28,6 +28,26 @@ export type LngLatLike = LngLat | {
     lat: number;
 } | [number, number];
 
+/**
+ * A `LngLat` object represents a given longitude and latitude coordinate, measured in degrees.
+ * These coordinates are based on the [WGS84 (EPSG:4326) standard](https://en.wikipedia.org/wiki/World_Geodetic_System#WGS84).
+ *
+ * Mapmetrics GL JS uses longitude, latitude coordinate order (as opposed to latitude, longitude) to match the
+ * [GeoJSON specification](https://tools.ietf.org/html/rfc7946).
+ *
+ * Note that any Mapmetrics GL JS method that accepts a `LngLat` object as an argument or option
+ * can also accept an `Array` of two numbers and will perform an implicit conversion.
+ * This flexible type is documented as {@link LngLatLike}.
+ *
+ * @group Geography and Geometry
+ *
+ * @example
+ * ```ts
+ * let ll = new LngLat(-123.9749, 40.7736);
+ * ll.lng; // = -123.9749
+ * ```
+ * @see [Get coordinates of the mouse pointer](https://maplibre.org/maplibre-gl-js/docs/examples/get-coordinates-of-the-mouse-pointer/)
+ */
 export class LngLat {
     /**
      * Longitude, measured in degrees.
@@ -116,8 +136,7 @@ export class LngLat {
         const lat2 = lngLat.lat * rad;
         const a = Math.sin(lat1) * Math.sin(lat2) + Math.cos(lat1) * Math.cos(lat2) * Math.cos((lngLat.lng - this.lng) * rad);
 
-        const maxMeters = earthRadius * Math.acos(Math.min(a, 1));
-        return maxMeters;
+        return earthRadius * Math.acos(Math.min(a, 1));
     }
 
     /**

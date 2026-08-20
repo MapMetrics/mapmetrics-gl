@@ -5,9 +5,9 @@ import {getPreset} from '../shared/schema-presets';
 const MAX_HTML_BYTES = 50 * 1024; // 50KB hard cap
 const DEFAULT_FEATURE_LIMIT = 50;
 
-export interface NoscriptOptions {
+export type NoscriptOptions = {
     featureLimit?: number;
-}
+};
 
 /**
  * Escape HTML entities to prevent XSS in generated noscript content.

@@ -1,5 +1,5 @@
 function rewind(gj: any, outer: boolean): any {
-    const type = gj && gj.type;
+    const type = gj?.type;
     let i;
 
     if (type === 'FeatureCollection') {

@@ -7,7 +7,7 @@
   },
   "zoom": 4,
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "geojson",
       "data": {
         "type": "FeatureCollection",
@@ -45,7 +45,7 @@
     {
       "id": "literal",
       "type": "symbol",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "layout": {
         "symbol-placement": "line",
         "text-field": "abcde\nabcde",

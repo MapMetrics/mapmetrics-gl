@@ -31,7 +31,7 @@ function normalizeToFeatureCollection(
 
     const allFeatures: Feature[] = [];
     for (const fc of Object.values(geojson as Record<string, FeatureCollection>)) {
-        if (fc && fc.features) {
+        if (fc?.features) {
             allFeatures.push(...fc.features);
         }
     }

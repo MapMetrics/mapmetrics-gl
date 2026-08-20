@@ -14,7 +14,7 @@ function createMap(logoPosition, mapmetricsLogo) {
         }
     };
 
-    return globalCreateMap(mapobj, undefined);
+    return globalCreateMap(mapobj);
 }
 
 beforeEach(() => {
@@ -30,41 +30,35 @@ describe('LogoControl', () => {
         )).toHaveLength(0);
     });
 
-    test('is not displayed when the mapmetricsLogo property is false', () => new Promise<void>(done => {
+    test('is not displayed when the mapmetricsLogo property is false', async () => {
         const map = createMap(undefined, false);
-        map.on('load', () => {
-            expect(map.getContainer().querySelectorAll(
-                '.mapmetricsgl-ctrl-logo'
-            )).toHaveLength(0);
-            done();
-        });
-    }));
+        await map.once('load');
+        expect(map.getContainer().querySelectorAll(
+            '.mapmetricsgl-ctrl-logo'
+        )).toHaveLength(0);
+    });
 
-    test('appears in bottom-left when mapmetricsLogo is true and logoPosition is undefined', () => new Promise<void>(done => {
+    test('appears in bottom-left when mapmetricsLogo is true and logoPosition is undefined', async () => {
         const map = createMap(undefined, true);
-        map.on('load', () => {
-            expect(map.getContainer().querySelectorAll(
-                '.mapmetricsgl-ctrl-bottom-left .mapmetricsgl-ctrl-logo'
-            )).toHaveLength(1);
-            done();
-        });
-    }));
+        await map.once('load');
+        expect(map.getContainer().querySelectorAll(
+            '.mapmetricsgl-ctrl-bottom-left .mapmetricsgl-ctrl-logo'
+        )).toHaveLength(1);
+    });
 
-    test('appears in the position specified by the position option', () => new Promise<void>(done => {
+    test('appears in the position specified by the position option', async () => {
         const map = createMap('top-left', true);
-        map.on('load', () => {
-            expect(map.getContainer().querySelectorAll(
-                '.mapmetricsgl-ctrl-top-left .mapmetricsgl-ctrl-logo'
-            )).toHaveLength(1);
-            done();
-        });
-    }));
+        await map.once('load');
+        expect(map.getContainer().querySelectorAll(
+            '.mapmetricsgl-ctrl-top-left .mapmetricsgl-ctrl-logo'
+        )).toHaveLength(1);
+    });
 
     /**
      * MapMetrics fork behaviour: unlike upstream MapLibre, the logo does NOT collapse to
      * compact automatically on narrow (under 640px) containers - see `_updateCompact` in
-     * `logo_control.ts`, which only applies `mapmetricsgl-compact` when `compact: true`
-     * was explicitly requested. This keeps the brand mark at a fixed 180px on mobile.
+     * `logo_control.ts`, which only applies `mapmetricsgl-compact` when `compact: true` was
+     * explicitly requested. This keeps the brand mark at a fixed 180px on mobile.
      */
     test('does not collapse to compact on narrow containers (fork behaviour)', () => {
         const map = createMap(undefined, true);
@@ -98,14 +92,12 @@ describe('LogoControl', () => {
         ).toHaveLength(1);
     });
 
-    test('has `rel` noopener and nofollow', () => new Promise<void>(done => {
+    test('has `rel` noopener and nofollow', async () => {
         const map = createMap(undefined, true);
 
-        map.on('load', () => {
-            const container = map.getContainer();
-            const logo = container.querySelector('.mapmetricsgl-ctrl-logo');
-            expect(logo).toHaveProperty('rel', 'noopener nofollow');
-            done();
-        });
-    }));
+        await map.once('load');
+        const container = map.getContainer();
+        const logo = container.querySelector('.mapmetricsgl-ctrl-logo');
+        expect(logo).toHaveProperty('rel', 'noopener nofollow');
+    });
 });

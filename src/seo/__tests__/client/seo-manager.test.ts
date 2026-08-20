@@ -7,7 +7,7 @@ import type {SeoConfig} from '../../shared/types';
  * required by SeoManager.
  */
 function createMockMap() {
-    const listeners: Record<string, ((...args: unknown[]) => void)[]> = {};
+    const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
 
     const container = document.createElement('div');
     container.id = 'mock-map-container';
@@ -15,13 +15,11 @@ function createMockMap() {
 
     const map = {
         on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-            if (!listeners[event]) listeners[event] = [];
+            listeners[event] ||= [];
             listeners[event].push(handler);
         }),
         off: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-            if (listeners[event]) {
-                listeners[event] = listeners[event].filter((h) => h !== handler);
-            }
+            listeners[event] &&= listeners[event].filter((h) => h !== handler);
         }),
         getCenter: vi.fn(() => ({lng: 4.8832, lat: 52.3742})),
         getBounds: vi.fn(() => ({
@@ -81,7 +79,7 @@ describe('SeoManager', () => {
 
     afterEach(() => {
         // Clean up any injected DOM elements
-        document.querySelectorAll('.mapmetrics-seo-jsonld, .mapmetrics-seo-noscript').forEach((el) => el.remove());
+        for (const el of document.querySelectorAll('.mapmetrics-seo-jsonld, .mapmetrics-seo-noscript')) el.remove();
         mockMap._cleanup();
     });
 

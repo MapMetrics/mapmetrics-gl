@@ -3,8 +3,8 @@
   "metadata": {
     "test": {
       "operations": [
-        ["addLayer", {"id": "maplibre", "type": "background"}],
-        ["removeLayer", "maplibre"],
+        ["addLayer", {"id": "mapmetrics", "type": "background"}],
+        ["removeLayer", "mapmetrics"],
         ["wait"]
       ]
     }

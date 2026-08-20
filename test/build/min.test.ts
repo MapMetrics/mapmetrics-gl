@@ -1,6 +1,8 @@
 import {describe, test, expect} from 'vitest';
 import fs from 'fs';
+import path from 'path';
 import packageJson from '../../package.json' assert {type: 'json'};
+import bundleSize from './bundle_size.json' assert {type: 'json'};
 
 const minBundle = fs.readFileSync('dist/mapmetrics-gl.js', 'utf8');
 
@@ -37,17 +39,14 @@ describe('test min build', () => {
         // need to make sure not a big bug that resulted in a big loss.
         const decreaseQuota = 4096;
 
-        // feel free to update this value after you've checked that it has changed on purpose :-)
-        //
-        // 950004 measured 2026-08 with terser re-enabled in build/rollup_plugins.ts. The
-        // previous value (911111) was inherited from upstream MapLibre and had never been
-        // met by this fork: with minification off the bundle was 2565907 bytes and this
-        // assertion simply failed on every branch. The fork's own additions (map-session
-        // auth, tile loading manager, grid overlays, seo/client) account for the delta
-        // against upstream's ~0.87 MB.
-        const expectedBytes = 950004;
+        let expectedBytes = bundleSize;
 
-        expect(actualBytes).toBeLessThan(expectedBytes + increaseQuota);
+        if (process.env.UPDATE) {
+            expectedBytes = actualBytes;
+            fs.writeFileSync(path.resolve(__dirname, './bundle_size.json'), `${expectedBytes}\n`);
+        }
+
+        expect(actualBytes, `Consider changing bundle_size.json to ${actualBytes} by running: UPDATE=true npm run test-build -- min.test.ts`).toBeLessThan(expectedBytes + increaseQuota);
         expect(actualBytes).toBeGreaterThan(expectedBytes - decreaseQuota);
     });
 });

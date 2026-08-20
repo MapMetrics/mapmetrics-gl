@@ -229,7 +229,7 @@ export class SeoManager {
 
         // Auto-discover geojson sources from the map style
         const style = this._map.getStyle();
-        if (!style || !style.sources) {
+        if (!style?.sources) {
             return [];
         }
 
@@ -242,7 +242,7 @@ export class SeoManager {
      * Gets the schema type for a given source from the config's propertyMap.
      */
     private _getSchemaTypeForSource(sourceId: string): any {
-        if (this._config.propertyMap && this._config.propertyMap[sourceId]) {
+        if (this._config.propertyMap?.[sourceId]) {
             return this._config.propertyMap[sourceId].schemaType;
         }
         return undefined;

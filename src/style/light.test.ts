@@ -12,7 +12,7 @@ test('Light with defaults', () => {
     light.recalculate({zoom: 0, zoomHistory: {}} as EvaluationParameters);
 
     expect(light.properties.get('anchor')).toEqual(spec.anchor.default);
-    expect(light.properties.get('position')).toEqual(sphericalToCartesian(spec.position.default as any as [number, number, number]));
+    expect(light.properties.get('position')).toEqual(sphericalToCartesian(spec.position.default as [number, number, number]));
     expect(light.properties.get('intensity')).toEqual(spec.intensity.default);
     expect(light.properties.get('color')).toEqual(Color.parse(spec.color.default));
 });
@@ -42,7 +42,7 @@ test('Light with stops function', () => {
     expect(light.properties.get('intensity')).toBe(0.5);
 });
 
-test('Light#getLight', () => {
+test('Light.getLight', () => {
     const defaults = {};
     for (const key in spec) {
         defaults[key] = spec[key].default;
@@ -51,7 +51,7 @@ test('Light#getLight', () => {
     expect(new Light(defaults).getLight()).toEqual(defaults);
 });
 
-describe('Light#setLight', () => {
+describe('Light.setLight', () => {
     test('sets light', () => {
         const light = new Light({});
         light.setLight({color: 'red', 'color-transition': {duration: 3000}} as LightSpecification);

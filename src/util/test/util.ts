@@ -10,6 +10,8 @@ import {RequestManager} from '../request_manager';
 import {type IReadonlyTransform, type ITransform} from '../../geo/transform_interface';
 import {type Style} from '../../style/style';
 import {type Terrain} from '../../render/terrain';
+import {Frustum} from '../primitives/frustum';
+import {mat4} from 'gl-matrix';
 
 export class StubMap extends Evented {
     style: Style;
@@ -35,18 +37,18 @@ export class StubMap extends Evented {
     getTerrain() { return this._terrain; }
 
     migrateProjection(newTransform: ITransform) {
-        newTransform.apply(this.transform);
+        newTransform.apply(this.transform, true);
         this.transform = newTransform;
     }
 }
 
-export function createMap(options?, callback?) {
+export function createMap(options?) {
     const container = window.document.createElement('div');
     const defaultOptions = {
         container,
         interactive: false,
         attributionControl: false,
-        maplibreLogo: false,
+        mapmetricsLogo: false,
         trackResize: true,
         style: {
             'version': 8,
@@ -60,16 +62,11 @@ export function createMap(options?, callback?) {
 
     if (options?.deleteStyle) delete defaultOptions.style;
 
-    const map = new Map(extend(defaultOptions, options));
-    if (callback) map.on('load', () => {
-        callback(null, map);
-    });
-
-    return map;
+    return new Map(extend(defaultOptions, options));
 }
 
 export function equalWithPrecision(test, expected, actual, multiplier, message, extra) {
-    message = message || `should be equal to within ${multiplier}`;
+    message ||= `should be equal to within ${multiplier}`;
     const expectedRounded = Math.round(expected / multiplier) * multiplier;
     const actualRounded = Math.round(actual / multiplier) * multiplier;
 
@@ -100,11 +97,11 @@ export function setMatchMedia() {
 }
 
 function setResizeObserver() {
-    global.ResizeObserver = vi.fn().mockImplementation(() => ({
-        observe: vi.fn(),
-        unobserve: vi.fn(),
-        disconnect: vi.fn(),
-    }));
+    global.ResizeObserver = vi.fn(class {
+        observe = vi.fn();
+        unobserve = vi.fn();
+        disconnect = vi.fn();
+    });
 }
 
 export function beforeMapTest() {
@@ -127,25 +124,23 @@ export function beforeMapTest() {
 }
 
 export function getWrapDispatcher() {
-    const wrapDispatcher = (actor: IActor) => {
+    return (actor: IActor) => {
         return {
             getActor() {
                 return actor;
             }
         } as any as Dispatcher;
     };
-
-    return wrapDispatcher;
 }
 
 export function getMockDispatcher() {
     const wrapDispatcher = getWrapDispatcher();
 
-    const mockDispatcher = wrapDispatcher({
-        sendAsync() { return Promise.resolve({}); },
+    return wrapDispatcher({
+        sendAsync() {
+            return Promise.resolve({});
+        },
     });
-
-    return mockDispatcher;
 }
 
 export function stubAjaxGetImage(createImageBitmap) {
@@ -218,7 +213,7 @@ export function createStyle(): StyleSpecification {
     };
 }
 
-export function expectToBeCloseToArray(actual: Array<number>, expected: Array<number>, precision?: number) {
+export function expectToBeCloseToArray(actual: number[], expected: number[], precision?: number) {
     expect(actual).toHaveLength(expected.length);
     for (let i = 0; i < expected.length; i++) {
         expect(actual[i]).toBeCloseTo(expected[i], precision);
@@ -229,11 +224,12 @@ export function createTerrain(): Terrain {
     return {
         pointCoordinate: () => null,
         getElevationForLngLatZoom: () => 1000,
+        getElevationForLngLat: () => 1000,
         getMinTileElevationForLngLatZoom: () => 0,
         getFramebuffer: () => ({}),
         getCoordsTexture: () => ({}),
         depthAtPoint: () => .9,
-        sourceCache: {
+        tileManager: {
             update: () => {},
             getRenderableTiles: () => [],
             anyTilesAfterTime: () => false
@@ -253,4 +249,30 @@ export function createFramebuffer() {
         },
         destroy: () => {}
     };
+}
+
+export function waitForEvent(evented: Evented, eventName: string, predicate: (e: any) => boolean): Promise<any> {
+    return new Promise((resolve) => {
+        const listener = (e: Event) => {
+            if (predicate(e)) {
+                resolve(e);
+            }
+        };
+        evented.on(eventName, listener);
+    });
+}
+
+export function createTestCameraFrustum(fovy: number, aspectRatio: number, zNear: number, zFar: number, elevation: number, rotation: number): Frustum {
+    const proj = new Float64Array(16) as any as mat4;
+    const invProj = new Float64Array(16) as any as mat4;
+
+    // Note that left handed coordinate space is used where z goes towards the sky.
+    // Y has to be flipped as well because it's part of the projection/camera matrix used in transform.js
+    mat4.perspective(proj, fovy, aspectRatio, zNear, zFar);
+    mat4.scale(proj, proj, [1, -1, 1]);
+    mat4.translate(proj, proj, [0, 0, elevation]);
+    mat4.rotateZ(proj, proj, rotation);
+    mat4.invert(invProj, proj);
+
+    return Frustum.fromInvProjectionMatrix(invProj, 1.0, 0.0);
 }

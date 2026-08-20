@@ -3,10 +3,10 @@
  * for schema.org linked data.
  */
 
-export interface EntityLinks {
+export type EntityLinks = {
     sameAs: string[];
     identifier?: Record<string, unknown>;
-}
+};
 
 /**
  * Generates schema.org entity links from feature properties.

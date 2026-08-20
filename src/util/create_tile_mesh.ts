@@ -1,23 +1,81 @@
-import {type Context} from '../gl/context';
+import {type Context} from '../webgl/context';
 import {Mesh} from '../render/mesh';
 import {PosArray, TriangleIndexArray} from '../data/array_types.g';
 import {SegmentVector} from '../data/segment';
 import {NORTH_POLE_Y, SOUTH_POLE_Y} from '../render/subdivision';
 import {EXTENT} from '../data/extent';
 import posAttributes from '../data/pos_attributes';
+
+/**
+ * The size of border region for stencil masks, in internal tile coordinates.
+ * Used for globe rendering.
+ */
 const EXTENT_STENCIL_BORDER = EXTENT / 128;
+
+/**
+ * Options for generating a tile mesh.
+ * Can optionally configure any of the following:
+ * - mesh subdivision granularity
+ * - border presence
+ * - special geometry for the north and/or south pole
+ */
 export type CreateTileMeshOptions = {
+    /**
+     * Specifies how much should the tile mesh be subdivided.
+     * A value of 1 leads to a simple quad, a value of 4 will result in a grid of 4x4 quads.
+     */
     granularity?: number;
+    /**
+     * When true, an additional ring of quads is generated along the border, always extending `EXTENT_STENCIL_BORDER` units away from the main mesh.
+     */
     generateBorders?: boolean;
+    /**
+     * When true, additional geometry is generated along the north edge of the mesh, connecting it to the pole special vertex position.
+     * This geometry replaces the mesh border along this edge, if one is present.
+     */
     extendToNorthPole?: boolean;
+    /**
+     * When true, additional geometry is generated along the south edge of the mesh, connecting it to the pole special vertex position.
+     * This geometry replaces the mesh border along this edge, if one is present.
+     */
     extendToSouthPole?: boolean;
 };
+
+/**
+ * Stores the prepared vertex and index buffer bytes for a mesh.
+ */
 export type TileMesh = {
+    /**
+     * The vertex data. Each vertex is two 16 bit signed integers, one for X, one for Y.
+     */
     vertices: ArrayBuffer;
+    /**
+     * The index data. Each triangle is defined by three indices. The indices may either be 16 bit or 32 bit unsigned integers,
+     * depending on the mesh creation arguments and on whether the mesh can fit into 16 bit indices.
+     */
     indices: ArrayBuffer;
+    /**
+     * A helper boolean indicating whether the indices are 32 bit.
+     */
     uses32bitIndices: boolean;
 };
+
+/**
+ * Describes desired type of vertex indices, either 16 bit uint, 32 bit uint, or, if undefined, any of the two options.
+ */
 export type IndicesType = '32bit' | '16bit' | undefined;
+
+/**
+ * @internal
+ * Creates a mesh of a quad that covers the entire tile (covering positions in range 0..EXTENT),
+ * is optionally subdivided into finer quads, optionally includes a border
+ * and optionally extends to the north and/or special pole vertices.
+ * Also allocates and populates WebGL buffers for the mesh.
+ * Forces 16 bit indices that are used throughout Mapmetrics.
+ * @param context - The WebGL context wrapper.
+ * @param options - Specify options for tile mesh creation such as granularity or border.
+ * @returns The mesh vertices and indices, already allocated and uploaded into WebGL buffers.
+ */
 export function createTileMeshWithBuffers(context: Context, options: CreateTileMeshOptions): Mesh {
     const tileMesh = createTileMesh(options, '16bit');
     const vertices = PosArray.deserialize({
@@ -28,15 +86,36 @@ export function createTileMeshWithBuffers(context: Context, options: CreateTileM
         arrayBuffer: tileMesh.indices,
         length: tileMesh.indices.byteLength / 2 / 3, // Three values per triangle, 16 bit
     });
-    const mesh = new Mesh(
+    return new Mesh(
         context.createVertexBuffer(vertices, posAttributes.members),
         context.createIndexBuffer(indices),
         SegmentVector.simpleSegment(0, 0, vertices.length, indices.length)
     );
-
-    return mesh;
 }
+
+/**
+ * Creates a mesh of a quad that covers the entire tile (covering positions in range 0..EXTENT),
+ * is optionally subdivided into finer quads, optionally includes a border
+ * and optionally extends to the north and/or special pole vertices.
+ * Additionally the resulting mesh indices type can be specified using `forceIndicesSize`.
+ * @example
+ * ```
+ * // Creating a mesh for a tile that can be used for raster layers, hillshade, etc.
+ * const meshBuffers = createTileMesh({
+ *     granularity: map.style.projection.subdivisionGranularity.tile.getGranularityForZoomLevel(tileID.z),
+ *     generateBorders: true,
+ *     extendToNorthPole: tileID.y === 0,
+ *     extendToSouthPole: tileID.y === (1 << tileID.z) - 1,
+ * }, '16bit');
+ * ```
+ * @see [Add a custom layer with tiles to a globe](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-custom-layer-with-tiles-to-a-globe/)
+ * @param options - Specify options for tile mesh creation such as granularity or border.
+ * @param forceIndicesSize - Specifies what indices type to use. The values '32bit' and '16bit' force their respective indices size. If undefined, the mesh may use either size, and will pick 16 bit indices if possible. If '16bit' is specified and the mesh exceeds 65536 vertices, an exception is thrown.
+ * @returns Typed arrays of the mesh vertices and indices.
+ */
 export function createTileMesh(options: CreateTileMeshOptions, forceIndicesSize?: IndicesType): TileMesh {
+    // We only want to generate the north/south border if the tile
+    // does NOT border the north/south edge of the mercator range.
     const granularity = options.granularity !== undefined ? Math.max(options.granularity, 1) : 1;
 
     const quadsPerAxisX = granularity + (options.generateBorders ? 2 : 0); // two extra quads for border

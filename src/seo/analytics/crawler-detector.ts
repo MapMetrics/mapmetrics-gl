@@ -1,8 +1,8 @@
-interface CrawlerResult {
+type CrawlerResult = {
     isBot: boolean;
     botName?: string;
     type?: 'training' | 'search';
-}
+};
 
 const AI_CRAWLERS: Array<{pattern: string; name: string; type: 'training' | 'search'}> = [
     {pattern: 'GPTBot', name: 'GPTBot', type: 'training'},

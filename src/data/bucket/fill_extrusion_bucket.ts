@@ -5,8 +5,7 @@ import {type Segment, SegmentVector} from '../segment';
 import {ProgramConfigurationSet} from '../program_configuration';
 import {TriangleIndexArray} from '../index_array_type';
 import {EXTENT} from '../extent';
-import mvt from '@mapbox/vector-tile';
-const vectorTileFeatureTypes = mvt.VectorTileFeature.types;
+import {VectorTileFeature} from '@mapbox/vector-tile';
 import {classifyRings} from '@maplibre/maplibre-gl-style-spec';
 const EARCUT_MAX_RINGS = 500;
 import {register} from '../../util/web_worker_transfer';
@@ -15,7 +14,7 @@ import {loadGeometry} from '../load_geometry';
 import {toEvaluationFeature} from '../evaluation_feature';
 import {EvaluationParameters} from '../../style/evaluation_parameters';
 
-import type {CanonicalTileID} from '../../source/tile_id';
+import type {CanonicalTileID} from '../../tile/tile_id';
 import type {
     Bucket,
     BucketParameters,
@@ -25,16 +24,16 @@ import type {
 } from '../bucket';
 
 import type {FillExtrusionStyleLayer} from '../../style/style_layer/fill_extrusion_style_layer';
-import type {Context} from '../../gl/context';
-import type {IndexBuffer} from '../../gl/index_buffer';
-import type {VertexBuffer} from '../../gl/vertex_buffer';
+import type {Context} from '../../webgl/context';
+import type {IndexBuffer} from '../../webgl/index_buffer';
+import type {VertexBuffer} from '../../webgl/vertex_buffer';
 import type Point from '@mapbox/point-geometry';
 import type {FeatureStates} from '../../source/source_state';
 import type {ImagePosition} from '../../render/image_atlas';
-import type {VectorTileLayer} from '@mapbox/vector-tile';
 import {subdividePolygon, subdivideVertexLine} from '../../render/subdivision';
 import type {SubdivisionGranularitySetting} from '../../render/subdivision_granularity_settings';
 import {fillLargeMeshArrays} from '../../render/fill_large_mesh_arrays';
+import type {VectorTileLayerLike} from '@maplibre/vt-pbf';
 
 const FACTOR = Math.pow(2, 13);
 
@@ -62,10 +61,10 @@ export class FillExtrusionBucket implements Bucket {
     index: number;
     zoom: number;
     overscaling: number;
-    layers: Array<FillExtrusionStyleLayer>;
-    layerIds: Array<string>;
-    stateDependentLayers: Array<FillExtrusionStyleLayer>;
-    stateDependentLayerIds: Array<string>;
+    layers: FillExtrusionStyleLayer[];
+    layerIds: string[];
+    stateDependentLayers: FillExtrusionStyleLayer[];
+    stateDependentLayerIds: string[];
 
     layoutVertexArray: FillExtrusionLayoutArray;
     layoutVertexBuffer: VertexBuffer;
@@ -76,11 +75,11 @@ export class FillExtrusionBucket implements Bucket {
     indexArray: TriangleIndexArray;
     indexBuffer: IndexBuffer;
 
-    hasPattern: boolean;
+    hasDependencies: boolean;
     programConfigurations: ProgramConfigurationSet<FillExtrusionStyleLayer>;
     segments: SegmentVector;
     uploaded: boolean;
-    features: Array<BucketFeature>;
+    features: BucketFeature[];
 
     constructor(options: BucketParameters<FillExtrusionStyleLayer>) {
         this.zoom = options.zoom;
@@ -88,7 +87,7 @@ export class FillExtrusionBucket implements Bucket {
         this.layers = options.layers;
         this.layerIds = this.layers.map(layer => layer.id);
         this.index = options.index;
-        this.hasPattern = false;
+        this.hasDependencies = false;
 
         this.layoutVertexArray = new FillExtrusionLayoutArray();
         this.centroidVertexArray = new PosArray();
@@ -98,9 +97,9 @@ export class FillExtrusionBucket implements Bucket {
         this.stateDependentLayerIds = this.layers.filter((l) => l.isStateDependent()).map((l) => l.id);
     }
 
-    populate(features: Array<IndexedFeature>, options: PopulateParameters, canonical: CanonicalTileID) {
+    populate(features: IndexedFeature[], options: PopulateParameters, canonical: CanonicalTileID) {
         this.features = [];
-        this.hasPattern = hasPattern('fill-extrusion', this.layers, options);
+        this.hasDependencies = hasPattern('fill-extrusion', this.layers, options);
 
         for (const {feature, id, index, sourceLayerIndex} of features) {
             const needGeometry = this.layers[0]._featureFilter.needGeometry;
@@ -118,8 +117,8 @@ export class FillExtrusionBucket implements Bucket {
                 patterns: {}
             };
 
-            if (this.hasPattern) {
-                this.features.push(addPatternDependencies('fill-extrusion', this.layers, bucketFeature, this.zoom, options));
+            if (this.hasDependencies) {
+                this.features.push(addPatternDependencies('fill-extrusion', this.layers, bucketFeature, {zoom: this.zoom}, options));
             } else {
                 this.addFeature(bucketFeature, bucketFeature.geometry, index, canonical, {}, options.subdivisionGranularity);
             }
@@ -135,9 +134,11 @@ export class FillExtrusionBucket implements Bucket {
         }
     }
 
-    update(states: FeatureStates, vtLayer: VectorTileLayer, imagePositions: {[_: string]: ImagePosition}) {
+    update(states: FeatureStates, vtLayer: VectorTileLayerLike, imagePositions: {[_: string]: ImagePosition}) {
         if (!this.stateDependentLayers.length) return;
-        this.programConfigurations.updatePaintArrays(states, vtLayer, this.stateDependentLayers, imagePositions);
+        this.programConfigurations.updatePaintArrays(states, vtLayer, this.stateDependentLayers, {
+            imagePositions
+        });
     }
 
     isEmpty() {
@@ -167,7 +168,7 @@ export class FillExtrusionBucket implements Bucket {
         this.centroidVertexBuffer.destroy();
     }
 
-    addFeature(feature: BucketFeature, geometry: Array<Array<Point>>, index: number, canonical: CanonicalTileID, imagePositions: {[_: string]: ImagePosition}, subdivisionGranularity: SubdivisionGranularitySetting) {
+    addFeature(feature: BucketFeature, geometry: Point[][], index: number, canonical: CanonicalTileID, imagePositions: {[_: string]: ImagePosition}, subdivisionGranularity: SubdivisionGranularitySetting) {
         for (const polygon of classifyRings(geometry, EARCUT_MAX_RINGS)) {
             // Compute polygon centroid to calculate elevation in GPU
             const centroid: CentroidAccumulator = {x: 0, y: 0, sampleCount: 0};
@@ -187,14 +188,14 @@ export class FillExtrusionBucket implements Bucket {
             }
         }
 
-        this.programConfigurations.populatePaintArrays(this.layoutVertexArray.length, feature, index, imagePositions, canonical);
+        this.programConfigurations.populatePaintArrays(this.layoutVertexArray.length, feature, index, {imagePositions, canonical});
     }
 
     private processPolygon(
         centroid: CentroidAccumulator,
         canonical: CanonicalTileID,
         feature: BucketFeature,
-        polygon: Array<Array<Point>>,
+        polygon: Point[][],
         subdivisionGranularity: SubdivisionGranularitySetting
     ): void {
         if (polygon.length < 1) {
@@ -219,7 +220,7 @@ export class FillExtrusionBucket implements Bucket {
             segment: this.segments.prepareSegment(4, this.layoutVertexArray, this.indexArray)
         };
         const granularity = subdivisionGranularity.fill.getGranularityForZoomLevel(canonical.z);
-        const isPolygon = vectorTileFeatureTypes[feature.type] === 'Polygon';
+        const isPolygon = VectorTileFeature.types[feature.type] === 'Polygon';
 
         for (const ring of polygon) {
             if (ring.length === 0) {
@@ -259,7 +260,7 @@ export class FillExtrusionBucket implements Bucket {
      * Generates side faces for the supplied geometry. Assumes `geometry` to be a line string, like the output of {@link subdivideVertexLine}.
      * For rings, it is assumed that the first and last vertex of `geometry` are equal.
      */
-    private _generateSideFaces(geometry: Array<Point>, segmentReference: {segment: Segment}) {
+    private _generateSideFaces(geometry: Point[], segmentReference: {segment: Segment}) {
         let edgeDistance = 0;
 
         for (let p = 1; p < geometry.length; p++) {
@@ -306,7 +307,7 @@ export class FillExtrusionBucket implements Bucket {
  * Accumulates geometry to centroid. Geometry can be either a polygon ring, a line string or a closed line string.
  * In case of a polygon ring or line ring, the last vertex is ignored if it is the same as the first vertex.
  */
-function accumulatePointsToCentroid(centroid: CentroidAccumulator, geometry: Array<Point>): void {
+function accumulatePointsToCentroid(centroid: CentroidAccumulator, geometry: Point[]): void {
     for (let i = 0; i < geometry.length; i++) {
         const p = geometry[i];
 

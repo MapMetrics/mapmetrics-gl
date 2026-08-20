@@ -10,8 +10,8 @@ describe('generateEntityLinks', () => {
     it('generates identifier for osm_id', () => {
         const result = generateEntityLinks({osm_id: 'node/123456'});
         expect(result.identifier).toBeDefined();
-        expect(result.identifier!['@type']).toBe('PropertyValue');
-        expect(result.identifier!.value).toBe('node/123456');
+        expect(result.identifier['@type']).toBe('PropertyValue');
+        expect(result.identifier.value).toBe('node/123456');
     });
 
     it('generates sameAs for wikidata', () => {

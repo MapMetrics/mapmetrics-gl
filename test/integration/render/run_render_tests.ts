@@ -6,20 +6,17 @@ import pixelmatch from 'pixelmatch';
 import {fileURLToPath} from 'url';
 import {globSync} from 'glob';
 import http from 'http';
-import puppeteer, {type Page, type Browser} from 'puppeteer';
 import {CoverageReport} from 'monocart-coverage-reports';
-import {localizeURLs} from '../lib/localize-urls';
-import type {
-    Map as MapmetricsMap,
-    CanvasSource,
-    PointLike,
-    StyleSpecification,
-} from '../../../dist/mapmetrics-gl';
 import junitReportBuilder, {type TestSuite} from 'junit-report-builder';
-import type * as mapmetricsglModule from '../../../dist/mapmetrics-gl';
+import type {Page, Browser} from 'puppeteer';
+
+import {ensureError} from '../../../src/util/util';
+import {localizeURLs} from '../lib/localize-urls';
+import {launchPuppeteer} from '../lib/puppeteer_config';
+import type {default as MapMetricsGL, Map as MaplibreMap, CanvasSource, PointLike, StyleSpecification} from '../../../dist/mapmetrics-gl';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-let mapmetricsgl: typeof mapmetricsglModule;
+let mapmetricsgl: typeof MapMetricsGL;
 
 type TestData = {
     id: string;
@@ -73,7 +70,7 @@ type RenderOptions = {
 };
 
 type StyleWithTestData = StyleSpecification & {
-    metadata: {
+    metadata : {
         test: TestData;
     };
 };
@@ -88,13 +85,10 @@ type TestStats = {
 // https://stackoverflow.com/a/1349426/229714
 function makeHash(): string {
     const array = [];
-    const possible =
-        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
     for (let i = 0; i < 10; ++i)
-        array.push(
-            possible.charAt(Math.floor(Math.random() * possible.length))
-        );
+        array.push(possible.charAt(Math.floor(Math.random() * possible.length)));
 
     // join array elements without commas.
     return array.join('');
@@ -102,23 +96,20 @@ function makeHash(): string {
 
 function checkParameter(options: RenderOptions, param: string): boolean {
     const index = options.tests.indexOf(param);
-    if (index === -1) return false;
+    if (index === -1)
+        return false;
     options.tests.splice(index, 1);
     return true;
 }
 
-function checkValueParameter(
-    options: RenderOptions,
-    defaultValue: any,
-    param: string
-) {
-    const index = options.tests.findIndex((elem) => {
-        return String(elem).startsWith(param);
-    });
-    if (index === -1) return defaultValue;
+function checkValueParameter(options: RenderOptions, defaultValue: any, param: string) {
+    const index = options.tests.findIndex((elem) => String(elem).startsWith(param));
+    if (index === -1)
+        return defaultValue;
 
     const split = String(options.tests.splice(index, 1)).split('=');
-    if (split.length !== 2) return defaultValue;
+    if (split.length !== 2)
+        return defaultValue;
 
     return split[1];
 }
@@ -131,11 +122,7 @@ function checkValueParameter(
  * @param data - The actual image data to compare the expected to
  * @returns nothing as it updates the testData object
  */
-function compareRenderResults(
-    directory: string,
-    testData: TestData,
-    data: Uint8Array
-) {
+function compareRenderResults(directory: string, testData: TestData, data: Uint8Array) {
     const dir = path.join(directory, testData.id);
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir);
@@ -145,12 +132,8 @@ function compareRenderResults(
     const actualPath = path.join(dir, 'actual.png');
     const diffPath = path.join(dir, 'diff.png');
 
-    const width = Math.floor(
-        testData.reportWidth ?? testData.width * testData.pixelRatio
-    );
-    const height = Math.floor(
-        testData.reportHeight ?? testData.height * testData.pixelRatio
-    );
+    const width = Math.floor(testData.reportWidth ?? testData.width * testData.pixelRatio);
+    const height = Math.floor(testData.reportHeight ?? testData.height * testData.pixelRatio);
     const actualImg = new PNG({width, height});
 
     // PNG data must be unassociated (not premultiplied)
@@ -172,9 +155,7 @@ function compareRenderResults(
     const expectedPaths = globSync(globPattern);
 
     if (!process.env.UPDATE && expectedPaths.length === 0) {
-        throw new Error(
-            `No expected*.png files found as ${dir}; did you mean to run tests with UPDATE=true?`
-        );
+        throw new Error(`No expected*.png files found as ${dir}; did you mean to run tests with UPDATE=true?`);
     }
 
     // if we have multiple expected images, we'll compare against each one and pick the one with
@@ -188,20 +169,11 @@ function compareRenderResults(
         const expectedBuf = fs.readFileSync(path);
         const expectedImg = PNG.sync.read(expectedBuf);
         const diffImg = new PNG({width, height});
-        if (!testData.expected) {
-            testData.expected = expectedBuf.toString('base64'); // default expected image
-        }
+        testData.expected ||= expectedBuf.toString('base64'); // default expected image
 
-        const diff =
-            pixelmatch(
-                actualImg.data,
-                expectedImg.data,
-                diffImg.data,
-                width,
-                height,
-                {threshold: testData.threshold}
-            ) /
-            (width * height);
+        const diff = pixelmatch(
+            actualImg.data, expectedImg.data, diffImg.data,
+            width, height, {threshold: testData.threshold}) / (width * height);
 
         if (diff < minDiff) {
             minDiff = diff;
@@ -210,9 +182,12 @@ function compareRenderResults(
         }
     }
 
-    const diffBuf = PNG.sync.write(minDiffImg, {filterType: 4});
-
-    fs.writeFileSync(diffPath, diffBuf);
+    if (minDiffImg) {
+        const diffBuf = PNG.sync.write(minDiffImg, {filterType: 4});
+        fs.writeFileSync(diffPath, diffBuf);
+        testData.diff = diffBuf.toString('base64');
+        testData.expected = minExpectedBuf.toString('base64');
+    }
     fs.writeFileSync(actualPath, actualBuf);
 
     testData.difference = minDiff;
@@ -222,9 +197,6 @@ function compareRenderResults(
         console.log(`Updating ${expectedPath}`);
         fs.writeFileSync(expectedPath, PNG.sync.write(actualImg));
     }
-
-    testData.expected = minExpectedBuf.toString('base64');
-    testData.diff = diffBuf.toString('base64');
 }
 
 /**
@@ -234,20 +206,14 @@ function compareRenderResults(
  * @param directory - The base directory
  * @returns The tests data structure and the styles that were loaded
  */
-function getTestStyles(
-    options: RenderOptions,
-    directory: string,
-    port: number
-): StyleWithTestData[] {
+function getTestStyles(options: RenderOptions, directory: string, port: number): StyleWithTestData[] {
     const tests = options.tests || [];
 
-    const sequence = globSync('**/style.json', {cwd: directory})
-        .map((fixture) => {
+    return globSync('**/style.json', {cwd: directory})
+        .map(fixture => {
             const id = path.dirname(fixture);
-            const style = JSON.parse(
-                fs.readFileSync(path.join(directory, fixture), 'utf8')
-            ) as StyleWithTestData;
-            style.metadata = style.metadata || ({} as any);
+            const style = JSON.parse(fs.readFileSync(path.join(directory, fixture), 'utf8')) as StyleWithTestData;
+            style.metadata ||= {} as any;
 
             style.metadata.test = {
                 id,
@@ -257,31 +223,24 @@ function getTestStyles(
                 recycleMap: options.recycleMap || false,
                 allowed: 0.00025,
                 threshold: 0.1285,
-                ...style.metadata.test,
+                ...style.metadata.test
             };
 
             return style;
         })
-        .filter((style) => {
+        .filter(style => {
             const test = style.metadata.test;
-            if (
-                tests.length !== 0 &&
-                !tests.some((t) => test.id.indexOf(t) !== -1)
-            ) {
+            if (tests.length !== 0 && !tests.some(t => test.id.includes(t))) {
                 return false;
             }
 
-            if (
-                process.env.BUILDTYPE !== 'Debug' &&
-                test.id.match(/^debug\//)
-            ) {
+            if (process.env.BUILDTYPE !== 'Debug' && test.id.match(/^debug\//)) {
                 console.log(`* skipped ${test.id}`);
                 return false;
             }
             localizeURLs(style, port, path.join(__dirname, '../'));
             return true;
         });
-    return sequence;
 }
 
 /**
@@ -291,10 +250,8 @@ function getTestStyles(
  * @param style - The style to use
  * @returns an image byte array promise
  */
-async function getImageFromStyle(
-    styleForTest: StyleWithTestData,
-    page: Page
-): Promise<Uint8Array> {
+async function getImageFromStyle(styleForTest: StyleWithTestData, page: Page): Promise<Uint8Array> {
+
     const width = styleForTest.metadata.test.width;
     const height = styleForTest.metadata.test.height;
 
@@ -318,23 +275,23 @@ async function getImageFromStyle(
 </body>
 </html>`);
 
-    const evaluatedArray = await page.evaluate(
-        async (style: StyleWithTestData) => {
-            const options = style.metadata.test;
+    const evaluatedArray = await page.evaluate(async (style: StyleWithTestData) => {
 
-            class NullIsland {
-                id: string;
-                type: string;
-                renderingMode: string;
-                program: WebGLProgram;
-                constructor() {
-                    this.id = 'null-island';
-                    this.type = 'custom';
-                    this.renderingMode = '2d';
-                }
+        const options = style.metadata.test;
 
-                onAdd(map: MapmetricsMap, gl: WebGL2RenderingContext) {
-                    const vertexSource = `#version 300 es
+        class NullIsland {
+            id: string;
+            type: string;
+            renderingMode: string;
+            program: WebGLProgram;
+            constructor() {
+                this.id = 'null-island';
+                this.type = 'custom';
+                this.renderingMode = '2d';
+            }
+
+            onAdd(map: MaplibreMap, gl: WebGL2RenderingContext) {
+                const vertexSource = `#version 300 es
                 in vec3 aPos;
                 uniform mat4 u_matrix;
                 void main() {
@@ -342,66 +299,60 @@ async function getImageFromStyle(
                     gl_PointSize = 20.0;
                 }`;
 
-                    const fragmentSource = `#version 300 es
+                const fragmentSource = `#version 300 es
 
                 out highp vec4 fragColor;
                 void main() {
                     fragColor = vec4(1.0, 0.0, 0.0, 1.0);
                 }`;
 
-                    const vertexShader = gl.createShader(gl.VERTEX_SHADER);
-                    gl.shaderSource(vertexShader, vertexSource);
-                    gl.compileShader(vertexShader);
-                    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-                    gl.shaderSource(fragmentShader, fragmentSource);
-                    gl.compileShader(fragmentShader);
+                const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(vertexShader, vertexSource);
+                gl.compileShader(vertexShader);
+                const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(fragmentShader, fragmentSource);
+                gl.compileShader(fragmentShader);
 
-                    this.program = gl.createProgram();
-                    gl.attachShader(this.program, vertexShader);
-                    gl.attachShader(this.program, fragmentShader);
-                    gl.linkProgram(this.program);
-                }
-
-                render(gl: WebGL2RenderingContext, args) {
-                    const vertexArray = new Float32Array([0.5, 0.5, 0.0]);
-                    gl.useProgram(this.program);
-                    const vertexBuffer = gl.createBuffer();
-                    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-                    gl.bufferData(gl.ARRAY_BUFFER, vertexArray, gl.STATIC_DRAW);
-                    const posAttrib = gl.getAttribLocation(
-                        this.program,
-                        'aPos'
-                    );
-                    gl.enableVertexAttribArray(posAttrib);
-                    gl.vertexAttribPointer(posAttrib, 3, gl.FLOAT, false, 0, 0);
-                    gl.uniformMatrix4fv(
-                        gl.getUniformLocation(this.program, 'u_matrix'),
-                        false,
-                        args.defaultProjectionData.mainMatrix
-                    );
-                    gl.drawArrays(gl.POINTS, 0, 1);
-                }
+                this.program = gl.createProgram();
+                gl.attachShader(this.program, vertexShader);
+                gl.attachShader(this.program, fragmentShader);
+                gl.linkProgram(this.program);
             }
 
-            class Tent3D {
-                id: string;
-                type: string;
-                renderingMode: string;
-                program: WebGLProgram & {
-                    a_pos?: number;
-                    aPos?: number;
-                    uMatrix?: WebGLUniformLocation;
-                };
-                vertexBuffer: WebGLBuffer;
-                indexBuffer: WebGLBuffer;
-                constructor() {
-                    this.id = 'tent-3d';
-                    this.type = 'custom';
-                    this.renderingMode = '3d';
-                }
+            render(gl: WebGL2RenderingContext, args) {
+                const vertexArray = new Float32Array([0.5, 0.5, 0.0]);
+                gl.useProgram(this.program);
+                const vertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, vertexArray, gl.STATIC_DRAW);
+                const posAttrib = gl.getAttribLocation(this.program, 'aPos');
+                gl.enableVertexAttribArray(posAttrib);
+                gl.vertexAttribPointer(posAttrib, 3, gl.FLOAT, false, 0, 0);
+                gl.uniformMatrix4fv(gl.getUniformLocation(this.program, 'u_matrix'), false, args.defaultProjectionData.mainMatrix);
+                gl.drawArrays(gl.POINTS, 0, 1);
+            }
+        }
 
-                onAdd(map: MapmetricsMap, gl: WebGL2RenderingContext) {
-                    const vertexSource = `#version 300 es
+        class Tent3D {
+            id: string;
+            type: string;
+            renderingMode: string;
+            program: WebGLProgram & {
+                a_pos?: number;
+                aPos?: number;
+                uMatrix?:  WebGLUniformLocation;
+            };
+            vertexBuffer: WebGLBuffer;
+            indexBuffer: WebGLBuffer;
+            constructor() {
+                this.id = 'tent-3d';
+                this.type = 'custom';
+                this.renderingMode = '3d';
+            }
+
+            onAdd(map: MaplibreMap, gl: WebGL2RenderingContext) {
+
+                const vertexSource = `#version 300 es
 
                 in vec3 aPos;
                 uniform mat4 uMatrix;
@@ -410,130 +361,94 @@ async function getImageFromStyle(
                     gl_Position = uMatrix * vec4(aPos, 1.0);
                 }`;
 
-                    const fragmentSource = `#version 300 es
+                const fragmentSource = `#version 300 es
 
                 out highp vec4 fragColor;
                 void main() {
                     fragColor = vec4(1.0, 0.0, 0.0, 1.0);
                 }`;
 
-                    const vertexShader = gl.createShader(gl.VERTEX_SHADER);
-                    gl.shaderSource(vertexShader, vertexSource);
-                    gl.compileShader(vertexShader);
-                    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-                    gl.shaderSource(fragmentShader, fragmentSource);
-                    gl.compileShader(fragmentShader);
+                const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(vertexShader, vertexSource);
+                gl.compileShader(vertexShader);
+                const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(fragmentShader, fragmentSource);
+                gl.compileShader(fragmentShader);
 
-                    this.program = gl.createProgram();
-                    gl.attachShader(this.program, vertexShader);
-                    gl.attachShader(this.program, fragmentShader);
-                    gl.linkProgram(this.program);
-                    gl.validateProgram(this.program);
+                this.program = gl.createProgram();
+                gl.attachShader(this.program, vertexShader);
+                gl.attachShader(this.program, fragmentShader);
+                gl.linkProgram(this.program);
+                gl.validateProgram(this.program);
 
-                    this.program.aPos = gl.getAttribLocation(
-                        this.program,
-                        'aPos'
-                    );
-                    this.program.uMatrix = gl.getUniformLocation(
-                        this.program,
-                        'uMatrix'
-                    );
+                this.program.aPos = gl.getAttribLocation(this.program, 'aPos');
+                this.program.uMatrix = gl.getUniformLocation(this.program, 'uMatrix');
 
-                    const x = 0.5 - 0.015;
-                    const y = 0.5 - 0.01;
-                    const z = 0.01;
-                    const d = 0.01;
+                const x = 0.5 - 0.015;
+                const y = 0.5 - 0.01;
+                const z = 0.01;
+                const d = 0.01;
 
-                    const vertexArray = new Float32Array([
-                        x,
-                        y,
-                        0,
-                        x + d,
-                        y,
-                        0,
-                        x,
-                        y + d,
-                        z,
-                        x + d,
-                        y + d,
-                        z,
-                        x,
-                        y + d + d,
-                        0,
-                        x + d,
-                        y + d + d,
-                        0,
-                    ]);
-                    const indexArray = new Uint16Array([
-                        0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5,
-                    ]);
+                const vertexArray = new Float32Array([
+                    x, y, 0,
+                    x + d, y, 0,
+                    x, y + d, z,
+                    x + d, y + d, z,
+                    x, y + d + d, 0,
+                    x + d, y + d + d, 0]);
+                const indexArray = new Uint16Array([
+                    0, 1, 2,
+                    1, 2, 3,
+                    2, 3, 4,
+                    3, 4, 5
+                ]);
 
-                    this.vertexBuffer = gl.createBuffer();
-                    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-                    gl.bufferData(gl.ARRAY_BUFFER, vertexArray, gl.STATIC_DRAW);
-                    this.indexBuffer = gl.createBuffer();
-                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-                    gl.bufferData(
-                        gl.ELEMENT_ARRAY_BUFFER,
-                        indexArray,
-                        gl.STATIC_DRAW
-                    );
-                }
-
-                render(gl: WebGL2RenderingContext, args) {
-                    gl.useProgram(this.program);
-                    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-                    gl.enableVertexAttribArray(this.program.a_pos);
-                    gl.vertexAttribPointer(
-                        this.program.aPos,
-                        3,
-                        gl.FLOAT,
-                        false,
-                        0,
-                        0
-                    );
-                    gl.uniformMatrix4fv(
-                        this.program.uMatrix,
-                        false,
-                        args.defaultProjectionData.mainMatrix
-                    );
-                    gl.drawElements(gl.TRIANGLES, 12, gl.UNSIGNED_SHORT, 0);
-                }
+                this.vertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, vertexArray, gl.STATIC_DRAW);
+                this.indexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indexArray, gl.STATIC_DRAW);
             }
 
-            class Tent3DGlobe {
-                id: string;
-                type: string;
-                renderingMode: string;
+            render(gl: WebGL2RenderingContext, args) {
+                gl.useProgram(this.program);
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+                gl.enableVertexAttribArray(this.program.a_pos);
+                gl.vertexAttribPointer(this.program.aPos, 3, gl.FLOAT, false, 0, 0);
+                gl.uniformMatrix4fv(this.program.uMatrix, false, args.defaultProjectionData.mainMatrix);
+                gl.drawElements(gl.TRIANGLES, 12, gl.UNSIGNED_SHORT, 0);
+            }
+        }
 
-                vertexBuffer: WebGLBuffer;
-                indexBuffer: WebGLBuffer;
-                shaderMap: Map<
-                    string,
-                    {
-                        program: WebGLProgram;
-                        a_pos?: number;
-                        aPos?: number;
-                        uMatrix?: WebGLUniformLocation;
-                    }
-                > = new Map();
+        class Tent3DGlobe {
+            id: string;
+            type: string;
+            renderingMode: string;
 
-                constructor() {
-                    this.id = 'tent-3d-globe';
-                    this.type = 'custom';
-                    this.renderingMode = '3d';
+            vertexBuffer: WebGLBuffer;
+            indexBuffer: WebGLBuffer;
+            shaderMap: Map<string, {
+                program: WebGLProgram;
+                a_pos?: number;
+                aPos?: number;
+                uMatrix?:  WebGLUniformLocation;
+            }> = new Map();
+
+            constructor() {
+                this.id = 'tent-3d-globe';
+                this.type = 'custom';
+                this.renderingMode = '3d';
+            }
+
+            getShader(gl, shaderDescription) {
+                if (this.shaderMap.has(shaderDescription.variantName)) {
+                    return this.shaderMap.get(shaderDescription.variantName);
                 }
 
-                getShader(gl, shaderDescription) {
-                    if (this.shaderMap.has(shaderDescription.variantName)) {
-                        return this.shaderMap.get(
-                            shaderDescription.variantName
-                        );
-                    }
-
-                    const vertexSource = `#version 300 es
-                // Inject MapLibre projection code
+                const vertexSource = `#version 300 es
+                // Inject Mapmetrics projection code
                 ${shaderDescription.vertexShaderPrelude}
                 ${shaderDescription.define}
 
@@ -543,450 +458,340 @@ async function getImageFromStyle(
                     gl_Position = projectTileFor3D(a_pos.xy, a_pos.z);
                 }`;
 
-                    // create GLSL source for fragment shader
-                    const fragmentSource = `#version 300 es
+                // create GLSL source for fragment shader
+                const fragmentSource = `#version 300 es
                 uniform mediump vec4 u_color;
                 out highp vec4 fragColor;
                 void main() {
                     fragColor = u_color;
                 }`;
 
-                    // create a vertex shader
-                    const vertexShader = gl.createShader(gl.VERTEX_SHADER);
-                    gl.shaderSource(vertexShader, vertexSource);
-                    gl.compileShader(vertexShader);
+                // create a vertex shader
+                const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(vertexShader, vertexSource);
+                gl.compileShader(vertexShader);
 
-                    // create a fragment shader
-                    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-                    gl.shaderSource(fragmentShader, fragmentSource);
-                    gl.compileShader(fragmentShader);
+                // create a fragment shader
+                const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(fragmentShader, fragmentSource);
+                gl.compileShader(fragmentShader);
 
-                    // link the two shaders into a WebGL program
-                    const program = gl.createProgram();
-                    gl.attachShader(program, vertexShader);
-                    gl.attachShader(program, fragmentShader);
-                    gl.linkProgram(program);
+                // link the two shaders into a WebGL program
+                const program = gl.createProgram();
+                gl.attachShader(program, vertexShader);
+                gl.attachShader(program, fragmentShader);
+                gl.linkProgram(program);
 
-                    const result = {
-                        program,
-                        aPos: gl.getAttribLocation(program, 'a_pos'),
-                    };
+                const result = {
+                    program,
+                    aPos: gl.getAttribLocation(program, 'a_pos'),
+                };
 
-                    this.shaderMap.set(shaderDescription.variantName, result);
+                this.shaderMap.set(shaderDescription.variantName, result);
 
-                    return result;
-                }
-
-                onAdd(map, gl) {
-                    const x = 0.5 - 0.015;
-                    const y = 0.5 - 0.01;
-                    const z = 500_000;
-                    const d = 0.01;
-
-                    const vertexArray = new Float32Array([
-                        x,
-                        y,
-                        0,
-                        x + d,
-                        y,
-                        0,
-                        x,
-                        y + d,
-                        z,
-                        x + d,
-                        y + d,
-                        z,
-                        x,
-                        y + d + d,
-                        0,
-                        x + d,
-                        y + d + d,
-                        0,
-                    ]);
-                    const indexArray = new Uint16Array([
-                        0, 2, 1, 1, 2, 3, 2, 4, 3, 3, 4, 5,
-                    ]);
-
-                    this.vertexBuffer = gl.createBuffer();
-                    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-                    gl.bufferData(gl.ARRAY_BUFFER, vertexArray, gl.STATIC_DRAW);
-                    this.indexBuffer = gl.createBuffer();
-                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-                    gl.bufferData(
-                        gl.ELEMENT_ARRAY_BUFFER,
-                        indexArray,
-                        gl.STATIC_DRAW
-                    );
-                }
-
-                render(gl, args) {
-                    const shader = this.getShader(gl, args.shaderData);
-                    gl.useProgram(shader.program);
-                    gl.uniformMatrix4fv(
-                        gl.getUniformLocation(
-                            shader.program,
-                            'u_projection_fallback_matrix'
-                        ),
-                        false,
-                        args.defaultProjectionData.fallbackMatrix
-                    );
-                    gl.uniformMatrix4fv(
-                        gl.getUniformLocation(
-                            shader.program,
-                            'u_projection_matrix'
-                        ),
-                        false,
-                        args.defaultProjectionData.mainMatrix
-                    );
-                    gl.uniform4f(
-                        gl.getUniformLocation(
-                            shader.program,
-                            'u_projection_tile_mercator_coords'
-                        ),
-                        ...args.defaultProjectionData.tileMercatorCoords
-                    );
-                    gl.uniform4f(
-                        gl.getUniformLocation(
-                            shader.program,
-                            'u_projection_clipping_plane'
-                        ),
-                        ...args.defaultProjectionData.clippingPlane
-                    );
-                    gl.uniform1f(
-                        gl.getUniformLocation(
-                            shader.program,
-                            'u_projection_transition'
-                        ),
-                        args.defaultProjectionData.projectionTransition
-                    );
-
-                    gl.enable(gl.CULL_FACE);
-                    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
-                    gl.enableVertexAttribArray(shader.aPos);
-                    gl.vertexAttribPointer(
-                        shader.aPos,
-                        3,
-                        gl.FLOAT,
-                        false,
-                        0,
-                        0
-                    );
-                    for (let i = 0; i < 2; i++) {
-                        gl.uniform4f(
-                            gl.getUniformLocation(shader.program, 'u_color'),
-                            i === 0 ? 1 : 0.25,
-                            0,
-                            0,
-                            1
-                        );
-                        gl.cullFace(i === 0 ? gl.BACK : gl.FRONT);
-                        gl.drawElements(gl.TRIANGLES, 12, gl.UNSIGNED_SHORT, 0);
-                    }
-                }
+                return result;
             }
 
-            const customLayerImplementations = {
-                'tent-3d': Tent3D,
-                'tent-3d-globe': Tent3DGlobe,
-                'null-island': NullIsland,
+            onAdd (map, gl) {
+                const x = 0.5 - 0.015;
+                const y = 0.5 - 0.01;
+                const z = 500_000;
+                const d = 0.01;
+
+                const vertexArray = new Float32Array([
+                    x, y, 0,
+                    x + d, y, 0,
+                    x, y + d, z,
+                    x + d, y + d, z,
+                    x, y + d + d, 0,
+                    x + d, y + d + d, 0]);
+                const indexArray = new Uint16Array([
+                    0, 2, 1,
+                    1, 2, 3,
+                    2, 4, 3,
+                    3, 4, 5
+                ]);
+
+                this.vertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, vertexArray, gl.STATIC_DRAW);
+                this.indexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indexArray, gl.STATIC_DRAW);
+            }
+
+            render (gl, args) {
+                const shader = this.getShader(gl, args.shaderData);
+                gl.useProgram(shader.program);
+                gl.uniformMatrix4fv(
+                    gl.getUniformLocation(shader.program, 'u_projection_fallback_matrix'),
+                    false,
+                    args.defaultProjectionData.fallbackMatrix
+                );
+                gl.uniformMatrix4fv(
+                    gl.getUniformLocation(shader.program, 'u_projection_matrix'),
+                    false,
+                    args.defaultProjectionData.mainMatrix
+                );
+                gl.uniform4f(
+                    gl.getUniformLocation(shader.program, 'u_projection_tile_mercator_coords'),
+                    ...args.defaultProjectionData.tileMercatorCoords
+                );
+                gl.uniform4f(
+                    gl.getUniformLocation(shader.program, 'u_projection_clipping_plane'),
+                    ...args.defaultProjectionData.clippingPlane
+                );
+                gl.uniform1f(
+                    gl.getUniformLocation(shader.program, 'u_projection_transition'),
+                    args.defaultProjectionData.projectionTransition
+                );
+
+                gl.enable(gl.CULL_FACE);
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+                gl.enableVertexAttribArray(shader.aPos);
+                gl.vertexAttribPointer(shader.aPos, 3, gl.FLOAT, false, 0, 0);
+                for (let i = 0; i < 2; i++) {
+                    gl.uniform4f(
+                        gl.getUniformLocation(shader.program, 'u_color'),
+                        i === 0 ? 1 : 0.25, 0, 0, 1
+                    );
+                    gl.cullFace(i === 0 ? gl.BACK : gl.FRONT);
+                    gl.drawElements(gl.TRIANGLES, 12, gl.UNSIGNED_SHORT, 0);
+                }
+            }
+        }
+
+        const customLayerImplementations = {
+            'tent-3d': Tent3D,
+            'tent-3d-globe': Tent3DGlobe,
+            'null-island': NullIsland
+        };
+
+        async function updateFakeCanvas(document: Document, id: string, imagePath: string) {
+            const fakeCanvas = document.getElementById(id) as HTMLCanvasElement;
+
+            const getMeta = async (url) => {
+                const img = new Image();
+                img.src = url;
+                img.crossOrigin = 'anonymous';
+                await img.decode();
+                return img;
             };
 
-            async function updateFakeCanvas(
-                document: Document,
-                id: string,
-                imagePath: string
-            ) {
-                const fakeCanvas = document.getElementById(
-                    id
-                ) as HTMLCanvasElement;
+            const image = await getMeta(`http://localhost:2900/${imagePath}`);
 
-                const getMeta = async (url) => {
-                    const img = new Image();
-                    img.src = url;
-                    img.crossOrigin = 'anonymous';
-                    await img.decode();
-                    return img;
-                };
+            fakeCanvas.width = image.naturalWidth;
+            fakeCanvas.height = image.naturalHeight;
+            fakeCanvas.id = id;
 
-                const image = await getMeta(
-                    `http://localhost:2900/${imagePath}`
-                );
+            const ctx = fakeCanvas.getContext('2d');
+            ctx?.drawImage(image, 0, 0, image.naturalWidth, image.naturalHeight);
 
-                fakeCanvas.width = image.naturalWidth;
-                fakeCanvas.height = image.naturalHeight;
-                fakeCanvas.id = id;
+        }
 
-                const ctx = fakeCanvas.getContext('2d');
-                ctx?.drawImage(
-                    image,
-                    0,
-                    0,
-                    image.naturalWidth,
-                    image.naturalHeight
-                );
+        /**
+         * Executes the operations in the test data
+         *
+         * @param testData - The test data to operate upon
+         * @param map - The Map
+         * @param operations - The operations
+         * @param callback - The callback to use when all the operations are executed
+         */
+        async function applyOperations(testData: TestData, map: MaplibreMap & { _render: () => void}, idle: boolean) {
+            if (!testData.operations || testData.operations.length === 0) {
+                return;
             }
-
-            /**
-             * Executes the operations in the test data
-             *
-             * @param testData - The test data to operate upon
-             * @param map - The Map
-             * @param operations - The operations
-             * @param callback - The callback to use when all the operations are executed
-             */
-            async function applyOperations(
-                testData: TestData,
-                map: MapmetricsMap & { _render: () => void },
-                idle: boolean
-            ) {
-                if (!testData.operations || testData.operations.length === 0) {
-                    return;
-                }
-                for (const operation of testData.operations) {
-                    console.log(
-                        `Running operation: ${JSON.stringify(operation)}`
-                    );
-                    switch (operation[0]) {
-                        case 'wait':
-                            if (operation.length <= 1) {
-                                while (!map.loaded()) {
-                                    await map.once('render');
-                                }
+            for (const operation of testData.operations) {
+                console.log(`Running operation: ${JSON.stringify(operation)}`);
+                switch (operation[0]) {
+                    case 'wait':
+                        if (operation.length <= 1) {
+                            while (!map.loaded()) {
+                                await map.once('render');
+                            }
+                        } else {
+                            if (typeof operation[1] === 'string') {
+                                // Wait for the event to fire
+                                await map.once(operation[1]);
                             } else {
-                                if (typeof operation[1] === 'string') {
-                                    // Wait for the event to fire
-                                    await map.once(operation[1]);
-                                } else {
-                                    await new Promise<void>((resolve) => {
-                                        setTimeout(() => {
-                                            resolve();
-                                        }, operation[1]);
-                                    });
-                                    map._render();
-                                }
+                                await new Promise<void>((resolve) => {
+                                    setTimeout(() => {
+                                        resolve();
+                                    }, operation[1]);
+                                });
+                                map._render();
                             }
-                            console.log('done waiting');
+                        }
+                        console.log('done waiting');
+                        break;
+                    case 'idle':
+                        map.repaint = false;
+                        if (idle) {
+                            console.log('idle is true');
                             break;
-                        case 'idle':
-                            map.repaint = false;
-                            if (idle) {
-                                console.log('idle is true');
-                                break;
-                            }
-                            await map.once('idle');
-                            console.log('done waiting for idle');
-                            break;
-                        case 'sleep':
-                            await new Promise<void>((resolve) => {
-                                setTimeout(() => {
-                                    resolve();
-                                }, operation[1]);
-                            });
-                            break;
-                        case 'addImage': {
-                            const getImage = async (url) => {
-                                const img = new Image();
-                                img.src = url;
-                                img.crossOrigin = 'anonymous';
-                                await img.decode();
-                                return img;
-                            };
-                            const image = await getImage(
-                                `http://localhost:2900/${operation[2]}`
-                            );
+                        }
+                        await map.once('idle');
+                        console.log('done waiting for idle');
+                        break;
+                    case 'sleep':
+                        await new Promise<void>((resolve) => {
+                            setTimeout(() => {
+                                resolve();
+                            }, operation[1]);
+                        });
+                        break;
+                    case 'addImage': {
+                        const getImage = async (url) => {
+                            const img = new Image();
+                            img.src = url;
+                            img.crossOrigin = 'anonymous';
+                            await img.decode();
+                            return img;
+                        };
+                        const image = await getImage(`http://localhost:2900/${operation[2]}`);
 
-                            map.addImage(
-                                operation[1],
-                                image,
-                                operation[3] || {}
-                            );
-                            break;
-                        }
-                        case 'addCustomLayer':
-                            map.addLayer(
-                                new customLayerImplementations[operation[1]](),
-                                operation[2]
-                            );
-                            map._render();
-                            break;
-                        case 'updateFakeCanvas': {
-                            const canvasSource = map.getSource<CanvasSource>(
-                                operation[1]
-                            );
-                            canvasSource.play();
-                            // update before pause should be rendered
-                            await updateFakeCanvas(
-                                window.document,
-                                testData.addFakeCanvas.id,
-                                operation[2]
-                            );
-                            canvasSource.pause();
-                            // update after pause should not be rendered
-                            await updateFakeCanvas(
-                                window.document,
-                                testData.addFakeCanvas.id,
-                                operation[3]
-                            );
-                            map._render();
-                            break;
-                        }
-                        case 'setStyle':
-                            map.setStyle(operation[1], {
-                                localIdeographFontFamily: false as any,
-                            });
-                            break;
-                        case 'pauseSource':
-                            map.style.sourceCaches[operation[1]].pause();
-                            break;
-                        default:
-                            if (typeof map[operation[0]] === 'function') {
-                                map[operation[0]](...operation.slice(1));
-                            }
+                        map.addImage(operation[1], image, operation[3] || {});
+                        break;
                     }
+                    case 'addCustomLayer':
+                        map.addLayer(new customLayerImplementations[operation[1]](), operation[2]);
+                        map._render();
+                        break;
+                    case 'updateFakeCanvas': {
+                        const canvasSource = map.getSource<CanvasSource>(operation[1]);
+                        canvasSource.play();
+                        // update before pause should be rendered
+                        await updateFakeCanvas(window.document, testData.addFakeCanvas.id, operation[2]);
+                        canvasSource.pause();
+                        // update after pause should not be rendered
+                        await updateFakeCanvas(window.document, testData.addFakeCanvas.id, operation[3]);
+                        map._render();
+                        break;
+                    }
+                    case 'setStyle':
+                        map.setStyle(operation[1], {localIdeographFontFamily: false as any});
+                        break;
+                    case 'pauseTiles':
+                        map.style.tileManagers[operation[1]].pause();
+                        break;
+                    default:
+                        if (typeof map[operation[0]] === 'function') {
+                            map[operation[0]](...operation.slice(1));
+                        }
                 }
             }
 
-            async function createFakeCanvas(
-                document: Document,
-                id: string,
-                imagePath: string
-            ): Promise<HTMLCanvasElement> {
-                const fakeCanvas: HTMLCanvasElement =
-                    document.createElement('canvas');
+        }
 
-                const getImage = async (url) => {
-                    const img = new Image();
-                    img.src = url;
-                    img.crossOrigin = 'anonymous';
-                    await img.decode();
-                    return img;
-                };
+        async function createFakeCanvas(document: Document, id: string, imagePath: string): Promise<HTMLCanvasElement> {
+            const fakeCanvas: HTMLCanvasElement = document.createElement('canvas');
 
-                const image = await getImage(
-                    `http://localhost:2900/${imagePath}`
-                );
+            const getImage = async (url) => {
+                const img = new Image();
+                img.src = url;
+                img.crossOrigin = 'anonymous';
+                await img.decode();
+                return img;
+            };
 
-                fakeCanvas.width = image.naturalWidth;
-                fakeCanvas.height = image.naturalHeight;
-                fakeCanvas.id = id;
+            const image = await getImage(`http://localhost:2900/${imagePath}`);
 
-                const ctx = fakeCanvas.getContext('2d');
-                ctx?.drawImage(
-                    image,
-                    0,
-                    0,
-                    image.naturalWidth,
-                    image.naturalHeight
-                );
+            fakeCanvas.width = image.naturalWidth;
+            fakeCanvas.height = image.naturalHeight;
+            fakeCanvas.id = id;
 
-                return fakeCanvas;
+            const ctx = fakeCanvas.getContext('2d');
+            ctx?.drawImage(image, 0, 0, image.naturalWidth, image.naturalHeight);
+
+            return fakeCanvas;
+        }
+
+        return new Promise(async (resolve, reject) => {
+            setTimeout(() => {
+                reject(new Error('Test timed out'));
+            }, options.timeout || 40000);
+
+            if (options.addFakeCanvas) {
+                const fakeCanvas = await createFakeCanvas(document, options.addFakeCanvas.id, options.addFakeCanvas.image);
+                document.body.appendChild(fakeCanvas);
             }
 
-            return new Promise(async (resolve, reject) => {
-                setTimeout(() => {
-                    reject(new Error('Test timed out'));
-                }, options.timeout || 40000);
+            if (mapmetricsgl.getRTLTextPluginStatus() === 'unavailable') {
+                mapmetricsgl.setRTLTextPlugin(
+                    'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js',
+                    false // Don't lazy load the plugin
+                );
+            }
 
-                if (options.addFakeCanvas) {
-                    const fakeCanvas = await createFakeCanvas(
-                        document,
-                        options.addFakeCanvas.id,
-                        options.addFakeCanvas.image
-                    );
-                    document.body.appendChild(fakeCanvas);
-                }
-
-                if (mapmetricsgl.getRTLTextPluginStatus() === 'unavailable') {
-                    mapmetricsgl.setRTLTextPlugin(
-                        'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js',
-                        false // Don't lazy load the plugin
-                    );
-                }
-
-                const map = new mapmetricsgl.Map({
-                    container: 'map',
-                    style,
-                    interactive: false,
-                    attributionControl: false,
-                    maxPitch: options.maxPitch,
-                    pixelRatio: options.pixelRatio,
-                    canvasContextAttributes: {
-                        preserveDrawingBuffer: true,
-                        powerPreference: 'default',
-                    },
-                    fadeDuration: options.fadeDuration || 0,
-                    localIdeographFontFamily:
-                        options.localIdeographFontFamily || (false as any),
-                    crossSourceCollisions:
-                        typeof options.crossSourceCollisions === 'undefined'
-                            ? true
-                            : options.crossSourceCollisions,
-                    maxCanvasSize: [8192, 8192],
-                });
-
-                let idle = false;
-                map.on('idle', () => {
-                    console.log('idle');
-                    idle = true;
-                });
-                // Configure the map to never stop the render loop
-                map.repaint =
-                    typeof options.continuesRepaint === 'undefined'
-                        ? true
-                        : options.continuesRepaint;
-
-                if (options.debug) map.showTileBoundaries = true;
-                if (options.showOverdrawInspector)
-                    map.showOverdrawInspector = true;
-                if (options.showPadding) map.showPadding = true;
-
-                const gl = map.painter.context.gl;
-
-                await map.once('load');
-                if (options.collisionDebug) {
-                    map.showCollisionBoxes = true;
-                    if (options.operations) {
-                        options.operations.push(['wait']);
-                    } else {
-                        options.operations = [['wait']];
-                    }
-                }
-
-                await applyOperations(options, map as any, idle);
-                const viewport = gl.getParameter(gl.VIEWPORT);
-                const w = options.reportWidth ?? viewport[2];
-                const h = options.reportHeight ?? viewport[3];
-
-                const data = new Uint8Array(w * h * 4);
-                gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, data);
-
-                // Flip the scanlines.
-                const stride = w * 4;
-                const tmp = new Uint8Array(stride);
-                for (let i = 0, j = h - 1; i < j; i++, j--) {
-                    const start = i * stride;
-                    const end = j * stride;
-                    tmp.set(data.slice(start, start + stride), 0);
-                    data.set(data.slice(end, end + stride), start);
-                    data.set(tmp, end);
-                }
-
-                map.remove();
-                delete map.painter.context.gl;
-
-                if (options.addFakeCanvas) {
-                    const fakeCanvas = window.document.getElementById(
-                        options.addFakeCanvas.id
-                    );
-                    fakeCanvas.parentNode.removeChild(fakeCanvas);
-                }
-
-                resolve(data);
+            const map = new mapmetricsgl.Map({
+                container: 'map',
+                style,
+                interactive: false,
+                attributionControl: false,
+                maxPitch: options.maxPitch,
+                pixelRatio: options.pixelRatio,
+                canvasContextAttributes: {preserveDrawingBuffer: true, powerPreference: 'default'},
+                fadeDuration: options.fadeDuration || 0,
+                localIdeographFontFamily: options.localIdeographFontFamily || false as any,
+                crossSourceCollisions: typeof options.crossSourceCollisions === 'undefined' ? true : options.crossSourceCollisions,
+                maxCanvasSize: [8192, 8192]
             });
-        },
-        styleForTest as any
-    );
+
+            let idle = false;
+            map.on('idle', () => {
+                console.log('idle');
+                idle = true;
+            });
+            // Configure the map to never stop the render loop
+            map.repaint = typeof options.continuesRepaint === 'undefined' ? true : options.continuesRepaint;
+
+            if (options.debug) map.showTileBoundaries = true;
+            if (options.showOverdrawInspector) map.showOverdrawInspector = true;
+            if (options.showPadding) map.showPadding = true;
+
+            const gl = map.painter.context.gl;
+
+            await map.once('load');
+            if (options.collisionDebug) {
+                map.showCollisionBoxes = true;
+                if (options.operations) {
+                    options.operations.push(['wait']);
+                } else {
+                    options.operations = [['wait']];
+                }
+            }
+
+            await applyOperations(options, map as any, idle);
+            const viewport = gl.getParameter(gl.VIEWPORT);
+            const w = options.reportWidth ?? viewport[2];
+            const h = options.reportHeight ?? viewport[3];
+
+            const data = new Uint8Array(w * h * 4);
+            gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, data);
+
+            // Flip the scanlines.
+            const stride = w * 4;
+            const tmp = new Uint8Array(stride);
+            for (let i = 0, j = h - 1; i < j; i++, j--) {
+                const start = i * stride;
+                const end = j * stride;
+                tmp.set(data.slice(start, start + stride), 0);
+                data.set(data.slice(end, end + stride), start);
+                data.set(tmp, end);
+            }
+
+            map.remove();
+            delete map.painter.context.gl;
+
+            if (options.addFakeCanvas) {
+                const fakeCanvas = window.document.getElementById(options.addFakeCanvas.id);
+                fakeCanvas.parentNode.removeChild(fakeCanvas);
+            }
+
+            resolve(data);
+        });
+    }, styleForTest as any);
 
     return new Uint8Array(Object.values(evaluatedArray as object) as number[]);
 }
@@ -1000,42 +805,22 @@ async function getImageFromStyle(
  */
 function printProgress(test: TestData, total: number, index: number) {
     if (test.error) {
-        console.log(
-            '\x1b[91m',
-            `${index}/${total}: errored ${test.id} ${test.error.message}`,
-            '\x1b[0m'
-        );
+        console.log('\x1b[91m', `${index}/${total}: errored ${test.id} ${test.error.message}`, '\x1b[0m');
     } else if (!test.ok) {
-        console.log(
-            '\x1b[31m',
-            `${index}/${total}: failed ${test.id} ${test.difference}`,
-            '\x1b[0m'
-        );
+        console.log('\x1b[31m', `${index}/${total}: failed ${test.id} ${test.difference}`, '\x1b[0m');
     } else {
         console.log(`${index}/${total}: passed ${test.id}`);
     }
 }
 
-function printSpecificStatistics(
-    status: 'passed' | 'failed' | 'errored',
-    subsetStats: TestData[],
-    total: number,
-    suite: TestSuite
-) {
+function printSpecificStatistics(status: 'passed' | 'failed' | 'errored', subsetStats: TestData[], total: number, suite: TestSuite) {
     const statusCount = subsetStats.length;
     if (statusCount === 0) {
         return;
     }
-    console.log(
-        `${statusCount} ${status} (${((100 * statusCount) / total).toFixed(
-            1
-        )}%)`
-    );
+    console.log(`${statusCount} ${status} (${(100 * statusCount / total).toFixed(1)}%)`);
     for (const testData of subsetStats) {
-        const testCase = suite
-            .testCase()
-            .className(testData.id)
-            .name(testData.id);
+        const testCase = suite.testCase().className(testData.id).name(testData.id);
         if (status === 'failed') {
             testCase.failure();
         } else if (status === 'errored') {
@@ -1063,53 +848,31 @@ function printStatistics(stats: TestStats): boolean {
     printSpecificStatistics('errored', stats.errored, stats.total, suite);
 
     junitReportBuilder.writeTo('junit.xml');
-    return stats.failed.length + stats.errored.length === 0;
+    return (stats.failed.length + stats.errored.length) === 0;
 }
 
 function getReportItem(test: TestData) {
     return `<div class="test">
     <h2>${test.id}</h2>
-    ${
-        test.actual
-            ? `
+    ${test.actual ? `
     <div class="imagewrap">
         <div>
         <p>Actual</p>
-        <img src="data:image/png;base64,${
-            test.actual
-        }" data-alt-src="data:image/png;base64,${test.expected}">
+        <img src="data:image/png;base64,${test.actual}" data-alt-src="data:image/png;base64,${test.expected}">
         </div>
-        ${
-            test.diff
-                ? `
+        ${test.diff ? `
         <div>
         <p>Diff</p>
         <img src="data:image/png;base64,${test.diff}" data-alt-src="data:image/png;base64,${test.expected}">
-        </div>`
-                : ''
-        }
-        ${
-            test.expected
-                ? `
+        </div>` : ''}
+        ${test.expected ? `
         <div>
         <p>Closest expected</p>
         <img src="data:image/png;base64,${test.expected}"  >
-        </div>`
-                : ''
-        }
-    </div>`
-            : ''
-    }
-    ${
-        test.error
-            ? `<p style="color: red"><strong>Error:</strong> ${test.error.message}</p>`
-            : ''
-    }
-    ${
-        test.difference
-            ? `<p class="diff"><strong>Diff:</strong> ${test.difference}</p>`
-            : ''
-    }
+        </div>` : ''}
+    </div>` : ''}
+    ${test.error ? `<p style="color: red"><strong>Error:</strong> ${test.error.message}</p>` : ''}
+    ${test.difference ? `<p class="diff"><strong>Diff:</strong> ${test.difference}</p>` : ''}
 </div>`;
 }
 
@@ -1117,38 +880,22 @@ function applyDebugParameter(options: RenderOptions, page: Page) {
     if (options.debug) {
         page.on('console', async (message) => {
             if (message.text() !== 'JSHandle@error') {
-                console.log(
-                    `${message
-                        .type()
-                        .substring(0, 3)
-                        .toUpperCase()} ${message.text()}`
-                );
+                console.log(`${message.type().substring(0, 3).toUpperCase()} ${message.text()}`);
                 return;
             }
-            const messages = await Promise.all(
-                message.args().map((arg) => arg.getProperty('message'))
-            );
-            console.log(
-                `${message
-                    .type()
-                    .substring(0, 3)
-                    .toUpperCase()} ${messages.filter(Boolean)}`
-            );
+            const messages = await Promise.all(message.args().map((arg) => arg.getProperty('message')));
+            console.log(`${message.type().substring(0, 3).toUpperCase()} ${messages.filter(Boolean)}`);
         });
 
-        page.on('pageerror', ({message}) => console.error(message));
+        page.on('pageerror', (e) => { console.error(ensureError(e).message); });
 
-        page.on('response', (response) =>
-            console.log(`${response.status()} ${response.url()}`)
-        );
+        page.on('response', response => {
+            console.log(`${response.status()} ${response.url()}`);
+        });
 
-        page.on('requestfailed', (request) => {
+        page.on('requestfailed', request => {
             if (request) {
-                console.error(
-                    `requestfailed, error text: ${
-                        request.failure()?.errorText
-                    }, url: ${request.url()}`
-                );
+                console.error(`requestfailed, error text: ${request.failure()?.errorText}, url: ${request.url()}`);
             } else {
                 console.error('Request failed and request object is ', request);
             }
@@ -1156,11 +903,7 @@ function applyDebugParameter(options: RenderOptions, page: Page) {
     }
 }
 
-async function runTests(
-    page: Page,
-    testStyles: StyleWithTestData[],
-    directory: string
-) {
+async function runTests(page: Page, testStyles: StyleWithTestData[], directory: string) {
     let index = 0;
     for (const style of testStyles) {
         try {
@@ -1168,18 +911,13 @@ async function runTests(
             const data = await getImageFromStyle(style, page);
             compareRenderResults(directory, style.metadata.test, data);
         } catch (ex) {
-            style.metadata.test.error = ex;
+            style.metadata.test.error = ensureError(ex);
         }
         printProgress(style.metadata.test, testStyles.length, ++index);
     }
 }
 
-async function createPageAndStart(
-    browser: Browser,
-    testStyles: StyleWithTestData[],
-    directory: string,
-    options: RenderOptions
-) {
+async function createPageAndStart(browser: Browser, testStyles: StyleWithTestData[], directory: string, options: RenderOptions) {
     const page = await browser.newPage();
     await page.coverage.startJSCoverage({includeRawScriptCoverage: true});
     applyDebugParameter(options, page);
@@ -1197,16 +935,12 @@ async function closePageAndFinish(page: Page, reportCoverage: boolean) {
 
     const rawV8CoverageData = coverage.map((it) => {
         // Convert to raw v8 coverage format
-        const entry: any = {
+        const entry: any =  {
             source: it.text,
-            ...it.rawScriptCoverage,
+            ...it.rawScriptCoverage
         };
-        if (entry.url.endsWith('mapmtrics-gl-dev.js')) {
-            entry.sourceMap = JSON.parse(
-                fs
-                    .readFileSync('dist/mapmetrics-gl-dev.js.map')
-                    .toString('utf-8')
-            );
+        if (entry.url.endsWith('mapmetrics-gl-dev.js')) {
+            entry.sourceMap = JSON.parse(fs.readFileSync('dist/mapmetrics-gl-dev.js.map').toString('utf-8'));
         }
         return entry;
     });
@@ -1214,7 +948,10 @@ async function closePageAndFinish(page: Page, reportCoverage: boolean) {
     const coverageReport = new CoverageReport({
         name: 'Mapmetrics Coverage Report',
         outputDir: './coverage/render',
-        reports: [['v8'], ['codecov']],
+        reports: [['v8'], ['json']],
+        sourcePath: (relativePath)=> {
+            return path.resolve(relativePath);
+        }
     });
     coverageReport.cleanCache();
 
@@ -1239,14 +976,11 @@ async function executeRenderTests() {
         skipreport: false,
         seed: makeHash(),
         debug: false,
-        openBrowser: false,
+        openBrowser: false
     };
 
     if (process.argv.length > 2) {
-        options.tests =
-            process.argv.slice(2).filter((value, index, self) => {
-                return self.indexOf(value) === index;
-            }) || [];
+        options.tests = process.argv.slice(2).filter((value, index, self) => { return self.indexOf(value) === index; }) || [];
         options.recycleMap = checkParameter(options, '--recycle-map');
         options.skipreport = checkParameter(options, '--skip-report');
         options.seed = checkValueParameter(options, options.seed, '--seed');
@@ -1254,10 +988,7 @@ async function executeRenderTests() {
         options.openBrowser = checkParameter(options, '--open-browser');
     }
 
-    const browser = await puppeteer.launch({
-        headless: !options.openBrowser,
-        args: ['--enable-webgl', '--no-sandbox', '--disable-web-security'],
-    });
+    const browser = await launchPuppeteer(!options.openBrowser);
 
     const mount = st({
         path: 'test/integration/assets',
@@ -1265,6 +996,9 @@ async function executeRenderTests() {
         passthrough: true,
     });
     const server = http.createServer((req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*'); // Allow all origins, or specify 'http://your-frontend-domain.com'
+        res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, POST, PUT, DELETE');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Include any custom headers your client might send
         mount(req, res, () => {
             if (req.url.includes('/sparse204/1-')) {
                 res.writeHead(204);
@@ -1283,65 +1017,38 @@ async function executeRenderTests() {
         })
     );
 
-    await new Promise<void>((resolve) =>
-        server.listen(2900, '0.0.0.0', resolve)
-    );
-    await new Promise<void>((resolve) =>
-        mvtServer.listen(2901, '0.0.0.0', resolve)
-    );
+    await new Promise<void>((resolve) => server.listen(2900, '0.0.0.0', resolve));
+    await new Promise<void>((resolve) => mvtServer.listen(2901, '0.0.0.0', resolve));
 
     const directory = path.join(__dirname);
-    let testStyles = getTestStyles(
-        options,
-        directory,
-        (server.address() as any).port
-    );
+    let testStyles = getTestStyles(options, directory, (server.address() as any).port);
 
     if (process.env.SPLIT_COUNT && process.env.CURRENT_SPLIT_INDEX) {
-        const numberOfTestsForThisPart = Math.ceil(
-            testStyles.length / +process.env.SPLIT_COUNT
-        );
-        testStyles = testStyles.splice(
-            +process.env.CURRENT_SPLIT_INDEX * numberOfTestsForThisPart,
-            numberOfTestsForThisPart
-        );
+        const numberOfTestsForThisPart = Math.ceil(testStyles.length / +process.env.SPLIT_COUNT);
+        testStyles = testStyles.splice(+process.env.CURRENT_SPLIT_INDEX * numberOfTestsForThisPart, numberOfTestsForThisPart);
     }
 
-    let page = await createPageAndStart(
-        browser,
-        testStyles,
-        directory,
-        options
-    );
-    const failedTests = testStyles.filter(
-        (t) => t.metadata.test.error || !t.metadata.test.ok
-    );
+    let page = await createPageAndStart(browser, testStyles, directory, options);
+    const failedTests = testStyles.filter(t => t.metadata.test.error || !t.metadata.test.ok);
     await closePageAndFinish(page, failedTests.length === 0);
     if (failedTests.length > 0 && failedTests.length < testStyles.length) {
         console.log(`Re-running failed tests: ${failedTests.length}`);
         options.debug = true;
-        page = await createPageAndStart(
-            browser,
-            failedTests,
-            directory,
-            options
-        );
+        page = await createPageAndStart(browser, failedTests, directory, options);
         await closePageAndFinish(page, true);
     }
 
-    const tests = testStyles.map((s) => s.metadata.test).filter((t) => !!t);
+    const tests = testStyles.map(s => s.metadata.test).filter(t => !!t);
     const testStats: TestStats = {
         total: tests.length,
-        errored: tests.filter((t) => t.error),
-        failed: tests.filter((t) => !t.error && !t.ok),
-        passed: tests.filter((t) => !t.error && t.ok),
+        errored: tests.filter(t => t.error),
+        failed: tests.filter(t => !t.error && !t.ok),
+        passed: tests.filter(t => !t.error && t.ok)
     };
 
     if (process.env.UPDATE) {
         if (testStats.errored.length > 0) {
-            console.log(
-                `Updated ${testStats.failed.length}/${testStats.total} tests, ${testStats.errored.length} errored.`
-            );
+            console.log(`Updated ${testStats.failed.length}/${testStats.total} tests, ${testStats.errored.length} errored.`);
         } else {
             console.log(`Updated ${testStats.total} tests.`);
         }
@@ -1351,67 +1058,44 @@ async function executeRenderTests() {
     const success = printStatistics(testStats);
 
     if (!options.skipreport) {
-        const erroredItems = testStats.errored.map((t) => getReportItem(t));
-        const failedItems = testStats.failed.map((t) => getReportItem(t));
+        const erroredItems = testStats.errored.map(t => getReportItem(t));
+        const failedItems = testStats.failed.map(t => getReportItem(t));
 
         // write HTML reports
         let resultData: string;
         if (erroredItems.length || failedItems.length) {
-            const resultItemTemplate = fs
-                .readFileSync(path.join(__dirname, 'result_item_template.html'))
-                .toString();
+            const resultItemTemplate = fs.readFileSync(path.join(__dirname, 'result_item_template.html')).toString();
             resultData = resultItemTemplate
                 .replace('${failedItemsLength}', failedItems.length.toString())
                 .replace('${failedItems}', failedItems.join('\n'))
-                .replace(
-                    '${erroredItemsLength}',
-                    erroredItems.length.toString()
-                )
+                .replace('${erroredItemsLength}', erroredItems.length.toString())
                 .replace('${erroredItems}', erroredItems.join('\n'));
         } else {
             resultData = '<h1 style="color: green">All tests passed!</h1>';
         }
 
-        const reportTemplate = fs
-            .readFileSync(path.join(__dirname, 'report_template.html'))
-            .toString();
-        const resultsContent = reportTemplate.replace(
-            '${resultData}',
-            resultData
-        );
+        const reportTemplate = fs.readFileSync(path.join(__dirname, 'report_template.html')).toString();
+        const resultsContent = reportTemplate.replace('${resultData}', resultData);
 
-        const p = path.join(
-            __dirname,
-            options.recycleMap ? 'results-recycle-map.html' : 'results.html'
-        );
+        const p = path.join(__dirname, options.recycleMap ? 'results-recycle-map.html' : 'results.html');
         fs.writeFileSync(p, resultsContent, 'utf8');
         console.log(`\nFull html report is logged to '${p}'`);
 
         // write text report of just the error/failed id
         if (testStats.errored?.length > 0) {
-            const erroredItemIds = testStats.errored.map((t) => t.id);
-            const caseIdFileName = path.join(
-                __dirname,
-                'results-errored-caseIds.txt'
-            );
+            const erroredItemIds = testStats.errored.map(t => t.id);
+            const caseIdFileName = path.join(__dirname, 'results-errored-caseIds.txt');
             fs.writeFileSync(caseIdFileName, erroredItemIds.join('\n'), 'utf8');
 
-            console.log(
-                `\n${testStats.errored?.length} errored test case IDs are logged to '${caseIdFileName}'`
-            );
+            console.log(`\n${testStats.errored?.length} errored test case IDs are logged to '${caseIdFileName}'`);
         }
 
         if (testStats.failed?.length > 0) {
-            const failedItemIds = testStats.failed.map((t) => t.id);
-            const caseIdFileName = path.join(
-                __dirname,
-                'results-failed-caseIds.txt'
-            );
+            const failedItemIds = testStats.failed.map(t => t.id);
+            const caseIdFileName = path.join(__dirname, 'results-failed-caseIds.txt');
             fs.writeFileSync(caseIdFileName, failedItemIds.join('\n'), 'utf8');
 
-            console.log(
-                `\n${testStats.failed?.length} failed test case IDs are logged to '${caseIdFileName}'`
-            );
+            console.log(`\n${testStats.failed?.length} failed test case IDs are logged to '${caseIdFileName}'`);
         }
     }
 

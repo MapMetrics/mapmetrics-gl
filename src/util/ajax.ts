@@ -1,6 +1,6 @@
-import {extend, isWorker} from './util';
+import {ensureError, extend, isWorker} from './util';
 import {isMapMetricsGatewayUrl} from './mapmetrics_hosts';
-import {createAbortError} from './abort_error';
+import {AbortError, isAbortError, throwIfAborted} from './abort_error';
 import {getProtocol} from '../source/protocol_crud';
 import {MessageType} from './actor_messages';
 
@@ -15,12 +15,13 @@ export const GLOBAL_DISPATCHER_ID = 'global-dispatcher';
 export type ExpiryData = {
     cacheControl?: string | null;
     expires?: Date | string | null;
+    etag?: string;
     /**
      * Lower-cased `x-map-session-*` response headers, present only when the gateway rolled the v2
      * map-session credential over. The gateway lists them in `Access-Control-Expose-Headers`, so
      * they are readable cross-origin. Rides the same plumbing as the expiry data because tiles are
      * fetched on a worker thread and this is the only channel back to the main thread, where the
-     * session lives.
+     * session lives. Upstream's `etag` travels this exact path — keep the two together.
      */
     mapSessionHeaders?: {[_: string]: string} | null;
 };
@@ -90,6 +91,10 @@ export type RequestParameters = {
      * Parameters supported only by browser fetch API. Property of the Request interface contains the cache mode of the request. It controls how the request will interact with the browser's HTTP cache. (https://developer.mozilla.org/en-US/docs/Web/API/Request/cache)
      */
     cache?: RequestCache;
+    /**
+     * The referrer policy to use for the request. Controls how much referrer information is sent. (https://developer.mozilla.org/en-US/docs/Web/API/Request/referrerPolicy)
+     */
+    referrerPolicy?: ReferrerPolicy;
 };
 
 /**
@@ -154,11 +159,9 @@ export class AJAXError extends Error {
  * to the string(!) "null" (Firefox), or "file://" (Chrome, Safari, Edge),
  * and we will set an empty referrer. Otherwise, we're using the document's URL.
  */
-export const getReferrer = () =>
-    isWorker(self)
-        ? self.worker && self.worker.referrer
-        : (window.location.protocol === 'blob:' ? window.parent : window)
-            .location.href;
+export const getReferrer = () => isWorker(self) ?
+    self.worker?.referrer :
+    (window.location.protocol === 'blob:' ? window.parent : window).location.href;
 
 /**
  * Determines whether a URL is a file:// URL. This is obviously the case if it begins
@@ -167,25 +170,74 @@ export const getReferrer = () =>
  * @param url - The URL to check
  * @returns `true` if the URL is a file:// URL, `false` otherwise
  */
-const isFileURL = (url) =>
-    /^file:/.test(url) || (/^file:/.test(getReferrer()) && !/^\w+:/.test(url));
+const isFileURL = url => url.startsWith('file:') || (getReferrer()?.startsWith('file:') && !/^\w+:/.test(url));
 
-function makeXMLHttpRequest(
-    requestParameters: RequestParameters,
-    abortController: AbortController
-): Promise<GetResourceResponse<any>> {
+async function makeFetchRequest(requestParameters: RequestParameters, abortController: AbortController): Promise<GetResourceResponse<any>> {
+    const request = new Request(requestParameters.url, {
+        method: requestParameters.method || 'GET',
+        body: requestParameters.body,
+        // Gateway hosts always get credentials: the v1 session cookie rides on them. Everything
+        // else keeps whatever the caller asked for. See {@link isMapMetricsGatewayUrl} — the
+        // predicate is an exact hostname match, deliberately, so a URL that merely *contains*
+        // a gateway hostname is not handed the cookie.
+        credentials: isMapMetricsGatewayUrl(requestParameters.url) ? 'include' : requestParameters.credentials,
+        headers: requestParameters.headers,
+        cache: requestParameters.cache,
+        referrer: getReferrer(),
+        referrerPolicy: requestParameters.referrerPolicy,
+        signal: abortController.signal,
+        mode: 'cors'
+    });
+
+    // If the user has already set an Accept header, do not overwrite it here
+    if (requestParameters.type === 'json' && !request.headers.has('Accept')) {
+        request.headers.set('Accept', 'application/json');
+    }
+
+    let response: Response;
+    try {
+        response = await fetch(request);
+    } catch (e) {
+        // Pass through AbortErrors for upstream handling
+        if (isAbortError(e)) {
+            throw e;
+        }
+
+        // When the error is due to CORS policy, DNS issue or malformed URL, the fetch call does not resolve but throws a generic TypeError instead.
+        // It is preferable to throw an AJAXError so that the Map event "error" can catch it and still have
+        // access to the faulty url. In such case, we provide the arbitrary HTTP error code of `0`.
+        throw new AJAXError(0, ensureError(e).message, requestParameters.url, new Blob());
+    }
+
+    if (!response.ok) {
+        const body = await response.blob();
+        throw new AJAXError(response.status, response.statusText, requestParameters.url, body);
+    }
+    let parsePromise: Promise<any>;
+    if ((requestParameters.type === 'arrayBuffer' || requestParameters.type === 'image')) {
+        parsePromise = response.arrayBuffer();
+    } else if (requestParameters.type === 'json') {
+        parsePromise = response.json();
+    } else {
+        parsePromise = response.text();
+    }
+    const result = await parsePromise;
+    throwIfAborted(abortController.signal);
+    return {
+        data: result,
+        cacheControl: response.headers.get('Cache-Control'),
+        expires: response.headers.get('Expires'),
+        etag: response.headers.get('ETag'),
+        mapSessionHeaders: collectMapSessionHeaders(name => response.headers.get(name))
+    };
+}
+
+function makeXMLHttpRequest(requestParameters: RequestParameters, abortController: AbortController): Promise<GetResourceResponse<any>> {
     return new Promise((resolve, reject) => {
         const xhr: XMLHttpRequest = new XMLHttpRequest();
 
-        xhr.open(
-            requestParameters.method || 'GET',
-            requestParameters.url,
-            true
-        );
-        if (
-            requestParameters.type === 'arrayBuffer' ||
-            requestParameters.type === 'image'
-        ) {
+        xhr.open(requestParameters.method || 'GET', requestParameters.url, true);
+        if (requestParameters.type === 'arrayBuffer' || requestParameters.type === 'image') {
             xhr.responseType = 'arraybuffer';
         }
         for (const k in requestParameters.headers) {
@@ -198,23 +250,19 @@ function makeXMLHttpRequest(
                 xhr.setRequestHeader('Accept', 'application/json');
             }
         }
-        // Enable credentials for MapMetrics gateways to allow cookie setting.
+        // Enable credentials for MapMetrics gateways so the v1 session cookie is sent and can be set.
         // NOTE: no font/sprite carve-out here, deliberately. This is the transport layer and it
-        // preserves today's live behaviour: every gateway request carries credentials. The
-        // carve-outs live in the callers that FORCE credentials onto a request that did not ask.
-        xhr.withCredentials = isMapMetricsGatewayUrl(requestParameters.url);
+        // preserves live behaviour: every gateway request carries credentials. The carve-outs live
+        // in the callers that FORCE credentials onto a request that did not ask for them.
+        xhr.withCredentials = isMapMetricsGatewayUrl(requestParameters.url) || requestParameters.credentials === 'include';
         xhr.onerror = () => {
-            console.error(`🍪 XHR error for ${requestParameters.url.substring(0, 50)}...`, xhr.status, xhr.statusText);
             reject(new Error(xhr.statusText));
         };
         xhr.onload = () => {
             if (abortController.signal.aborted) {
                 return;
             }
-            if (
-                ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 0) &&
-                xhr.response !== null
-            ) {
+            if (((xhr.status >= 200 && xhr.status < 300) || xhr.status === 0) && xhr.response !== null) {
                 let data: unknown = xhr.response;
                 if (requestParameters.type === 'json') {
                     // We're manually parsing JSON here to get better error messages.
@@ -229,92 +277,20 @@ function makeXMLHttpRequest(
                     data,
                     cacheControl: xhr.getResponseHeader('Cache-Control'),
                     expires: xhr.getResponseHeader('Expires'),
-                    mapSessionHeaders: collectMapSessionHeaders((name) => xhr.getResponseHeader(name)),
+                    etag: xhr.getResponseHeader('ETag'),
+                    mapSessionHeaders: collectMapSessionHeaders(name => xhr.getResponseHeader(name))
                 });
             } else {
-                const body = new Blob([xhr.response], {
-                    type: xhr.getResponseHeader('Content-Type'),
-                });
-                console.error(`🍪 XHR failed for ${requestParameters.url.substring(0, 50)}...`, xhr.status, xhr.statusText);
-                reject(
-                    new AJAXError(
-                        xhr.status,
-                        xhr.statusText,
-                        requestParameters.url,
-                        body
-                    )
-                );
+                const body = new Blob([xhr.response], {type: xhr.getResponseHeader('Content-Type')});
+                reject(new AJAXError(xhr.status, xhr.statusText, requestParameters.url, body));
             }
         };
         abortController.signal.addEventListener('abort', () => {
             xhr.abort();
-            reject(createAbortError());
+            reject(new AbortError(abortController.signal.reason));
         });
         xhr.send(requestParameters.body);
     });
-}
-
-async function makeFetchRequest(
-    requestParameters: RequestParameters,
-    abortController: AbortController
-): Promise<GetResourceResponse<any>> {
-    const request = new Request(requestParameters.url, {
-        method: requestParameters.method || 'GET',
-        body: requestParameters.body,
-        credentials: isMapMetricsGatewayUrl(requestParameters.url) ? 'include' : undefined,
-        headers: requestParameters.headers,
-        cache: requestParameters.cache,
-        referrer: getReferrer(),
-        signal: abortController.signal,
-        mode: 'cors'  // Explicitly set CORS mode
-    });
-
-    // If the user has already set an Accept header, do not overwrite it here
-    if (requestParameters.type === 'json' && !request.headers.has('Accept')) {
-        request.headers.set('Accept', 'application/json');
-    }
-
-    let response: Response;
-    try {
-        response = await fetch(request);
-    } catch (e) {
-        // When the error is due to CORS policy, DNS issue or malformed URL, the fetch call does not resolve but throws a generic TypeError instead.
-        // It is preferable to throw an AJAXError so that the Map event "error" can catch it and still have
-        // access to the faulty url. In such case, we provide the arbitrary HTTP error code of `0`.
-        throw new AJAXError(0, e.message, requestParameters.url, new Blob());
-    }
-
-    if (!response.ok) {
-        const body = await response.blob();
-        throw new AJAXError(
-            response.status,
-            response.statusText,
-            requestParameters.url,
-            body
-        );
-    }
-
-    let parsePromise: Promise<any>;
-    if (
-        requestParameters.type === 'arrayBuffer' ||
-        requestParameters.type === 'image'
-    ) {
-        parsePromise = response.arrayBuffer();
-    } else if (requestParameters.type === 'json') {
-        parsePromise = response.json();
-    } else {
-        parsePromise = response.text();
-    }
-    const result = await parsePromise;
-    if (abortController.signal.aborted) {
-        throw createAbortError();
-    }
-    return {
-        data: result,
-        cacheControl: response.headers.get('Cache-Control'),
-        expires: response.headers.get('Expires'),
-        mapSessionHeaders: collectMapSessionHeaders((name) => response.headers.get(name)),
-    };
 }
 
 /**
@@ -325,18 +301,17 @@ async function makeFetchRequest(
  * @param abortController - The abort controller allowing to cancel the request
  * @returns a promise resolving to the response, including cache control and expiry data
  */
-export const makeRequest = function (
-    requestParameters: RequestParameters,
-    abortController: AbortController
-): Promise<GetResourceResponse<any>> {
+export const makeRequest = async function(requestParameters: RequestParameters, abortController: AbortController): Promise<GetResourceResponse<any>> {
     const url = requestParameters.url;
     // Transport selection, not a credential decision: gateway hosts plus two tile path shapes
     // that may be served from a customer's own domain.
     const isMapMetricsRequest = isMapMetricsGatewayUrl(url) ||
-                               url.includes('/rtile/') ||
-                               url.includes('/vector-tile/');
-    
-    // Always set headers for MapMetrics domains, rtile and vector tile requests, except for font, style, and sprite requests
+        url.includes('/rtile/') ||
+        url.includes('/vector-tile/');
+
+    // Tile bodies are protobuf. Fonts, styles and sprites are NOT — asking for protobuf there
+    // makes the gateway 406 or return the wrong content type, so the exclusions below are
+    // load-bearing in the opposite direction from the gate itself.
     if (isMapMetricsRequest &&
         !url.includes('/fonts/') &&
         !url.includes('/basemaps-assets/fonts/') &&
@@ -348,96 +323,60 @@ export const makeRequest = function (
         };
     }
 
-    // For MapMetrics domains, rtile and vector tile requests, always use XMLHttpRequest
+    // For MapMetrics gateway and tile-shaped requests, always use XMLHttpRequest.
     if (isMapMetricsRequest) {
         return makeXMLHttpRequest(requestParameters, abortController);
     }
 
-    if (
-        /:\/\//.test(requestParameters.url) &&
-        !/^https?:|^file:/.test(requestParameters.url)
-    ) {
+    if (requestParameters.url.includes('://') && !(/^https?:|^file:/.test(requestParameters.url))) {
         const protocolLoadFn = getProtocol(requestParameters.url);
         if (protocolLoadFn) {
-            return protocolLoadFn(requestParameters, abortController);
+            const response = await protocolLoadFn(requestParameters, abortController);
+            if (!response.data && requestParameters.type === 'arrayBuffer') {
+                // A successful array buffer request should always return data even if empty
+                return extend(response, {data: new ArrayBuffer(0)});
+            }
+            return response;
         }
-        if (isWorker(self) && self.worker && self.worker.actor) {
-            return self.worker.actor.sendAsync(
-                {
-                    type: MessageType.getResource,
-                    data: requestParameters,
-                    targetMapId: GLOBAL_DISPATCHER_ID,
-                },
-                abortController
-            );
+        if (isWorker(self) && self.worker?.actor) {
+            return self.worker.actor.sendAsync({type: MessageType.getResource, data: requestParameters, targetMapId: GLOBAL_DISPATCHER_ID}, abortController);
         }
     }
     if (!isFileURL(requestParameters.url)) {
-        if (
-            fetch &&
-            Request &&
-            AbortController &&
-            Object.prototype.hasOwnProperty.call(Request.prototype, 'signal')
-        ) {
+        if (fetch && Request && AbortController && Object.hasOwn(Request.prototype, 'signal')) {
             return makeFetchRequest(requestParameters, abortController);
         }
-        if (isWorker(self) && self.worker && self.worker.actor) {
-            return self.worker.actor.sendAsync(
-                {
-                    type: MessageType.getResource,
-                    data: requestParameters,
-                    mustQueue: true,
-                    targetMapId: GLOBAL_DISPATCHER_ID,
-                },
-                abortController
-            );
+        if (isWorker(self) && self.worker?.actor) {
+            return self.worker.actor.sendAsync({type: MessageType.getResource, data: requestParameters, mustQueue: true, targetMapId: GLOBAL_DISPATCHER_ID}, abortController);
         }
     }
     return makeXMLHttpRequest(requestParameters, abortController);
 };
 
-export const getJSON = <T>(
-    requestParameters: RequestParameters,
-    abortController: AbortController
-): Promise<{ data: T } & ExpiryData> => {
-    return makeRequest(
-        extend(requestParameters, {type: 'json'}),
-        abortController
-    );
+export const getJSON = <T>(requestParameters: RequestParameters, abortController: AbortController): Promise<{data: T} & ExpiryData> => {
+    return makeRequest(extend(requestParameters, {type: 'json'}), abortController);
 };
 
-export const getArrayBuffer = (
-    requestParameters: RequestParameters,
-    abortController: AbortController
-): Promise<{ data: ArrayBuffer } & ExpiryData> => {
-    return makeRequest(
-        extend(requestParameters, {type: 'arrayBuffer'}),
-        abortController
-    );
+export const getArrayBuffer = (requestParameters: RequestParameters, abortController: AbortController): Promise<{data: ArrayBuffer} & ExpiryData> => {
+    return makeRequest(extend(requestParameters, {type: 'arrayBuffer'}), abortController);
 };
 
 export function sameOrigin(inComingUrl: string) {
     // A relative URL "/foo" or "./foo" will throw exception in URL's ctor,
     // try-catch is expansive so just use a heuristic check to avoid it
     // also check data URL
-    if (
-        !inComingUrl ||
+    if (!inComingUrl ||
         inComingUrl.indexOf('://') <= 0 || // relative URL
-        inComingUrl.indexOf('data:image/') === 0 || // data image URL
-        inComingUrl.indexOf('blob:') === 0
-    ) {
-        // blob
+        inComingUrl.startsWith('data:image/') || // data image URL
+        inComingUrl.startsWith('blob:')) { // blob
         return true;
     }
     const urlObj = new URL(inComingUrl);
     const locationObj = window.location;
-    return (
-        urlObj.protocol === locationObj.protocol &&
-        urlObj.host === locationObj.host
-    );
+    return urlObj.protocol === locationObj.protocol && urlObj.host === locationObj.host;
 }
 
-export const getVideo = (urls: Array<string>): Promise<HTMLVideoElement> => {
+export const getVideo = (urls: string[]): Promise<HTMLVideoElement> => {
     const video: HTMLVideoElement = window.document.createElement('video');
     video.muted = true;
     return new Promise((resolve) => {
@@ -445,8 +384,7 @@ export const getVideo = (urls: Array<string>): Promise<HTMLVideoElement> => {
             resolve(video);
         };
         for (const url of urls) {
-            const s: HTMLSourceElement =
-                window.document.createElement('source');
+            const s: HTMLSourceElement = window.document.createElement('source');
             if (!sameOrigin(url)) {
                 video.crossOrigin = 'Anonymous';
             }

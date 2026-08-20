@@ -6,7 +6,7 @@
     }
   },
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "geojson",
       "data": {
         "type": "FeatureCollection",
@@ -38,7 +38,7 @@
     {
       "id": "literal",
       "type": "symbol",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "layout": {
         "text-field": "abcde\n\nabcde",
         "text-font": [

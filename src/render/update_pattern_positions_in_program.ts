@@ -1,6 +1,6 @@
 import type {CrossFaded} from '../style/properties';
 import type {ResolvedImage} from '@maplibre/maplibre-gl-style-spec';
-import type {Tile} from '../source/tile';
+import type {Tile} from '../tile/tile';
 import type {ProgramConfiguration} from '../data/program_configuration';
 import type {FillExtrusionStyleLayer} from '../style/style_layer/fill_extrusion_style_layer';
 import type {FillStyleLayer} from '../style/style_layer/fill_style_layer';
@@ -25,7 +25,7 @@ export function updatePatternPositionsInProgram(
     tile: Tile,
     layer: FillStyleLayer | FillExtrusionStyleLayer): void {
 
-    if (!constantPattern || !tile || !tile.imageAtlas) {
+    if (!constantPattern || !tile?.imageAtlas) {
         return;
     }
 
@@ -33,7 +33,7 @@ export function updatePatternPositionsInProgram(
     let posTo = patternPositions[constantPattern.to.toString()];
     let posFrom = patternPositions[constantPattern.from.toString()];
 
-    // https://github.com/maplibre/maplibre-gl-js/issues/3377
+    // https://github.com/mapmetrics/mapmetrics-gl-js/issues/3377
     if (!posTo && posFrom) posTo = posFrom;
     if (!posFrom && posTo) posFrom = posTo;
 

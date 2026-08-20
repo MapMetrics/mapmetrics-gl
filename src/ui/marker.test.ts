@@ -84,7 +84,7 @@ describe('marker', () => {
         expect(marker.getElement()).toBe(element);
     });
 
-    test('Marker#addTo adds the marker element to the canvas container', () => {
+    test('Marker.addTo adds the marker element to the canvas container', () => {
         const map = createMap();
         new Marker()
             .setLngLat([-77.01866, 38.888])
@@ -146,21 +146,39 @@ describe('marker', () => {
 
     });
 
-    test('Marker#setPopup binds a popup', () => {
+    test('Marker.setPopup binds a popup', () => {
         const popup = new Popup();
         const marker = new Marker()
             .setPopup(popup);
         expect(marker.getPopup()).toBe(popup);
     });
 
-    test('Marker#setPopup unbinds a popup', () => {
+    test('Marker.setPopup unbinds a popup', () => {
         const marker = new Marker()
             .setPopup(new Popup())
             .setPopup();
         expect(!marker.getPopup()).toBeTruthy();
     });
 
-    test('Marker#togglePopup opens a popup that was closed', async () => {
+    test('Marker.setPopup binds a popup and allow closing it with click', () => {
+        const map = createMap();
+        const popup = new Popup()
+            .setText('Test');
+        const marker = new Marker()
+            .setLngLat([0,0])
+            .setPopup(popup)
+            .addTo(map);
+
+        // open popup
+        marker.togglePopup();
+        const spy = vi.fn();
+        popup.on('close', spy);
+        map.getContainer().querySelector<HTMLButtonElement>('.mapmetricsgl-popup-close-button').click();
+
+        expect(spy).toHaveBeenCalled();
+    });
+
+    test('Marker.togglePopup opens a popup that was closed', async () => {
         const map = createMap();
         const marker = new Marker()
             .setLngLat([0, 0])
@@ -175,7 +193,7 @@ describe('marker', () => {
         map.remove();
     });
 
-    test('Marker#togglePopup closes a popup that was open', () => {
+    test('Marker.togglePopup closes a popup that was open', () => {
         const map = createMap();
         const marker = new Marker()
             .setLngLat([0, 0])
@@ -229,14 +247,14 @@ describe('marker', () => {
         map.remove();
     });
 
-    test('Marker#setPopup sets a tabindex', () => {
+    test('Marker.setPopup sets a tabindex', () => {
         const popup = new Popup();
         const marker = new Marker()
             .setPopup(popup);
         expect(marker.getElement().getAttribute('tabindex')).toBe('0');
     });
 
-    test('Marker#setPopup removes tabindex when unset', () => {
+    test('Marker.setPopup removes tabindex when unset', () => {
         const popup = new Popup();
         const marker = new Marker()
             .setPopup(popup)
@@ -244,7 +262,7 @@ describe('marker', () => {
         expect(marker.getElement().getAttribute('tabindex')).toBeFalsy();
     });
 
-    test('Marker#setPopup does not replace existing tabindex', () => {
+    test('Marker.setPopup does not replace existing tabindex', () => {
         const element = window.document.createElement('div');
         element.setAttribute('tabindex', '5');
         const popup = new Popup();
@@ -258,6 +276,25 @@ describe('marker', () => {
         const marker = new Marker().setLngLat([0, 0]).addTo(map);
 
         expect(marker.getElement().getAttribute('aria-label')).toBe('alt title');
+    });
+
+    test('Marker aria-label is not set if the element already has one', () => {
+        const map = createMap({locale: {'Marker.Title': 'alt title'}});
+        const customHtmlElement = document.createElement('div');
+        customHtmlElement.setAttribute('aria-label', 'custom aria label');
+
+        const markerWithHtmlElement = new Marker({
+            element: customHtmlElement
+        }).setLngLat([10, 10]).addTo(map);
+
+        expect(markerWithHtmlElement.getElement().getAttribute('aria-label')).toBe('custom aria label');
+    });
+
+    test('Marker should have a role attribute to satisfy accessibility requirements for the aria-label', () => {
+        const map = createMap({locale: {'Marker.Title': 'alt title'}});
+        const marker = new Marker().setLngLat([0, 0]).addTo(map);
+
+        expect(marker.getElement().getAttribute('role')).toBe('button');
     });
 
     test('Marker anchor defaults to center', () => {
@@ -427,7 +464,7 @@ describe('marker', () => {
         map.remove();
     });
 
-    test('Marker#setDraggable adds drag functionality', () => {
+    test('Marker.setDraggable adds drag functionality', () => {
         const map = createMap();
         const marker = new Marker()
             .setLngLat([0, 0])
@@ -439,7 +476,7 @@ describe('marker', () => {
         map.remove();
     });
 
-    test('Marker#setDraggable turns off drag functionality', () => {
+    test('Marker.setDraggable turns off drag functionality', () => {
         const map = createMap();
         const marker = new Marker({draggable: true})
             .setLngLat([0, 0])
@@ -754,6 +791,46 @@ describe('marker', () => {
         map.remove();
     });
 
+    test('Marker fires click event when clicked', () => {
+        const map = createMap();
+        const marker = new Marker()
+            .setLngLat([0, 0])
+            .addTo(map);
+        const el = marker.getElement();
+
+        const clickSpy = vi.fn();
+        marker.on('click', clickSpy);
+
+        // Simulate click on the marker element
+        el.click();
+
+        expect(clickSpy).toHaveBeenCalledTimes(1);
+
+        map.remove();
+    });
+
+    test('Marker removes click listener on remove()', () => {
+        const map = createMap();
+        const marker = new Marker()
+            .setLngLat([0, 0])
+            .addTo(map);
+        const el = marker.getElement();
+
+        const clickSpy = vi.fn();
+        marker.on('click', clickSpy);
+
+        el.click();
+        expect(clickSpy).toHaveBeenCalledTimes(1);
+
+        marker.remove();
+
+        // After remove(), clicking the element should not fire the marker's click event
+        el.click();
+        expect(clickSpy).toHaveBeenCalledTimes(1);
+
+        map.remove();
+    });
+
     test('Marker with draggable:true does not error if removed on mousedown', () => {
         const map = createMap();
         const marker = new Marker({draggable: true})
@@ -1035,6 +1112,34 @@ describe('marker', () => {
         map.remove();
     });
 
+    test('Applies options.opacityWhenCovered when marker is covered by globe with terrain disabled or enabled', async () => {
+        const map = createMap({width: 1024, renderWorldCopies: true});
+        await map.once('load');
+
+        const marker = new Marker({opacity: '0.7', opacityWhenCovered: '0.3'})
+            .setLngLat([180, 0])
+            .addTo(map);
+
+        map.setProjection({type: 'globe'}); // Enable the globe projection
+        await sleep(100); // Give time for the projection to load
+        expect(marker.getElement().style.opacity).toBe('0.3');
+        marker.setLngLat([0, 0]);
+        await sleep(100); // Give marker change time to load
+        expect(marker.getElement().style.opacity).toBe('0.7');
+
+        map.terrain = createTerrain(); // Enable terrain
+        await sleep(100); // Give time for the terrain to load
+        map.fire('terrain'); // Trigger terrain event for marker
+        marker.setLngLat([180, 0]);
+        await sleep(100); // Give marker change time to load
+        expect(marker.getElement().style.opacity).toBe('0.3');
+        marker.setLngLat([0, 0]);
+        await sleep(100); // Give marker change time to load
+        expect(marker.getElement().style.opacity).toBe('0.7');
+
+        map.remove();
+    });
+
     test('Removes an open popup when going behind 3d terrain', async () => {
         const map = createMap();
         const marker = new Marker()
@@ -1090,6 +1195,21 @@ describe('marker', () => {
         expect(marker._lngLat.lng).toBe(-179);
     });
 
+    test('Marker\'s lng is wrapped when slightly crossing 180 with zoomed out globe', async () => {
+        const map = createMap({width: 1024, renderWorldCopies: true});
+        await map.once('load');
+        map.setProjection({type: 'globe'});
+        map.setZoom(0);
+
+        const marker = new Marker()
+            .setLngLat([179, 0])
+            .addTo(map);
+
+        marker.setLngLat([181, 0]);
+
+        expect(marker._lngLat.lng).toBe(-179);
+    });
+
     test('should round the marker transform position to whole pixels when subpixel positioning is disabled', () => {
         const map = createMap();
         const marker = new Marker()
@@ -1125,5 +1245,114 @@ describe('marker', () => {
         const adjustedTransform = marker.getElement().style.transform;
         expect(adjustedTransform)
             .toContain('translate(262.4px, 235.5934100987358px)');
+    });
+
+    test('Sets opacity according to options.opacity when provided a number', async () => {
+        const map = createMap();
+        const marker = new Marker({opacity: 0.7})
+            .setLngLat([0, 0])
+            .addTo(map);
+        await sleep(100);
+        expect(marker.getElement().style.opacity).toMatch('.7');
+        map.remove();
+    });
+
+    test('Changes opacity to a new number value provided by setOpacity', () => {
+        const map = createMap();
+        const marker = new Marker({opacity: 0.7})
+            .setLngLat([0, 0])
+            .addTo(map);
+        marker.setOpacity(0.6);
+        expect(marker.getElement().style.opacity).toMatch('.6');
+        map.remove();
+    });
+
+    test('Applies new "opacityWhenCovered" provided by setOpacity when provided a number', () => {
+        const map = createMap();
+        map.transform.lngLatToCameraDepth = () => .95; // Mocking distance to marker
+        const marker = new Marker({opacityWhenCovered: 0.15})
+            .setLngLat([0, 0])
+            .addTo(map);
+
+        map.terrain = createTerrain();
+        map.fire('terrain');
+
+        marker.setOpacity(undefined, 0.35);
+
+        expect(marker.getElement().style.opacity).toMatch('0.35');
+        map.remove();
+    });
+
+    test('Adds mapmetricsgl-marker-covered class when marker is covered by 3d terrain', async () => {
+        const map = createMap();
+        vi.spyOn(MercatorTransform.prototype, 'lngLatToCameraDepth').mockImplementation((_lngLat, _ele) => 0.95);
+        const marker = new Marker()
+            .setLngLat([0, 0])
+            .addTo(map);
+
+        map.terrain = createTerrain();
+        map.terrain.depthAtPoint = () => .92; // Mocking terrain blocking marker
+        map.fire('terrain');
+        await sleep(100);
+
+        expect(marker.getElement().classList.contains('mapmetricsgl-marker-covered')).toBe(true);
+        map.remove();
+    });
+
+    test('Removes mapmetricsgl-marker-covered class when marker is no longer covered by 3d terrain', async () => {
+        const map = createMap();
+        vi.spyOn(MercatorTransform.prototype, 'lngLatToCameraDepth').mockImplementation((_lngLat, _ele) => 0.95);
+        const marker = new Marker()
+            .setLngLat([0, 0])
+            .addTo(map);
+
+        map.terrain = createTerrain();
+        map.terrain.depthAtPoint = () => .92; // Terrain blocking marker
+        map.fire('terrain');
+        await sleep(100);
+
+        expect(marker.getElement().classList.contains('mapmetricsgl-marker-covered')).toBe(true);
+
+        map.terrain.depthAtPoint = () => .95; // Terrain no longer blocking marker
+        map.fire('moveend');
+        await sleep(100);
+
+        expect(marker.getElement().classList.contains('mapmetricsgl-marker-covered')).toBe(false);
+        map.remove();
+    });
+
+    test('Adds mapmetricsgl-marker-covered class when marker is covered by globe', async () => {
+        const map = createMap({width: 1024, renderWorldCopies: true});
+        await map.once('load');
+
+        const marker = new Marker()
+            .setLngLat([180, 0])
+            .addTo(map);
+
+        map.setProjection({type: 'globe'});
+        await sleep(100);
+
+        expect(marker.getElement().classList.contains('mapmetricsgl-marker-covered')).toBe(true);
+        map.remove();
+    });
+
+    test('Removes mapmetricsgl-marker-covered class when marker is no longer covered by globe', async () => {
+        const map = createMap({width: 1024, renderWorldCopies: true});
+        await map.once('load');
+
+        const marker = new Marker()
+            .setLngLat([180, 0])
+            .addTo(map);
+
+        map.setProjection({type: 'globe'});
+        await sleep(100);
+
+        expect(marker.getElement().classList.contains('mapmetricsgl-marker-covered')).toBe(true);
+
+        marker.setLngLat([0, 0]);
+        await sleep(100);
+
+        expect(marker.getElement().classList.contains('mapmetricsgl-marker-covered')).toBe(false);
+        map.remove();
     });
 });

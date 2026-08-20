@@ -1,7 +1,7 @@
 import {DOM} from '../../util/dom';
 
-import {defaultEasing, bezier, zoomScale, scaleZoom} from '../../util/util';
-import {browser} from '../../util/browser';
+import {defaultEasing, bezier, zoomScale, scaleZoom, evaluateZoomSnap} from '../../util/util';
+import {now} from '../../util/time_control';
 import {interpolates} from '@maplibre/maplibre-gl-style-spec';
 import {LngLat} from '../../geo/lng_lat';
 import {TransformProvider} from './transform-provider';
@@ -16,12 +16,12 @@ const wheelZoomDelta = 4.000244140625;
 
 // These magic numbers control the rate of zoom. Trackpad events fire at a greater
 // frequency than mouse scroll wheel, so reduce the zoom rate per wheel tick
-const defaultZoomRate = 1 / 1000;  // Was 1/1200, now 1.2x faster
-const wheelZoomRate = 1 / 1000;    // Was 1/1200, now 1.2x faster
+const defaultZoomRate = 1 / 1000;  // MapMetrics retune: 10x gentler than upstream's 1/100.
+const wheelZoomRate = 1 / 1000;    // MapMetrics retune, from upstream's 1/450.
 
 // upper bound on how much we scale the map in any single render frame; this
 // is used to limit zoom rate in the case of very fast scrolling
-const maxScalePerFrame = 2.2;  // Was 2, now 1.1x faster
+const maxScalePerFrame = 2.2;      // MapMetrics retune, from upstream's 2.
 
 // Minimum time difference value to be used for calculating zoom easing in renderFrame();
 // this is used to normalise very fast (typically 0 to 0.3ms) repeating lastWheelEventTimeDiff
@@ -60,7 +60,7 @@ export class ScrollZoomHandler implements Handler {
         easing: (_: number) => number;
     };
 
-    _frameId: boolean;
+    _needsRerender: boolean;
     _triggerRenderFrame: () => void;
 
     _defaultZoomRate: number;
@@ -175,10 +175,10 @@ export class ScrollZoomHandler implements Handler {
             return;
         }
         let value = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaY * 40 : e.deltaY;
-        const now = browser.now(),
-            timeDelta = now - (this._lastWheelEventTime || 0);
+        const currentTime = now(),
+            timeDelta = currentTime - (this._lastWheelEventTime || 0);
 
-        this._lastWheelEventTime = now;
+        this._lastWheelEventTime = currentTime;
 
         if (value !== 0 && (value % wheelZoomDelta) === 0) {
             // This one is definitely a mouse wheel event.
@@ -236,9 +236,7 @@ export class ScrollZoomHandler implements Handler {
     _start(e: MouseEvent) {
         if (!this._delta) return;
 
-        if (this._frameId) {
-            this._frameId = null;
-        }
+        this._needsRerender = false;
 
         this._active = true;
         if (!this.isZooming()) {
@@ -260,15 +258,15 @@ export class ScrollZoomHandler implements Handler {
             this._aroundPoint = pos;
         }
 
-        if (!this._frameId) {
-            this._frameId = true;
+        if (!this._needsRerender) {
+            this._needsRerender = true;
             this._triggerRenderFrame();
         }
     }
 
     renderFrame() {
-        if (!this._frameId) return;
-        this._frameId = null;
+        if (!this._needsRerender) return;
+        this._needsRerender = false;
 
         if (!this.isActive()) return;
         const tr = this._tr.transform;
@@ -289,7 +287,7 @@ export class ScrollZoomHandler implements Handler {
         if (this._delta !== 0) {
             // For trackpad events and single mouse wheel ticks, use the default zoom rate
             const zoomRate = (this._type === 'wheel' && Math.abs(this._delta) > wheelZoomDelta) ? this._wheelZoomRate : this._defaultZoomRate;
-            // Scale by sigmoid of scroll wheel delta.
+            // Scale by sigmoid of scroll wheel delta so the map responds to small scrolls and compresses large scrolls
             let scale = maxScalePerFrame / (1 + Math.exp(-Math.abs(this._delta * zoomRate)));
 
             if (this._delta < 0 && scale !== 0) {
@@ -297,7 +295,15 @@ export class ScrollZoomHandler implements Handler {
             }
 
             const fromScale = typeof this._targetZoom !== 'number' ? tr.scale : zoomScale(this._targetZoom);
-            this._targetZoom = Math.min(tr.maxZoom, Math.max(tr.minZoom, scaleZoom(fromScale * scale)));
+            const target = tr.applyConstrain(tr.getCameraLngLat(), scaleZoom(fromScale * scale)).zoom;
+            const zoomSnap = this._map.getZoomSnap();
+
+            if (this._type === 'wheel' && zoomSnap > 0) {
+                const currentSnapped = evaluateZoomSnap(tr.zoom, zoomSnap);
+                this._targetZoom = evaluateZoomSnap(target, zoomSnap, target - currentSnapped);
+            } else {
+                this._targetZoom = target;
+            }
 
             // if this is a mouse wheel, refresh the starting zoom and easing
             // function we're using to smooth out the zooming between wheel
@@ -318,16 +324,14 @@ export class ScrollZoomHandler implements Handler {
         let zoom;
 
         if (this._type === 'wheel' && startZoom && easing) {
-            const lastWheelEventTimeDiff = browser.now() - this._lastWheelEventTime;
+            const lastWheelEventTimeDiff = now() - this._lastWheelEventTime;
 
             const t = Math.min((lastWheelEventTimeDiff + wheelEventTimeDiffAdjustment) / 200, 1);
 
             const k = easing(t);
             zoom = interpolates.number(startZoom, targetZoom, k);
             if (t < 1) {
-                if (!this._frameId) {
-                    this._frameId = true;
-                }
+                this._needsRerender = true;
             } else {
                 finished = true;
             }
@@ -338,54 +342,39 @@ export class ScrollZoomHandler implements Handler {
 
         this._active = true;
 
-        // For mouse wheel zoom-out operations, use step-by-step approach with tile waiting
+        // Wheel zoom-OUT defers until the destination zoom's tiles are in, so the user does not
+        // stare at a grey viewport. Zoom-in is untouched.
         if (finished && zoom < tr.zoom && this._type === 'wheel') {
-            // For mouse wheel events, use step-by-step approach with tile waiting
             if (this._map.tileLoadingManager) {
                 this._map.tileLoadingManager.waitForZoomOutTiles(zoom, 500).then((tilesLoaded) => {
-                    if (tilesLoaded) {
-                        // Tiles are ready, use small steps for smooth zoom
-                        const currentZoom = tr.zoom;
-                        const targetZoom = zoom;
-                        const zoomStep = 0.1; // Small zoom step for smooth animation
-                        const stepTimeout = 50; // Fast steps when tiles are ready
-                        
-                        this._stepZoomOut(currentZoom, targetZoom, zoomStep, stepTimeout);
-                    } else {
-                        // Tiles not ready, use bigger steps and slower timeouts
-                        const currentZoom = tr.zoom;
-                        const targetZoom = zoom;
-                        const zoomStep = 0.3; // Bigger zoom step when tiles aren't ready
-                        const stepTimeout = 1400; // Slower steps when tiles aren't ready
-                        
-                        this._stepZoomOut(currentZoom, targetZoom, zoomStep, stepTimeout);
-                    }
-                    
-                    // Complete the animation
+                    const currentZoom = tr.zoom;
+                    const targetZoomOut = zoom;
+                    // Tiles ready -> small, fast steps. Tiles not ready -> bigger, slower steps.
+                    const zoomStep = tilesLoaded ? 0.1 : 0.3;
+                    const stepTimeout = tilesLoaded ? 50 : 1400;
+                    this._stepZoomOut(currentZoom, targetZoomOut, zoomStep, stepTimeout);
                     this._completeZoomAnimation();
                 });
-                
+
                 return {
                     noInertia: true,
                     needsRenderFrame: true,
-                    zoomDelta: 0, // Let the promise handle the actual zoom
-                    around: this._aroundPoint,
-                    originalEvent: this._lastWheelEvent
-                };
-            } else {
-                // No tile loading manager, use normal zoom
-                this._map.setZoom(zoom);
-                
-                this._completeZoomAnimation();
-                
-                return {
-                    noInertia: true,
-                    needsRenderFrame: false,
-                    zoomDelta: zoom - tr.zoom,
+                    zoomDelta: 0, // the promise above performs the actual zoom
                     around: this._aroundPoint,
                     originalEvent: this._lastWheelEvent
                 };
             }
+
+            // No tile loading manager, use normal zoom.
+            this._map.setZoom(zoom);
+            this._completeZoomAnimation();
+            return {
+                noInertia: true,
+                needsRenderFrame: false,
+                zoomDelta: zoom - tr.zoom,
+                around: this._aroundPoint,
+                originalEvent: this._lastWheelEvent
+            };
         }
 
         if (finished) {
@@ -415,7 +404,7 @@ export class ScrollZoomHandler implements Handler {
 
         if (this._prevEase) {
             const currentEase = this._prevEase;
-            const t = (browser.now() - currentEase.start) / currentEase.duration;
+            const t = (now() - currentEase.start) / currentEase.duration;
             const speed = currentEase.easing(t + 0.01) - currentEase.easing(t);
 
             // Quick hack to make new bezier that is continuous with last
@@ -426,7 +415,7 @@ export class ScrollZoomHandler implements Handler {
         }
 
         this._prevEase = {
-            start: browser.now(),
+            start: now(),
             duration,
             easing
         };
@@ -460,17 +449,14 @@ export class ScrollZoomHandler implements Handler {
         const tr = this._tr.transform;
         const stepZoom = (targetZoom > currentZoom) ? zoomStep : -zoomStep;
         const nextZoom = Math.min(tr.maxZoom, Math.max(tr.minZoom, currentZoom + stepZoom));
-        
-        // Set the zoom for this step
+
         this._map.setZoom(nextZoom);
-        
-        // Check if we've reached the target or need to continue
+
         if ((stepZoom > 0 && nextZoom >= targetZoom) || (stepZoom < 0 && nextZoom <= targetZoom)) {
-            // We've reached or passed the target, set to exact target and complete
+            // Reached or passed the target: snap to it exactly and finish.
             this._map.setZoom(targetZoom);
             this._completeZoomAnimation();
         } else {
-            // Continue to next step
             setTimeout(() => {
                 this._stepZoomOut(nextZoom, targetZoom, zoomStep, stepTimeout);
             }, stepTimeout);

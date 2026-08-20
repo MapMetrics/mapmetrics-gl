@@ -11,7 +11,7 @@
   ],
   "zoom": 14,
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "maxzoom": 14,
       "tiles": [
@@ -31,7 +31,7 @@
     {
       "id": "right",
       "type": "symbol",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "poi_label",
       "filter": [
         "==",

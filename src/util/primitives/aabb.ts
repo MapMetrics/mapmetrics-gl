@@ -1,13 +1,8 @@
 import {vec3, type vec4} from 'gl-matrix';
 import {type Frustum} from './frustum';
+import {IntersectionResult, type IBoundingVolume} from './bounding_volume';
 
-export const enum IntersectionResult {
-    None = 0,
-    Partial = 1,
-    Full = 2,
-}
-
-export class Aabb {
+export class Aabb implements IBoundingVolume {
     min: vec3;
     max: vec3;
     center: vec3;
@@ -31,12 +26,12 @@ export class Aabb {
         return new Aabb(qMin, qMax);
     }
 
-    distanceX(point: Array<number>): number {
+    distanceX(point: number[]): number {
         const pointOnAabb = Math.max(Math.min(this.max[0], point[0]), this.min[0]);
         return pointOnAabb - point[0];
     }
 
-    distanceY(point: Array<number>): number {
+    distanceY(point: number[]): number {
         const pointOnAabb = Math.max(Math.min(this.max[1], point[1]), this.min[1]);
         return pointOnAabb - point[1];
     }
@@ -49,8 +44,8 @@ export class Aabb {
         // Each frustum plane together with 3 major axes define the separating axes
         let fullyInside = true;
 
-        for (let p = 0; p < frustum.planes.length; p++) {
-            const planeIntersection = this.intersectsPlane(frustum.planes[p]);
+        for (const plane of frustum.planes) {
+            const planeIntersection = this.intersectsPlane(plane);
 
             if (planeIntersection === IntersectionResult.None) {
                 return IntersectionResult.None;

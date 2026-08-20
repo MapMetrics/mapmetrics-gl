@@ -1,8 +1,8 @@
-import type {CanonicalTileID} from '../../source/tile_id';
+import type {CanonicalTileID} from '../../tile/tile_id';
 import type {PreparedShader} from '../../shaders/shaders';
-import type {Context} from '../../gl/context';
+import type {Context} from '../../webgl/context';
 import type {Mesh} from '../../render/mesh';
-import type {Program} from '../../render/program';
+import type {Program} from '../../webgl/program';
 import type {SubdivisionGranularitySetting} from '../../render/subdivision_granularity_settings';
 import type {ProjectionSpecification} from '@maplibre/maplibre-gl-style-spec';
 import type {EvaluationParameters} from '../../style/evaluation_parameters';
@@ -40,7 +40,7 @@ export type ProjectionGPUContext = {
 export type TileMeshUsage = 'stencil' | 'raster';
 
 /**
- * An interface the implementations of which are used internally by MapLibre to handle different projections.
+ * An interface the implementations of which are used internally by Mapmetrics to handle different projections.
  */
 export interface Projection {
     /**
@@ -52,7 +52,7 @@ export interface Projection {
     /**
      * @internal
      * True if this projection needs to render subdivided geometry.
-     * Optimized rendering paths for non-subdivided geometry might be used throughout MapLibre.
+     * Optimized rendering paths for non-subdivided geometry might be used throughout Mapmetrics.
      * The value of this property may change during runtime, for example in globe projection depending on zoom.
      */
     get useSubdivision(): boolean;
@@ -60,12 +60,12 @@ export interface Projection {
     /**
      * Name of the shader projection variant that should be used for this projection.
      * Note that this value may change dynamically, for example when globe projection internally transitions to mercator.
-     * Then globe projection might start reporting the mercator shader variant name to make MapLibre use faster mercator shaders.
+     * Then globe projection might start reporting the mercator shader variant name to make Mapmetrics use faster mercator shaders.
      */
     get shaderVariantName(): string;
 
     /**
-     * A `#define` macro that is injected into every MapLibre shader that uses this projection.
+     * A `#define` macro that is injected into every Mapmetrics shader that uses this projection.
      * @example
      * `const define = projection.shaderDefine; // '#define GLOBE'`
      */
@@ -78,7 +78,7 @@ export interface Projection {
     get shaderPreludeCode(): PreparedShader;
 
     /**
-     * Vertex shader code that is injected into every MapLibre vertex shader that uses this projection.
+     * Vertex shader code that is injected into every Mapmetrics vertex shader that uses this projection.
      */
     get vertexShaderPreludeCode(): string;
 

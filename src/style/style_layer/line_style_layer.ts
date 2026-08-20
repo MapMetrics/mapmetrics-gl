@@ -46,8 +46,8 @@ export class LineStyleLayer extends StyleLayer {
     _transitioningPaint: Transitioning<LinePaintProps>;
     paint: PossiblyEvaluated<LinePaintProps, LinePaintPropsPossiblyEvaluated>;
 
-    constructor(layer: LayerSpecification) {
-        super(layer, properties);
+    constructor(layer: LayerSpecification, globalState: Record<string, any>) {
+        super(layer, properties, globalState);
         this.gradientVersion = 0;
         if (!lineFloorwidthProperty) {
             lineFloorwidthProperty =
@@ -72,7 +72,7 @@ export class LineStyleLayer extends StyleLayer {
         return this._transitionablePaint._values['line-gradient'].value.expression;
     }
 
-    recalculate(parameters: EvaluationParameters, availableImages: Array<string>) {
+    recalculate(parameters: EvaluationParameters, availableImages: string[]) {
         super.recalculate(parameters, availableImages);
         (this.paint._values as any)['line-floorwidth'] =
             lineFloorwidthProperty.possiblyEvaluate(this._transitioningPaint._values['line-width'].value, parameters);

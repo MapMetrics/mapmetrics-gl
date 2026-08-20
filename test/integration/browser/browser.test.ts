@@ -1,18 +1,12 @@
-import {
-    describe,
-    beforeEach,
-    beforeAll,
-    afterEach,
-    afterAll,
-    test,
-    expect,
-} from 'vitest';
-import puppeteer, {type Page, type Browser} from 'puppeteer';
+import {describe, beforeEach, beforeAll, afterEach, afterAll, test, expect} from 'vitest';
+import {type Page, type Browser} from 'puppeteer';
 import st from 'st';
 import http, {type Server} from 'http';
 import type {AddressInfo} from 'net';
-import type {default as MapMetricsGL, Map} from '../../../dist/mapmetrics-gl';
+
 import {sleep} from '../../../src/util/test/util';
+import {launchPuppeteer} from '../lib/puppeteer_config';
+import type {default as MapMetricsGL, Map} from '../../../dist/mapmetrics-gl';
 
 const testWidth = 800;
 const testHeight = 600;
@@ -25,36 +19,25 @@ let map: Map;
 let mapmetricsgl: typeof MapMetricsGL;
 
 describe('Browser tests', () => {
+
     // start server
     beforeAll(async () => {
-        server = http.createServer(st(process.cwd()));
+        server = http.createServer(
+            st(process.cwd())
+        );
         await new Promise<void>((resolve) => server.listen(resolve));
 
-        browser = await puppeteer.launch({
-            headless: true,
-            args: [
-                '--enable-webgl',
-                '--use-gl=angle',
-                '--use-angle=gl',
-                '--no-sandbox',
-            ],
-        });
+        browser = await launchPuppeteer();
+
     }, 40000);
 
     beforeEach(async () => {
         page = await browser.newPage();
-        await page.setViewport({
-            width: testWidth,
-            height: testHeight,
-            deviceScaleFactor,
-        });
+        await page.setViewport({width: testWidth, height: testHeight, deviceScaleFactor});
 
         const port = (server.address() as AddressInfo).port;
 
-        await page.goto(
-            `http://localhost:${port}/test/integration/browser/fixtures/land.html`,
-            {waitUntil: 'domcontentloaded'}
-        );
+        await page.goto(`http://localhost:${port}/test/integration/browser/fixtures/land.html`, {waitUntil: 'domcontentloaded'});
 
         await page.evaluate(() => {
             new Promise<void>((resolve, _reject) => {
@@ -67,7 +50,7 @@ describe('Browser tests', () => {
         });
     }, 40000);
 
-    afterEach(async () => {
+    afterEach(async() => {
         page.close();
     }, 40000);
 
@@ -78,67 +61,89 @@ describe('Browser tests', () => {
         }
     }, 40000);
 
-    test(
-        'Load should fire before resize and moveend',
-        {retry: 3, timeout: 20000},
-        async () => {
-            const firstFiredEvent = await page.evaluate(() => {
-                const map2 = new mapmetricsgl.Map({
-                    container: 'map',
-                    style: 'https://demotiles.maplibre.org/style.json',
-                    center: [10, 10],
-                    zoom: 10,
-                });
-                return new Promise<string>((resolve, _reject) => {
-                    map2.once('resize', () => resolve('resize'));
-                    map2.once('moveend', () => resolve('moveend'));
-                    map2.once('load', () => resolve('load'));
-                });
+    test('Contextmenu event triggered during scrollzoom', {retry: 3, timeout: 20000}, async () => {
+        const contextMenuEventFired = await page.evaluate(() => {
+            return new Promise<string>((resolve, _reject) => {
+                map.on('contextmenu', (e) => {resolve(e.type);});
+                map.getCanvas().dispatchEvent(new MouseEvent('mousedown', {bubbles: true, button: 2, clientX: 10, clientY: 10}));
+                map.getCanvas().dispatchEvent(new MouseEvent('contextmenu', {bubbles: true}));
+                map.getCanvas().dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true}));
+                map.getCanvas().dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true}));
+                map.getCanvas().dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true}));
+                map.getCanvas().dispatchEvent(new MouseEvent('mouseup', {bubbles: true, button: 2, clientX: 10, clientY: 10}));
             });
-            expect(firstFiredEvent).toBe('load');
-        }
-    );
+        });
+        expect(contextMenuEventFired).toBe('contextmenu');
+    });
 
-    test(
-        'Should continue zooming from last mouse position after scroll and flyto, see #2709',
-        {retry: 3, timeout: 20000},
-        async () => {
-            const finalZoom = await page.evaluate(() => {
-                return new Promise<number>((resolve, _reject) => {
-                    map.once('zoom', () => {
-                        map.flyTo({
-                            zoom: 9,
-                        });
-                        setTimeout(() => {
-                            map.getCanvas().dispatchEvent(
-                                new WheelEvent('wheel', {
-                                    deltaY: 120,
-                                    bubbles: true,
-                                })
-                            );
-                            map.once('idle', () => {
-                                resolve(map.getZoom());
-                            });
-                        }, 1000);
-                    });
-                    map.getCanvas().dispatchEvent(
-                        new WheelEvent('wheel', {deltaY: 120, bubbles: true})
-                    );
-                });
+    test('Mousemove events are fired during scrollzoom', {retry: 3, timeout: 20000}, async () => {
+        const mouseMoveFired = await page.evaluate(() => {
+            return new Promise<number[]>((resolve, _reject) => {
+                let mouseMoveCount = 0;
+                let wheelCount = 0;
+                map.on('mousemove', () => {mouseMoveCount++;});
+                map.on('wheel', () => {wheelCount++;});
+                map.getCanvas().dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true}));
+                map.getCanvas().dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true}));
+                map.getCanvas().dispatchEvent(new MouseEvent('mousemove', {bubbles: true}));
+                map.getCanvas().dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true}));
+                map.getCanvas().dispatchEvent(new MouseEvent('mousemove', {bubbles: true}));
+                map.getCanvas().dispatchEvent(new MouseEvent('mousemove', {bubbles: true}));
+                map.getCanvas().dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true}));
+                map.getCanvas().dispatchEvent(new MouseEvent('mousemove', {bubbles: true}));
+                resolve([mouseMoveCount, wheelCount]);
             });
-            expect(finalZoom).toBeGreaterThan(2);
-        }
-    );
+        });
+        expect(mouseMoveFired[0]).toBe(4);
+        expect(mouseMoveFired[1]).toBe(4);
+    });
+
+    test('Load should fire before resize and moveend', {retry: 3, timeout: 20000}, async () => {
+        const firstFiredEvent = await page.evaluate(() => {
+            const map2 = new mapmetricsgl.Map({
+                container: 'map',
+                style: 'https://demotiles.mapmetrics.org/style.json',
+                center: [10, 10],
+                zoom: 10
+            });
+            return new Promise<string>((resolve, _reject) => {
+                map2.once('resize', () => resolve('resize'));
+                map2.once('moveend', () => resolve('moveend'));
+                map2.once('load', () => resolve('load'));
+            });
+        });
+        expect(firstFiredEvent).toBe('load');
+    });
+
+    test('Should continue zooming from last mouse position after scroll and flyto, see #2709', {retry: 3, timeout: 20000}, async () => {
+        const finalZoom = await page.evaluate(() => {
+            return new Promise<number>((resolve, _reject) => {
+                map.once('zoom', () => {
+                    map.flyTo({
+                        zoom: 9
+                    });
+                    setTimeout(() => {
+                        map.getCanvas().dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true}));
+                        map.once('idle', () => {
+                            resolve(map.getZoom());
+                        });
+                    }, 1000);
+                });
+                map.getCanvas().dispatchEvent(new WheelEvent('wheel', {deltaY: 120, bubbles: true}));
+            });
+        });
+        expect(finalZoom).toBeGreaterThan(2);
+    });
 
     test('Drag to the left', {retry: 3, timeout: 20000}, async () => {
         const canvas = await page.$('.mapmetricsgl-canvas');
         const canvasBB = await canvas?.boundingBox();
 
         const dragToLeft = async () => {
-            await page.mouse.move(canvasBB!.x, canvasBB!.y);
+            await page.mouse.move(canvasBB.x, canvasBB.y);
             await page.mouse.down();
             await page.mouse.move(100, 0, {
-                steps: 10,
+                steps: 10
             });
             await page.mouse.up();
             await sleep(200);
@@ -164,11 +169,8 @@ describe('Browser tests', () => {
     });
 
     test('Resize viewport (page)', {retry: 3, timeout: 20000}, async () => {
-        await page.setViewport({
-            width: 400,
-            height: 400,
-            deviceScaleFactor: 2,
-        });
+
+        await page.setViewport({width: 400, height: 400, deviceScaleFactor: 2});
 
         await sleep(200);
 
@@ -179,60 +181,51 @@ describe('Browser tests', () => {
     });
 
     test('Resize div', {retry: 3, timeout: 20000}, async () => {
+
         await page.evaluate(() => {
-            document.getElementById('map')!.style.width = '200px';
-            document.getElementById('map')!.style.height = '200px';
+            document.getElementById('map').style.width = '200px';
+            document.getElementById('map').style.height = '200px';
         });
         await sleep(1000);
 
         const canvas = await page.$('.mapmetricsgl-canvas');
         const canvasBB = await canvas?.boundingBox();
-        expect(canvasBB!.width).toBeCloseTo(200);
-        expect(canvasBB!.height).toBeCloseTo(200);
+        expect(canvasBB.width).toBeCloseTo(200);
+        expect(canvasBB.height).toBeCloseTo(200);
     });
 
-    test(
-        'Zoom: Double click at the center',
-        {retry: 3, timeout: 20000},
-        async () => {
-            const canvas = await page.$('.mapmetricsgl-canvas');
-            const canvasBB = await canvas?.boundingBox()!;
-            await page.mouse.click(canvasBB?.x!, canvasBB?.y!, {
-                clickCount: 2,
-            });
+    test('Zoom: Double click at the center', {retry: 3, timeout: 20000}, async () => {
 
-            // Wait until the map has settled, then report the zoom level back.
-            const zoom = await page.evaluate(() => {
-                return new Promise((resolve, _reject) => {
-                    map.once('idle', () => resolve(map.getZoom()));
-                });
-            });
+        const canvas = await page.$('.mapmetricsgl-canvas');
+        const canvasBB = await canvas?.boundingBox();
+        await page.mouse.click(canvasBB?.x, canvasBB?.y, {clickCount: 2});
 
-            expect(zoom).toBe(2);
-        }
-    );
+        // Wait until the map has settled, then report the zoom level back.
+        const zoom = await page.evaluate(() => {
+            return new Promise((resolve, _reject) => {
+                map.once('idle', () => resolve(map.getZoom()));
+            });
+        });
+
+        expect(zoom).toBe(2);
+    });
 
     test('Marker scaled: correct drag', {retry: 3}, async () => {
         await page.evaluate(() => {
-            document.getElementById('map')!.style.transform = 'scale(0.5)';
+            document.getElementById('map').style.transform = 'scale(0.5)';
             const markerMapPosition = map.getCenter();
-            (window as any).marker = new mapmetricsgl.Marker({
-                draggable: true,
-            })
+            (window as any).marker = new mapmetricsgl.Marker({draggable: true})
                 .setLngLat(markerMapPosition)
                 .addTo(map);
             return map.getCenter();
         });
         const canvas = await page.$('.mapmetricsgl-canvas');
-        const canvasBB = await canvas?.boundingBox()!;
+        const canvasBB = await canvas?.boundingBox();
         const dragToLeft = async () => {
-            await page.mouse.move(
-                canvasBB!.x + canvasBB!.width / 2,
-                canvasBB!.y + canvasBB!.height / 2
-            );
+            await page.mouse.move(canvasBB.x + canvasBB.width / 2, canvasBB.y + canvasBB.height / 2);
             await page.mouse.down();
-            await page.mouse.move(canvasBB!.x, canvasBB!.y, {
-                steps: 100,
+            await page.mouse.move(canvasBB.x, canvasBB.y, {
+                steps: 100
             });
             await page.mouse.up();
             await sleep(200);
@@ -249,7 +242,7 @@ describe('Browser tests', () => {
 
     test('Marker: correct position', {retry: 3, timeout: 20000}, async () => {
         const markerScreenPosition = await page.evaluate(() => {
-            const markerMapPosition = [11.4, 47.3] as [number, number];
+            const markerMapPosition = [11.40, 47.30] as [number, number];
             const marker = new mapmetricsgl.Marker()
                 .setLngLat(markerMapPosition)
                 .addTo(map);
@@ -258,9 +251,9 @@ describe('Browser tests', () => {
             map.fitBounds(
                 [
                     [markerMapPosition[0], markerMapPosition[1] + 0.02],
-                    [markerMapPosition[0], markerMapPosition[1] - 0.01],
-                ],
-                {duration: 0}
+                    [markerMapPosition[0], markerMapPosition[1] - 0.01]
+                ]
+                , {duration: 0}
             );
 
             map.setStyle({
@@ -268,54 +261,50 @@ describe('Browser tests', () => {
                 sources: {
                     osm: {
                         type: 'raster',
-                        tiles: [
-                            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        ],
+                        tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'],
                         tileSize: 256,
                         attribution: '&copy; OpenStreetMap Contributors',
-                        maxzoom: 19,
+                        maxzoom: 19
                     },
                     // Use a different source for terrain and hillshade layers, to improve render quality
                     terrainSource: {
                         type: 'raster-dem',
-                        url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
-                        tileSize: 256,
+                        url: 'https://demotiles.mapmetrics.org/terrain-tiles/tiles.json',
+                        tileSize: 256
                     },
                     hillshadeSource: {
                         type: 'raster-dem',
-                        url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
-                        tileSize: 256,
-                    },
+                        url: 'https://demotiles.mapmetrics.org/terrain-tiles/tiles.json',
+                        tileSize: 256
+                    }
                 },
                 layers: [
                     {
                         id: 'osm',
                         type: 'raster',
-                        source: 'osm',
+                        source: 'osm'
                     },
                     {
                         id: 'hills',
                         type: 'hillshade',
                         source: 'hillshadeSource',
                         layout: {visibility: 'visible'},
-                        paint: {'hillshade-shadow-color': '#473B24'},
-                    },
+                        paint: {'hillshade-shadow-color': '#473B24'}
+                    }
                 ],
                 terrain: {
                     source: 'terrainSource',
-                    exaggeration: 1,
-                },
+                    exaggeration: 1
+                }
             });
 
             return new Promise<any>((resolve) => {
                 map.once('idle', () => {
                     map.once('idle', () => {
-                        const markerBounding = marker
-                            .getElement()
-                            .getBoundingClientRect();
+                        const markerBounding = marker.getElement().getBoundingClientRect();
                         resolve({
                             x: markerBounding.x,
-                            y: markerBounding.y,
+                            y: markerBounding.y
                         });
                     });
                     map.setTerrain({source: 'terrainSource'});
@@ -327,141 +316,116 @@ describe('Browser tests', () => {
         expect(markerScreenPosition.y).toBeCloseTo(378.1);
     });
 
-    test(
-        'Fullscreen control should work in shadowdom as well',
-        {retry: 3, timeout: 20000},
-        async () => {
-            const fullscreenButtonTitle = await page.evaluate(async () => {
-                function sleepInBrowser(milliseconds: number) {
-                    return new Promise((resolve) =>
-                        setTimeout(resolve, milliseconds)
-                    );
-                }
+    test('Fullscreen control should work in shadowdom as well', {retry: 3, timeout: 20000}, async () => {
+        const fullscreenButtonTitle = await page.evaluate(async () => {
+            function sleepInBrowser(milliseconds: number) {
+                return new Promise(resolve => setTimeout(resolve, milliseconds));
+            }
 
-                let map: Map;
-                class MapLibre extends HTMLElement {
-                    async connectedCallback() {
-                        const maplibreCSS = await (
-                            await fetch('/../../../../dist/mapmetrics-gl.css')
-                        ).text();
-                        const styleSheet = new CSSStyleSheet();
-                        await styleSheet.replace(`${maplibreCSS}
+            let map: Map;
+            class Mapmetrics extends HTMLElement {
+                async connectedCallback() {
+                    const mapmetricsCSS = await (await fetch('/../../../../dist/mapmetrics-gl.css')).text();
+                    const styleSheet = new CSSStyleSheet();
+                    await styleSheet.replace(`${mapmetricsCSS}
                       :host, .mapmetricsgl-map {
                       height: 100%;
                       width: 100%;
                     }`);
-                        const shadow = this.attachShadow({
-                            mode: 'open',
-                        });
-                        shadow.adoptedStyleSheets.push(styleSheet);
-                        const container = document.createElement('div');
-                        shadow.appendChild(container);
-                        map = new mapmetricsgl.Map({
-                            container,
-                            style: {
-                                version: 8,
-                                sources: {
-                                    osm: {
-                                        attribution:
-                                            '&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>',
-                                        type: 'raster',
-                                        tileSize: 256,
-                                        tiles: [
-                                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                        ],
-                                    },
-                                },
-                                layers: [
-                                    {
-                                        type: 'raster',
-                                        id: 'OpenStreetMap',
-                                        source: 'osm',
-                                    },
-                                ],
-                            },
-                        });
-                        map.addControl(new mapmetricsgl.FullscreenControl());
-                    }
-                }
-                customElements.define('map-libre', MapLibre);
-                document.body.innerHTML = '<map-libre></map-libre>';
-                await sleepInBrowser(100);
-
-                await map.once('idle');
-                const fullscreenButton = document
-                    .getElementsByTagName('map-libre')[0]
-                    .shadowRoot.querySelector(
-                        '.mapmetricsgl-ctrl-fullscreen'
-                    ) as HTMLButtonElement;
-                fullscreenButton.click();
-                await sleepInBrowser(1000);
-
-                return fullscreenButton.title;
-            });
-
-            expect(fullscreenButtonTitle).toBe('Exit fullscreen');
-        }
-    );
-
-    test(
-        'Marker: correct opacity after resize with 3d terrain',
-        {retry: 3, timeout: 20000},
-        async () => {
-            const markerOpacity = await page.evaluate(() => {
-                const marker = new mapmetricsgl.Marker()
-                    .setLngLat(map.getCenter())
-                    .addTo(map);
-
-                map.setStyle({
-                    version: 8,
-                    sources: {
-                        osm: {
-                            type: 'raster',
-                            tiles: [
-                                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            ],
-                            tileSize: 256,
-                            attribution: '&copy; OpenStreetMap Contributors',
-                            maxzoom: 19,
-                        },
-                        terrainSource: {
-                            type: 'raster-dem',
-                            url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
-                            tileSize: 256,
-                        },
-                    },
-                    layers: [
-                        {
-                            id: 'osm',
-                            type: 'raster',
-                            source: 'osm',
-                        },
-                    ],
-                    terrain: {
-                        source: 'terrainSource',
-                        exaggeration: 1,
-                    },
-                });
-
-                return new Promise<any>((resolve) => {
-                    map.once('idle', () => {
-                        map.once('idle', () => {
-                            document.getElementById('map')!.style.width =
-                                '250px';
-                            setTimeout(() => {
-                                resolve(marker.getElement().style.opacity);
-                            }, 100);
-                        });
-                        map.setTerrain({source: 'terrainSource'});
+                    const shadow = this.attachShadow({
+                        mode: 'open'
                     });
-                });
+                    shadow.adoptedStyleSheets.push(styleSheet);
+                    const container = document.createElement('div');
+                    shadow.appendChild(container);
+                    map = new mapmetricsgl.Map({
+                        container,
+                        style: {
+                            version: 8,
+                            sources: {
+                                osm: {
+                                    attribution: '&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>',
+                                    type: 'raster',
+                                    tileSize: 256,
+                                    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png']
+                                }
+                            },
+                            layers: [{
+                                type: 'raster',
+                                id: 'OpenStreetMap',
+                                source: 'osm'
+                            }]
+                        }
+                    });
+                    map.addControl(new mapmetricsgl.FullscreenControl());
+                }
+            }
+            customElements.define('map-libre', Mapmetrics);
+            document.body.innerHTML = '<map-libre></map-libre>';
+            await sleepInBrowser(100);
+
+            await map.once('idle');
+            const fullscreenButton = document.getElementsByTagName('map-libre')[0].shadowRoot.querySelector<HTMLButtonElement>('.mapmetricsgl-ctrl-fullscreen');
+            fullscreenButton.click();
+            await sleepInBrowser(1000);
+
+            return fullscreenButton.title;
+        });
+
+        expect(fullscreenButtonTitle).toBe('Exit fullscreen');
+    });
+
+    test('Marker: correct opacity after resize with 3d terrain', {retry: 3, timeout: 20000}, async () => {
+        const markerOpacity = await page.evaluate(() => {
+            const marker = new mapmetricsgl.Marker()
+                .setLngLat(map.getCenter())
+                .addTo(map);
+
+            map.setStyle({
+                version: 8,
+                sources: {
+                    osm: {
+                        type: 'raster',
+                        tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '&copy; OpenStreetMap Contributors',
+                        maxzoom: 19
+                    },
+                    terrainSource: {
+                        type: 'raster-dem',
+                        url: 'https://demotiles.mapmetrics.org/terrain-tiles/tiles.json',
+                        tileSize: 256
+                    }
+                },
+                layers: [{
+                    id: 'osm',
+                    type: 'raster',
+                    source: 'osm'
+                }],
+                terrain: {
+                    source: 'terrainSource',
+                    exaggeration: 1
+                }
             });
 
-            expect(markerOpacity).toBe('1');
-        }
-    );
+            return new Promise<any>((resolve) => {
+                map.once('idle', () => {
+                    map.once('idle', () => {
+                        document.getElementById('map').style.width = '250px';
+                        setTimeout(() => {
+                            resolve(marker.getElement().style.opacity);
+                        }, 100);
+                    });
+                    map.setTerrain({source: 'terrainSource'});
+                });
+            });
+        });
+
+        expect(markerOpacity).toBe('1');
+    });
 
     test('Load map with RTL plugin should throw exception for invalid URL', async () => {
+
         const rtlPromise = page.evaluate(() => {
             // console.log('Testing start');
             return mapmetricsgl.setRTLTextPlugin('badURL', false);
@@ -472,50 +436,161 @@ describe('Browser tests', () => {
         const regex = new RegExp('Failed to execute \'importScripts\'.*');
 
         await expect(rtlPromise).rejects.toThrow(regex);
+
     }, 2000);
 
-    test(
-        'Movement with transformCameraUpdate and terrain',
-        {retry: 3, timeout: 20000},
-        async () => {
-            await page.evaluate(async () => {
-                map.setPitch(52)
-                    .setZoom(15)
-                    .setCenter([11.4, 47.3])
-                    .setStyle({
-                        version: 8,
-                        sources: {
-                            terrainSource: {
-                                type: 'raster-dem',
-                                url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
-                                tileSize: 256,
-                            },
+    test('Movement with transformCameraUpdate and terrain', {retry: 3, timeout: 20000}, async () => {
+        await page.evaluate(async () => {
+            map.setPitch(52)
+                .setZoom(15)
+                .setCenter([11.40, 47.30])
+                .setStyle({
+                    version: 8,
+                    sources: {
+                        terrainSource: {
+                            type: 'raster-dem',
+                            url: 'https://demotiles.mapmetrics.org/terrain-tiles/tiles.json',
+                            tileSize: 256
                         },
-                        layers: [],
-                        terrain: {
-                            source: 'terrainSource',
-                            exaggeration: 1,
-                        },
-                    });
-                await map.once('idle');
-                map.transformCameraUpdate = () => ({});
-            });
+                    },
+                    layers: [],
+                    terrain: {
+                        source: 'terrainSource',
+                        exaggeration: 1
+                    }
+                });
+            await map.once('idle');
+            map.transformCameraUpdate = () => ({});
+        });
 
-            const canvas = await page.$('.mapmetricsgl-canvas');
-            const canvasBB = await canvas?.boundingBox();
-            await page.mouse.move(canvasBB!.x, canvasBB!.y);
-            await page.mouse.down();
-            await page.mouse.move(100, 0, {
-                steps: 10,
-            });
-            await page.mouse.up();
-            await sleep(200);
+        const canvas = await page.$('.mapmetricsgl-canvas');
+        const canvasBB = await canvas?.boundingBox();
+        await page.mouse.move(canvasBB.x, canvasBB.y);
+        await page.mouse.down();
+        await page.mouse.move(100, 0, {
+            steps: 10,
+        });
+        await page.mouse.up();
+        await sleep(200);
 
-            const center = await page.evaluate(() => {
-                return map.getCenter();
+        const center = await page.evaluate(() => {
+            return map.getCenter();
+        });
+        expect(center.lng).toBeCloseTo(11.39770);
+        expect(center.lat).toBeCloseTo(47.29960);
+    });
+
+    test('Map canvas is not blank after context lost and restored', {retry: 3, timeout: 20000}, async () => {
+        const pixel = await page.evaluate(async () => {
+            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+            const canvas = map.getCanvas();
+            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+            const ext = gl?.getExtension('WEBGL_lose_context');
+            // Context loss and restore
+            const restored: Promise<void> = new Promise(resolve => {
+                const onRestored = () => {
+                    canvas.removeEventListener('webglcontextrestored', onRestored);
+                    resolve();
+                };
+                canvas.addEventListener('webglcontextrestored', onRestored);
             });
-            expect(center.lng).toBeCloseTo(11.3977);
-            expect(center.lat).toBeCloseTo(47.2996);
-        }
-    );
+            ext.loseContext();
+            await sleep(50);
+            ext.restoreContext();
+            await restored;
+            await new Promise(res => map.once('render', res));
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.finish();
+
+            // Read central pixel from the WebGL framebuffer
+            const dpr = window.devicePixelRatio || 1;
+            const width = canvas.width / dpr;
+            const height = canvas.height / dpr;
+            const x = Math.floor(width / 2);
+            const y = Math.floor(height / 2);
+            const readY = height - y - 1;
+            const rgba = new Uint8Array(4);
+            gl.readPixels(x, readY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+
+            return Array.from(rgba);
+        });
+
+        expect(pixel[0]).toBeGreaterThan(0);
+        expect(pixel[1]).toBeGreaterThan(0);
+        expect(pixel[2]).toBeGreaterThan(0);
+        expect(pixel[3]).toBeGreaterThan(0);
+    });
+
+    test('Map does not log invalid WebGL warnings on context loss/restore', async () => {
+        const warnings: string[] = [];
+        page.on('console', msg => {
+            if (msg.type() === 'warn' || msg.type() === 'error') {
+                warnings.push(msg.text());
+            }
+        });
+
+        // Simulate context loss
+        await page.evaluate(() => {
+            const canvas = map.getCanvas();
+            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+            const ext = gl?.getExtension('WEBGL_lose_context');
+            if (ext) {
+                ext.loseContext();
+                setTimeout(() => ext.restoreContext(), 50);
+            }
+        });
+
+        // Wait a bit to allow logs to arrive
+        await sleep(500);
+
+        const webglWarnings = warnings.filter(w => w.toLowerCase().includes('webgl'));
+        expect(webglWarnings).to.not.contain('WebGL: INVALID_OPERATION: deleteVertexArray: object does not belong to this context');
+        expect(webglWarnings).to.not.contain('WebGL: INVALID_OPERATION: bindBuffer: object does not belong to this context');
+        expect(webglWarnings).to.not.contain('[.WebGL-0x3e1400107800] GL_INVALID_OPERATION: glDrawElements: Must have element array buffer bound.');
+    });
+
+    test('Map canvas is not blank after context lost, resize map and context restored', {retry: 3, timeout: 20000}, async () => {
+        await page.evaluate(async () => {
+            const canvas = map.getCanvas();
+            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+            const ext = gl?.getExtension('WEBGL_lose_context');
+            (window as any).ext = ext;
+            ext.loseContext();
+        });
+
+        await page.setViewport({width: 500, height: 500, deviceScaleFactor: 2});
+        await page.setViewport({width: testWidth, height: testHeight, deviceScaleFactor: 2});
+
+        const pixel = await page.evaluate(async () => {
+            const canvas = map.getCanvas();
+            const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+            const ext = (window as any).ext;
+            ext.restoreContext();
+
+            await new Promise(res => map.once('idle', res));
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.finish();
+
+            // Read central pixel from the WebGL framebuffer
+            const dpr = window.devicePixelRatio || 1;
+            const width = canvas.width / dpr;
+            const height = canvas.height / dpr;
+
+            const x = Math.floor(width / 2);
+            const y = Math.floor(height / 2);
+            const readY = height - y - 1;
+            const rgba = new Uint8Array(4);
+            gl.readPixels(x, readY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+
+            return Array.from(rgba);
+        });
+
+        // pixel values when style is not well rendered
+        expect(pixel[0]).toBeGreaterThan(0);
+        expect(pixel[1]).toBeGreaterThan(0);
+        expect(pixel[2]).toBeGreaterThan(0);
+        expect(pixel[3]).toBeGreaterThan(0);
+    });
 });
