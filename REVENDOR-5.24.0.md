@@ -288,7 +288,7 @@ is §3 item 1 arriving through a door that did not exist when the manifest was w
 
 ---
 
-## Phase 3 — re-vendor (NOT STARTED — one deliverable landed)
+## Phase 3 — re-vendor (COMPLETE)
 
 **Delivered: `build/revendor/rename.py`.** MAPMETRICS-FORK.md §1.2 says the rename script "is not
 committed anywhere" and "each re-vendor therefore reinvents it". It is committed now, documented,
@@ -300,15 +300,19 @@ it was never the lossy part.
 It also settles a manifest error — see the `mapmetricsgl-globe.svg` note in its docstring, and §4
 below.
 
-Nothing else in Phase 3 has been attempted. The tree has not been touched.
+**Phase 3 completed 2026-08.** Upstream v5.24.0 `src/`, `build/`, `test/{unit,build,bench,integration}`
+and the root configs were taken wholesale and renamed; the fork's patches were replayed on top.
+All 24 manifest patches plus U1/U2/U3 are in. See the commit message on `revendor/v5.24.0` for the
+detail, and MAPMETRICS-FORK.md §6 for the defects and open decisions this surfaced.
 
-## Phase 4 — verify (NOT STARTED)
+## Phase 4 — verify (COMPLETE, except the 90-minute soak)
 
 ---
 
-## 4. Corrections owed to MAPMETRICS-FORK.md
+## 4. Corrections owed to MAPMETRICS-FORK.md — ALL 8 APPLIED
 
-Fold these in when the re-vendor lands:
+All eight were folded into MAPMETRICS-FORK.md in the same commit as the patches, as required.
+Kept here as the record of what changed and why:
 
 1. §2.1 / marker 9 — `mapmetricsgl-globe.svg` is **not** a "shape change no mechanical rename would
    produce". The fork has both it and `mapmetricsgl-ctrl-globe.svg`, byte-identical; the CSS
@@ -329,7 +333,12 @@ Fold these in when the re-vendor lands:
 
 ## 5. Handover — what remains
 
-Everything in Phase 3 and Phase 4. Ordered:
+**Items 1–7 below are DONE** (item 1 is a decision still owed to a human — see the note at the top of
+this document; the branch descends from `remove-client-renewal-timer`). What actually remains is in
+MAPMETRICS-FORK.md §6.4: the 90-minute three-window staging soak, the base-branch decision, and an
+audit of `test/integration/` fixtures.
+
+The original ordering, for the record:
 
 1. Decide the base: merge `remove-client-renewal-timer` into `Main`, or rebase this branch. See the
    note at the top.
