@@ -277,6 +277,21 @@ describe('invariant 4 — spacing and budget on tile-401-driven refreshes', () =
         expect(signed401()).toBe(false);
     });
 
+    test('the cool-down releases the 401 gate too, not only the refresh gate', () => {
+        // Give-up is a pause, not a verdict, and it is checked in TWO places. Without the copy
+        // here a map left open would still answer "yes, refresh" to every 401 for ever after the
+        // cool-down elapsed only in refreshNow -- or, the other way round, would stay wedged.
+        expect(signed401()).toBe(true);
+        for (let i = 0; i < MAX_CONSECUTIVE_HARD_FAILURES; i++) {
+            mapSession.rewindClocks(MIN_HARD_FAILURE_SPACING_SECONDS);
+            signed401();
+        }
+        expect(mapSession._gaveUp).toBe(true);
+        mapSession.rewindClocks(GIVE_UP_COOLDOWN_SECONDS);
+        expect(signed401()).toBe(true);
+        expect(mapSession._gaveUp).toBe(false);
+    });
+
     test('a signed tile the gateway honours clears the count, so it is consecutive not cumulative', () => {
         expect(signed401()).toBe(true);
         mapSession.rewindClocks(MIN_HARD_FAILURE_SPACING_SECONDS);
@@ -402,112 +417,140 @@ describe('invariant 9 — concurrent creates coalesce onto one request', () => {
     });
 });
 
-describe('invariant 1 — never renew an idle map', () => {
+// =====================================================================================
+// Invariants 1 and 2 used to be GATES on a client-side renewal timer: "only renew if a tile was
+// actually signed", "only renew if the tab is visible". The timer is gone -- every window after the
+// first is bought by GATEWAY ROLLOVER, which rides on a tile response -- so both invariants are now
+// properties of the SHAPE of the system rather than gates that could be got wrong. Nothing can bill
+// without a tile request, and an idle map and a hidden tab make none.
+//
+// These tests therefore assert an ABSENCE, and they are written to fail loudly if a timer ever
+// reappears: they run the clock forward by hours and demand both zero requests and zero armed
+// timers.
+// =====================================================================================
+
+describe('invariant 1 — an idle map cannot bill, structurally', () => {
     beforeEach(() => {
         vi.useFakeTimers();
-        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN, renewLeadTimeSeconds: 60});
+        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
     });
 
-    test('an idle credential is not renewed when the timer fires', () => {
+    test('a credential lapses completely with no tile traffic and nothing is requested', () => {
         const {calls} = stubTransport();
-        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 61}));
+        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 20, session_ends_at: nowSeconds() + 40}));
         calls.length = 0;
-        vi.advanceTimersByTime(2000);
+        // Past `exp`, past `sae`, and then a whole day past both. A phone left on a map overnight
+        // was measured billing ~16 windows for zero tile requests before the timer was removed.
+        vi.advanceTimersByTime(24 * 60 * 60 * 1000);
         expect(calls).toHaveLength(0);
+        expect(vi.getTimerCount()).toBe(0);
     });
 
-    test('a credential that actually signed a tile IS renewed when the timer fires', () => {
+    test('signing tiles arms nothing — use is not a renewal trigger any more', () => {
         const {calls} = stubTransport();
-        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 61}));
-        mapSession.signUrl(TILE);
-        expect(mapSession._activity).toBe(true);
+        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 20}));
+        for (let i = 0; i < 50; i++) mapSession.signUrl(TILE);
         calls.length = 0;
-        vi.advanceTimersByTime(2000);
-        expect(calls).toHaveLength(1);
-        expect(calls[0]).toContain('/v2/map-sessions/renew');
-    });
-
-    test('adopting a new credential resets the activity flag', () => {
-        mapSession.adoptRefreshResponse(body());
-        mapSession.signUrl(TILE);
-        expect(mapSession._activity).toBe(true);
-        mapSession.adoptRefreshResponse(body({session_id: 'sess-9', expires_at: nowSeconds() + 3000}));
-        expect(mapSession._activity).toBe(false);
-    });
-
-    test('a tile that could NOT be signed is not billable use', () => {
-        mapSession.adoptRefreshResponse(body());
-        mapSession.signUrl('https://evil.example.net/12/2094/1362.mvt');
-        expect(mapSession._activity).toBe(false);
-    });
-
-    test('a timer-driven refresh re-checks under the same gates it was scheduled under', () => {
-        const {calls} = stubTransport();
-        // A rollover credential — already charged for by the gateway — was adopted between the
-        // timer body's check and the refresh. There is time on the clock, so nothing is owed.
-        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 1200}));
-        mapSession._activity = true;
-        calls.length = 0;
-        mapSession.refreshNow(true);
+        vi.advanceTimersByTime(60 * 60 * 1000);
         expect(calls).toHaveLength(0);
-        // The same call with no time left DOES buy the next window.
-        mapSession._exp = nowSeconds() + 10;
-        mapSession.refreshNow(true);
-        expect(calls).toHaveLength(1);
+        expect(vi.getTimerCount()).toBe(0);
     });
 
-    test('the idle gate is re-checked at FIRE time, not at schedule time', () => {
+    test('an EXPIRED credential is still signed onto the tile, so the gateway can roll it over', () => {
         const {calls} = stubTransport();
-        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 61}));
-        mapSession.signUrl(TILE);
+        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 20, session_ends_at: nowSeconds() + 40}));
         calls.length = 0;
-        // The map went idle after the timer was armed.
-        mapSession._activity = false;
-        vi.advanceTimersByTime(2000);
+        vi.advanceTimersByTime(60_000);
+
+        // Sending the stale credential is the POINT: the gateway rolls it over, serves this tile
+        // inline and bills the window exactly once. Declining to sign would send the tile carrying
+        // only the style's ?token=, which is billed through the far more expensive v1 cookie path.
+        const signed = new URL(mapSession.signUrl(TILE));
+        expect(signed.searchParams.get('sig')).toBe('SIG1');
+        expect(signed.searchParams.get('s')).toBe('sess-1');
+        // And the client bought nothing of its own to do it.
         expect(calls).toHaveLength(0);
     });
 });
 
-describe('invariant 2 — a hidden tab must not renew', () => {
+describe('invariant 2 — a hidden tab cannot bill, structurally', () => {
     beforeEach(() => {
         vi.useFakeTimers();
-        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN, renewLeadTimeSeconds: 60});
+        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
     });
 
-    test('hiding the tab clears the activity flag', () => {
-        mapSession.adoptRefreshResponse(body());
-        mapSession.signUrl(TILE);
-        expect(mapSession._activity).toBe(true);
-        setVisibility('hidden');
-        expect(mapSession._activity).toBe(false);
-    });
-
-    test('a hidden tab does not renew when the timer fires', () => {
+    test('a hidden tab issues no request however long it stays hidden', () => {
         const {calls} = stubTransport();
-        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 61}));
+        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 20, session_ends_at: nowSeconds() + 40}));
         mapSession.signUrl(TILE);
         calls.length = 0;
-        Object.defineProperty(document, 'visibilityState', {value: 'hidden', configurable: true});
-        vi.advanceTimersByTime(2000);
+        setVisibility('hidden');
+        vi.advanceTimersByTime(12 * 60 * 60 * 1000);
+        expect(calls).toHaveLength(0);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    test('restoring the tab ARMS recovery but does not itself bill', () => {
+        const {calls} = stubTransport();
+        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 20, session_ends_at: nowSeconds() + 40}));
+        mapSession.signUrl(TILE);
+        calls.length = 0;
+        setVisibility('hidden');
+        vi.advanceTimersByTime(60 * 60 * 1000);
+        // The credential lapsed hours ago and the tab is used again. The old visibility hook fired
+        // a billed renewal here off a stale activity flag; nothing may be bought until a tile is
+        // actually requested.
+        setVisibility('visible');
+        expect(calls).toHaveLength(0);
+    });
+});
+
+describe('rollover is the only refresh path once a credential exists', () => {
+    beforeEach(() => {
+        mapSession.configure({apiKey: 'KEY', gatewayOrigin: ORIGIN});
+        // configure() buys the first credential eagerly; stand that create down so each test
+        // observes only the traffic IT causes.
+        mapSession._refreshInFlight = false;
+        mapSession._refreshInFlightSince = 0;
+    });
+
+    test('a credential that expired while idle recovers on the next tile, via response headers', () => {
+        const {calls} = stubTransport();
+        mapSession.seedCredential('acct-1', 'sess-1', 'SIG1', nowSeconds() - 100, nowSeconds() - 50);
+        calls.length = 0;
+
+        // The stale credential goes out on the tile...
+        const sent = mapSession.signUrl(TILE);
+        expect(new URL(sent).searchParams.get('sig')).toBe('SIG1');
+        // ...and the gateway serves it inline, returning the replacement on the response headers.
+        mapSession.onTileResponse(sent, 200, rolloverHeaders());
+
+        expect(mapSession._sessionId).toBe('sess-2');
+        expect(mapSession._sig).toBe('SIG2');
+        // The next tile carries the NEW credential, so the recovery is complete and not merely
+        // recorded.
+        expect(new URL(mapSession.signUrl(TILE)).searchParams.get('sig')).toBe('SIG2');
+        // Nothing was bought client-side. The window was billed once, by the gateway, for the tile
+        // it actually served.
         expect(calls).toHaveLength(0);
     });
 
-    test('a visible tab with a lapsed credential and real use renews on restore', () => {
-        const {calls} = stubTransport();
-        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 30}));
-        mapSession.signUrl(TILE);
-        calls.length = 0;
-        setVisibility('visible');
-        expect(calls).toHaveLength(1);
+    test('adopting a rollover credential reloads the tiles that errored without one', () => {
+        const listener = vi.fn();
+        mapSession.addCredentialListener(listener);
+        mapSession.seedCredential('acct-1', 'sess-1', 'SIG1', nowSeconds() - 10, nowSeconds() + 200);
+        mapSession.onTileResponse(`${TILE}&s=sess-1&sig=SIG1`, 200, rolloverHeaders());
+        expect(listener).toHaveBeenCalledTimes(1);
     });
 
-    test('restoring a tab that was never used does NOT renew', () => {
+    test('every client-side refresh is a CREATE — /v2/map-sessions/renew is never called', async () => {
         const {calls} = stubTransport();
-        mapSession.adoptRefreshResponse(body({expires_at: nowSeconds() + 30}));
-        calls.length = 0;
-        setVisibility('hidden');
-        setVisibility('visible');
-        expect(calls).toHaveLength(0);
+        // A live credential is held, which is exactly the state the old renew branch keyed off.
+        mapSession.seedCredential('acct-1', 'sess-1', 'SIG1', nowSeconds() + 1200, nowSeconds() + 1800);
+        mapSession.refreshNow();
+        await vi.waitFor(() => expect(calls).toHaveLength(1));
+        expect(calls[0].startsWith(`${ORIGIN}/v2/map-sessions?token=KEY`)).toBe(true);
+        expect(calls.join('\n')).not.toContain('/renew');
     });
 });
 

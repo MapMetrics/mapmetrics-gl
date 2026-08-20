@@ -191,7 +191,7 @@ is lost, auth is broken, or a licence obligation is quietly removed.** Ranked by
 |---|---|---|
 | **1** | `request_manager.ts` — `params.url = mapSession.signUrl(params.url)` | **Every tile request goes out unsigned.** The mapSession module is *designed* to be inert until `configureMapSession()` is called, so nothing throws. Tiles fall back to the v1 `?token=` path — billing per tile instead of per 30-minute window, the same ~200x class of regression seen on Android — or 401 and silently re-request. Renders fine either way. |
 | **2** | `index.ts` — `configureMapSession` / `mapSession` exports | The public entry point to billing disappears. An integrator's `configureMapSession({apiKey})` becomes `undefined is not a function` **in their code, not ours**, so it arrives as a customer bug report weeks later rather than a build failure. Meanwhile every map on that integration bills on the v1 path. |
-| **3** | `ajax.ts` — `collectMapSessionHeaders` + `mapSessionHeaders` on `ExpiryData` | The rollover `X-Map-Session-*` headers never reach the main thread, so the credential is never renewed at the 30-minute boundary. The map keeps working: the old credential 401s, tiles re-request, a *new* session bootstraps. Visible symptom: none. **Each renewal window becomes a fresh billed map load.** |
+| **3** | `ajax.ts` — `collectMapSessionHeaders` + `mapSessionHeaders` on `ExpiryData` | The rollover `X-Map-Session-*` headers never reach the main thread. **Since the client-side renewal timer was removed this is the ONLY path by which the credential is ever replaced**, so losing it strands the SDK on a credential that never changes for the life of the page. The map keeps working and shows no symptom: every tile past the first window is served by a gateway rollover the client never learns about. |
 | **4** | `vector_tile_worker_source.ts` — plumbing `response.mapSessionHeaders` through `loadTile` **and** `reloadTile` | Same failure as #3, from the other side of the worker boundary. **Both halves must survive — dropping either one alone produces identical, silent over-billing.** |
 | **5** | `source_cache.hasErroredTiles()` **and** the `map.ts` gate on it | Note the direction: the gate is what *prevents* a full-viewport re-download on **every** 30-minute renewal. Lose the gate — or lose `hasErroredTiles` and "fix" the compile error by reverting to an unconditional `reload(true)` — and the entire viewport is re-fetched twice an hour, on cellular, for a navigation client. Pure cost, zero visible symptom. Losing the *whole* mechanism instead is subtler but visible: errored tiles never recover after a credential adoption. |
 | **6** | `map.ts` — `mapSession.addCredentialListener(...)` in the constructor | Credentials are adopted but nothing nudges errored tiles. Cold start leaves a partially blank map that "fixes itself" on the next pan; the give-up/recovery path never recovers. Renders *almost* fine. |
@@ -323,12 +323,16 @@ authority:
   ports and is the highest-value test asset in this repo. If a re-vendor makes it fail, stop.
 - A fake-gateway integration test (msw or a local HTTP server): drive a `Map` through cold start →
   tile load → a forced 30-minute rollover, and assert that every tile GET carries the signing params,
-  that there is **exactly one** session POST per window and one renew at the boundary, and that the
-  tile count immediately after a renewal is near zero rather than a full viewport. That last assertion
-  is the `hasErroredTiles` gate, and it is the one a human reviewer will never spot.
+  that there is **exactly one** session POST for the whole run — the cold-start create, because there
+  is no client-side renewal timer any more and every later window is bought by gateway rollover on a
+  tile response — and that the tile count immediately after a rollover is near zero rather than a full
+  viewport. That last assertion is the `hasErroredTiles` gate, and it is the one a human reviewer will
+  never spot.
 - **A staging soak with real gateway billing counters: run one map continuously for ≥90 minutes —
-  three renewal windows — and read the billed-map-load counter. Expect 3.** This is the only check
-  that would have caught the Android regression, and nothing else substitutes for it.
+  three credential windows — and read the billed-map-load counter. Expect 3.** This is the only check
+  that would have caught the Android regression, and nothing else substitutes for it. Run the same
+  span again with the map IDLE and expect 0: with the timer gone that is structural rather than a
+  gate, because a map that requests no tiles gives the gateway nothing to roll over.
 - Confirm the `X-Map-Session-*` response headers still reach the main thread through the worker
   boundary. `Access-Control-Expose-Headers` is a gateway-side dependency that a purely client-side
   refactor can silently orphan.
