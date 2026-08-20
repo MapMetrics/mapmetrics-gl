@@ -52,9 +52,6 @@ export const GIVE_UP_COOLDOWN_SECONDS = 600;
  */
 export const REFRESH_STALE_SECONDS = 120;
 
-/** How long before `exp` to renew. Must be shorter than the gateway's session ttl. */
-export const DEFAULT_RENEW_LEAD_TIME_SECONDS = 60;
-
 /**
  * The `X-Map-Session-*` response headers a gateway ROLLOVER carries. The gateway lists all of them
  * in `Access-Control-Expose-Headers`, so a browser can read them cross-origin.
@@ -75,10 +72,6 @@ export type MapSessionOptions = {
      * {@link MapSession.signUrl}.
      */
     gatewayOrigin?: string;
-    /**
-     * How many seconds before `exp` to renew. Defaults to {@link DEFAULT_RENEW_LEAD_TIME_SECONDS}.
-     */
-    renewLeadTimeSeconds?: number;
     /**
      * The opt-OUT. Pass `false` to keep this page on v1 cookie billing.
      *
@@ -113,11 +106,25 @@ const defaultTransport: MapSessionTransport = async (url: string) => {
 };
 
 /**
- * Owns the signed v2 map-session credential: it decides what to sign, when to buy a new window,
+ * Owns the signed v2 map-session credential: it decides what to sign, when to buy the FIRST window,
  * and when a 401 is actually about the credential we hold.
  *
  * The whole point of the feature is ONE billed map load per window of use, so nearly every gate in
  * here is a billing gate rather than a correctness gate.
+ *
+ * THERE IS NO CLIENT-SIDE RENEWAL TIMER, and there must not be one again. Once the first credential
+ * exists, every later window is bought by GATEWAY ROLLOVER: a tile presented with an `expired` or
+ * `session_ended` credential is served INLINE, billed exactly once for the window, and the
+ * replacement credential comes back on this response's `X-Map-Session-*` headers, which
+ * {@link applyCredentialFromHeaders} adopts. That path is the only refresh path in normal operation.
+ *
+ * Rollover is not merely equivalent to a timer, it is STRUCTURALLY safer. A timer had to be gated —
+ * on recorded activity, on tab visibility — to stop it billing a map nobody was looking at; a phone
+ * left on a map overnight was measured billing ~16 windows for zero tile requests. Rollover cannot
+ * do that, because it is demand-driven BY CONSTRUCTION: it can only fire when a tile is actually
+ * requested. An idle map and a hidden tab request no tiles, so they cannot bill. Those two
+ * properties stopped being guards that can be got wrong and became facts about the shape of the
+ * system.
  *
  * There is exactly ONE instance per page ({@link mapSession}). Several `Map`s on one page share it,
  * otherwise each map would buy its own window.
@@ -133,7 +140,6 @@ export class MapSession {
     _apiKeyIsConfigured: boolean = false;
     /** False only after an explicit `configure({enabled: false})`. See {@link MapSessionOptions.enabled}. */
     _enabled: boolean = true;
-    _renewLeadTimeSeconds: number = DEFAULT_RENEW_LEAD_TIME_SECONDS;
 
     // --- credential ------------------------------------------------------------------
     _account: string | null = null;
@@ -151,7 +157,6 @@ export class MapSession {
     // --- refresh state ---------------------------------------------------------------
     _refreshInFlight: boolean = false;
     _refreshInFlightSince: number = 0;
-    _activity: boolean = false;
     _hardFailures: number = 0;
     _lastCountedFailureAt: number = 0;
     _gaveUp: boolean = false;
@@ -159,7 +164,6 @@ export class MapSession {
     _lastTile401RefreshAt: number = 0;
     _tile401Refreshes: number = 0;
     _refreshDecisionCount: number = 0;
-    _timer: ReturnType<typeof setTimeout> | null = null;
 
     _reloadListeners: Set<() => void> = new Set();
     _visibilityHandler: (() => void) | null = null;
@@ -184,9 +188,6 @@ export class MapSession {
             // statement that this application supplies its own key, and a style URL must not then
             // quietly substitute a different one.
             this._apiKeyIsConfigured = true;
-        }
-        if (options.renewLeadTimeSeconds !== undefined && options.renewLeadTimeSeconds > 0) {
-            this._renewLeadTimeSeconds = options.renewLeadTimeSeconds;
         }
         if (options.gatewayOrigin) {
             // Configuration pins the origin the permanent, full-scope API key is POSTed to. Letting
@@ -216,7 +217,7 @@ export class MapSession {
         // learned from the first https tile URL, and there is nowhere safe to POST the key yet.
         //
         // `!this._sig` keeps a repeat `configure()` from buying a second window: with a credential
-        // already held, `refreshNow()` would take the renew branch and bill again.
+        // already held there is nothing to buy, and `refreshNow()` is now always a CREATE.
         if (this._apiKey && this._origin && !this._sig) this.refreshNow();
     }
 
@@ -371,10 +372,12 @@ export class MapSession {
             return url;
         }
 
-        // A request the SDK could ACTUALLY sign counts as billable use of the current window —
-        // this, and only this, authorises the renewal timer to fire.
-        this._activity = true;
-
+        // NOTE the absence of an expiry check. An EXPIRED credential is still signed onto the tile
+        // deliberately: that is what triggers the gateway rollover, which serves this tile inline,
+        // bills the window exactly once and returns the replacement on the response headers. Adding
+        // a "don't sign if expired" gate here would send the tile unsigned instead, which the
+        // gateway bills through the v1 cookie path — the expensive behaviour, not the safe one.
+        //
         // MERGE, never replace. The v1 URL already carries `?token=` and the style may depend on
         // other items; only stale copies of our OWN params are dropped, so re-signing the same URL
         // cannot duplicate them.
@@ -533,11 +536,22 @@ export class MapSession {
     // ---------------------------------------------------------------------------------
 
     /**
-     * Creates or renews. Concurrent callers coalesce onto ONE request — a cold start fires many
+     * Buys a NEW session. Concurrent callers coalesce onto ONE request — a cold start fires many
      * tiles at once and without this that would be many billed sessions.
-     * @param fromTimer - true when driven by the renewal timer, which re-checks the idle gate
+     *
+     * There is deliberately no renew branch here any more, and `/v2/map-sessions/renew` is never
+     * called. Two reasons, and the second is the important one:
+     *
+     * - Nothing needs it. The gateway rolls a credential over on BOTH `expired` and `session_ended`,
+     *   so the ttl boundary and the `sae` hard stop are both covered without the client asking.
+     * - On the one path that could still reach it, renewing is actively WRONG. Every remaining
+     *   caller is either a cold start (no credential to renew) or the tile-401 recovery path — and a
+     *   SIGNED tile only 401s for `malformed` or `bad_signature`, never for expiry. So at that point
+     *   the gateway has just told us the signature we hold is bad; presenting that same signature to
+     *   `/renew` asks it the identical question and gets the identical answer, burning one of the
+     *   three hard-failure budget slots and delaying the create that was going to be needed anyway.
      */
-    refreshNow(fromTimer: boolean = false) {
+    refreshNow() {
         if (!this.isEnabled()) return;
         const now = nowSeconds();
 
@@ -550,10 +564,6 @@ export class MapSession {
             this._refreshInFlightSince = 0;
         }
         if (this._refreshInFlight || this._gaveUp) return;
-        // THE TIMER RE-CHECK, at FIRE time rather than schedule time. Between the timer body's
-        // check and here a rollover credential — already charged for by the gateway — may have been
-        // adopted. Firing anyway would buy a SECOND window for the same use.
-        if (fromTimer && (this._secondsUntilNextRenewal() > 0 || !this.shouldRenewNow())) return;
 
         // Counted after the suppression gates and before the origin check, so a test can observe
         // "a refresh was warranted and not suppressed" without any traffic. Every increment here is
@@ -565,20 +575,7 @@ export class MapSession {
         this._refreshInFlight = true;
         this._refreshInFlightSince = now;
 
-        const canRenew = !!this._sig && this._sae > now;
-        let url: string;
-        if (canRenew) {
-            const params = new URLSearchParams();
-            params.set('u', this._account || '');
-            params.set('s', this._sessionId || '');
-            params.set('e', String(this._exp));
-            params.set('a', String(this._sae));
-            params.set('k', this._keyId || '1');
-            params.set('sig', this._sig || '');
-            url = `${origin}/v2/map-sessions/renew?${params.toString()}`;
-        } else {
-            url = `${origin}/v2/map-sessions?token=${encodeURIComponent(this._apiKey || '')}`;
-        }
+        const url = `${origin}/v2/map-sessions?token=${encodeURIComponent(this._apiKey || '')}`;
 
         this.transport(url).then(
             (result) => {
@@ -597,8 +594,9 @@ export class MapSession {
      * A 200 whose body does not carry a FUTURE expiry is not a credential: adopting it would sign
      * `e=0` on every tile and 401 on every one of them, feeding exactly the repeat-refresh loop
      * {@link shouldRefreshForResponseUrl} exists to stop. `session_ends_at` is validated to the same
-     * standard: absent, it makes the renew branch permanently unreachable, so every later refresh
-     * would be a CREATE — silent billing multiplication with no other symptom.
+     * standard because it is SIGNED INTO the credential — it goes out as the `a` parameter and is
+     * inside the HMAC payload — so a zero or absent `sae` produces a signature the gateway cannot
+     * verify on any tile, and the map 401s its way through the whole recovery budget.
      * @param body - the parsed JSON response
      * @returns true if the credential was adopted
      */
@@ -629,8 +627,10 @@ export class MapSession {
 
     /**
      * Handles a non-adoptable refresh response. 401 past grace means "create a new one"; 403 means
-     * the key is not permitted to do this at all. Both must DROP the credential: leaving it in place
-     * keeps the renew branch reachable, so every later refresh fails the same way forever.
+     * the key is not permitted to do this at all. Both must DROP the credential: the gateway has
+     * just rejected it, so leaving it in place would keep {@link signUrl} stamping a known-bad
+     * signature onto every tile — and, worse, would make {@link shouldRefreshForResponseUrl} treat
+     * the resulting 401s as being about a live session and spend the recovery budget on them.
      * @param status - the HTTP status, or 0 for a transport failure
      */
     handleRefreshFailure(status: number) {
@@ -656,60 +656,9 @@ export class MapSession {
         this._refreshInFlightSince = 0;
     }
 
-    // ---------------------------------------------------------------------------------
-    // Activity-gated renewal
-    // ---------------------------------------------------------------------------------
-
-    /**
-     * THE IDLE GATE. Renewal costs a map load, so it must be paid for by USE.
-     *
-     * A map left open and untouched requests no tiles, so it costs the platform nothing. Renewing it
-     * anyway would bill ~16 map loads overnight for zero requests. With no activity we let the
-     * credential lapse; the next real tile rolls over at the gateway and is billed then, which is
-     * the correct moment. A hidden tab counts as no use for the same reason.
-     * @returns true if a renewal is paid for by real use
-     */
-    shouldRenewNow(): boolean {
-        return this._activity && !isHidden();
-    }
-
-    _secondsUntilNextRenewal(): number {
-        const lead = this._renewLeadTimeSeconds > 0 ? this._renewLeadTimeSeconds : DEFAULT_RENEW_LEAD_TIME_SECONDS;
-        const left = (this._exp > 0 ? this._exp - nowSeconds() : 0) - lead;
-        return left > 0 ? left : 0;
-    }
-
-    /**
-     * Cancels any armed renewal task and arms the next one. Every path through here cancels first,
-     * so two callers can never leave an orphaned timer alive on a superseded schedule.
-     */
-    scheduleRenewal() {
-        if (this._timer !== null) {
-            clearTimeout(this._timer);
-            this._timer = null;
-        }
-        if (!this.isEnabled()) return;
-        const delay = this._secondsUntilNextRenewal();
-        if (delay > 0) {
-            this._timer = setTimeout(() => {
-                this._timer = null;
-                // Re-checked AT FIRE TIME, not at schedule time: a map that was in use when the
-                // timer was set may have gone idle, or its tab hidden, since. refreshNow re-checks
-                // once more.
-                if (this.shouldRenewNow()) this.refreshNow(true);
-            }, delay * 1000);
-            return;
-        }
-        if (this.shouldRenewNow()) this.refreshNow(true);
-    }
-
     _onCredentialAdopted() {
-        // A new window starts with no use recorded — otherwise one pan would authorise renewing
-        // forever and the idle-billing bug returns by the back door.
-        this._activity = false;
         // A working credential clears the give-up state.
         this._clearGiveUp();
-        this.scheduleRenewal();
         // Tiles that 401'd before this credential existed are `errored` and this SDK does not retry
         // them on its own, so nothing would ever be signed without an explicit nudge.
         for (const listener of this._reloadListeners) {
@@ -731,32 +680,30 @@ export class MapSession {
     }
 
     // ---------------------------------------------------------------------------------
-    // Page visibility — the web counterpart of the mobile foreground/background hooks
+    // Page visibility — purely an ESCAPE HATCH, never a trigger
     // ---------------------------------------------------------------------------------
 
+    /**
+     * Note what this does NOT do: it never initiates a request. There is no hidden-tab branch left,
+     * because a hidden tab cannot bill anyway — it asks for no tiles, so nothing rolls over. The
+     * handler survives the removal of the renewal timer for one reason only, the one in
+     * {@link onVisible}: unwedging a session that has given up or wedged its coalescing flag.
+     */
     _installVisibilityHandler() {
         if (this._visibilityHandler || typeof document === 'undefined' || !document.addEventListener) return;
         this._visibilityHandler = () => {
-            if (isHidden()) this.onHidden();
-            else this.onVisible();
+            if (!isHidden()) this.onVisible();
         };
         document.addEventListener('visibilitychange', this._visibilityHandler);
     }
 
     /**
-     * The tab was hidden. Clears the activity flag, so a backgrounded tab cannot renew.
-     *
-     * Without this the idle gate leaks across a hide/show cycle: view a map (activity = true), hide
-     * the tab, the credential lapses, hours later the tab is shown again and the visible hook fires
-     * a renewal against the STALE activity flag — billed, with not one tile requested.
-     */
-    onHidden() {
-        this._activity = false;
-    }
-
-    /**
      * The tab became visible. This is the fast way out of the give-up state: once given up nothing
      * else can clear it in practice, because the resets need traffic that can no longer happen.
+     *
+     * It ARMS recovery, it does not perform it. Nothing is requested here; the next tile the map
+     * asks for is what actually drives a refresh, which is why restoring a tab cannot bill on its
+     * own.
      */
     onVisible() {
         this._clearGiveUp();
@@ -766,7 +713,6 @@ export class MapSession {
             this._refreshInFlight = false;
             this._refreshInFlightSince = 0;
         }
-        this.scheduleRenewal();
     }
 
     // ---------------------------------------------------------------------------------
@@ -788,8 +734,6 @@ export class MapSession {
 
     /** Drops all state. Test seam. */
     reset() {
-        if (this._timer !== null) clearTimeout(this._timer);
-        this._timer = null;
         if (this._visibilityHandler && typeof document !== 'undefined' && document.removeEventListener) {
             document.removeEventListener('visibilitychange', this._visibilityHandler);
         }
@@ -797,7 +741,6 @@ export class MapSession {
         this._apiKey = null;
         this._apiKeyIsConfigured = false;
         this._enabled = true;
-        this._renewLeadTimeSeconds = DEFAULT_RENEW_LEAD_TIME_SECONDS;
         this._account = null;
         this._sessionId = null;
         this._sig = null;
@@ -809,7 +752,6 @@ export class MapSession {
         this._loggedOriginMismatch = false;
         this._refreshInFlight = false;
         this._refreshInFlightSince = 0;
-        this._activity = false;
         this._hardFailures = 0;
         this._lastCountedFailureAt = 0;
         this._gaveUp = false;
@@ -829,7 +771,6 @@ export class MapSession {
         this._exp = exp;
         this._sae = sae;
         this._keyId = keyId;
-        this._activity = false;
     }
 
     /** Back-dates the failure clocks so spacing and cool-down can be exercised without sleeping. */
