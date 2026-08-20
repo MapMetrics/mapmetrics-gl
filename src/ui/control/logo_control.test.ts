@@ -14,7 +14,7 @@ function createMap(logoPosition, mapmetricsLogo) {
         }
     };
 
-    return globalCreateMap(mapobj, undefined);
+    return globalCreateMap(mapobj);
 }
 
 beforeEach(() => {
@@ -22,49 +22,47 @@ beforeEach(() => {
 });
 
 describe('LogoControl', () => {
-    test('does not appear by default', async () => {
+    test('appears by default -- upstream asserts the opposite', async () => {
+        // Upstream's version of this test expects 0: its logo is opt-IN. In this fork branding
+        // is mandatory, so the assertion is inverted deliberately. If a future re-vendor takes
+        // upstream's file wholesale, this inversion is lost and the logo silently disappears.
         const map = createMap(undefined, undefined);
         await map.once('load');
         expect(map.getContainer().querySelectorAll(
             '.mapmetricsgl-ctrl-logo'
-        )).toHaveLength(0);
+        )).toHaveLength(1);
     });
 
-    test('is not displayed when the mapmetricsLogo property is false', () => new Promise<void>(done => {
+    test('is STILL displayed when the mapmetricsLogo property is false', async () => {
+        // `mapmetricsLogo` selects POSITION, never presence.
         const map = createMap(undefined, false);
-        map.on('load', () => {
-            expect(map.getContainer().querySelectorAll(
-                '.mapmetricsgl-ctrl-logo'
-            )).toHaveLength(0);
-            done();
-        });
-    }));
+        await map.once('load');
+        expect(map.getContainer().querySelectorAll(
+            '.mapmetricsgl-ctrl-logo'
+        )).toHaveLength(1);
+    });
 
-    test('appears in bottom-left when mapmetricsLogo is true and logoPosition is undefined', () => new Promise<void>(done => {
+    test('appears in bottom-left when mapmetricsLogo is true and logoPosition is undefined', async () => {
         const map = createMap(undefined, true);
-        map.on('load', () => {
-            expect(map.getContainer().querySelectorAll(
-                '.mapmetricsgl-ctrl-bottom-left .mapmetricsgl-ctrl-logo'
-            )).toHaveLength(1);
-            done();
-        });
-    }));
+        await map.once('load');
+        expect(map.getContainer().querySelectorAll(
+            '.mapmetricsgl-ctrl-bottom-left .mapmetricsgl-ctrl-logo'
+        )).toHaveLength(1);
+    });
 
-    test('appears in the position specified by the position option', () => new Promise<void>(done => {
+    test('appears in the position specified by the position option', async () => {
         const map = createMap('top-left', true);
-        map.on('load', () => {
-            expect(map.getContainer().querySelectorAll(
-                '.mapmetricsgl-ctrl-top-left .mapmetricsgl-ctrl-logo'
-            )).toHaveLength(1);
-            done();
-        });
-    }));
+        await map.once('load');
+        expect(map.getContainer().querySelectorAll(
+            '.mapmetricsgl-ctrl-top-left .mapmetricsgl-ctrl-logo'
+        )).toHaveLength(1);
+    });
 
     /**
      * MapMetrics fork behaviour: unlike upstream MapLibre, the logo does NOT collapse to
      * compact automatically on narrow (under 640px) containers - see `_updateCompact` in
-     * `logo_control.ts`, which only applies `mapmetricsgl-compact` when `compact: true`
-     * was explicitly requested. This keeps the brand mark at a fixed 180px on mobile.
+     * `logo_control.ts`, which only applies `mapmetricsgl-compact` when `compact: true` was
+     * explicitly requested. This keeps the brand mark at a fixed 180px on mobile.
      */
     test('does not collapse to compact on narrow containers (fork behaviour)', () => {
         const map = createMap(undefined, true);
@@ -98,14 +96,24 @@ describe('LogoControl', () => {
         ).toHaveLength(1);
     });
 
-    test('has `rel` noopener and nofollow', () => new Promise<void>(done => {
+    test('has `rel` noopener and nofollow', async () => {
         const map = createMap(undefined, true);
 
-        map.on('load', () => {
-            const container = map.getContainer();
-            const logo = container.querySelector('.mapmetricsgl-ctrl-logo');
-            expect(logo).toHaveProperty('rel', 'noopener nofollow');
-            done();
-        });
-    }));
+        await map.once('load');
+        const container = map.getContainer();
+        const logo = container.querySelector('.mapmetricsgl-ctrl-logo');
+        expect(logo).toHaveProperty('rel', 'noopener nofollow');
+    });
+});
+
+test('BRANDING IS NOT OPTIONAL: the logo is added even when mapmetricsLogo is false', () => {
+    // `mapmetricsLogo` selects POSITION, never presence. Upstream gates its own logo on the
+    // equivalent option and defaults it to FALSE; the v5.24.0 re-vendor inherited that default
+    // and the logo silently disappeared -- SVG present, CSS correct, control wired, option
+    // declared, and all 47 manifest grep markers passing. Nothing could see it but a human
+    // looking at the map. This test is the thing that sees it.
+    const map = createMap(undefined, false);
+    const logos = map.getContainer().querySelectorAll('.mapmetricsgl-ctrl-logo');
+    expect(logos).toHaveLength(1);
+    map.remove();
 });

@@ -3,9 +3,20 @@ import UnitBezier from '@mapbox/unitbezier';
 import {isOffscreenCanvasDistorted} from './offscreen_canvas_distorted';
 import type {Size} from './image';
 import type {WorkerGlobalScopeInterface} from './web_worker';
-import {mat3, mat4, quat, vec2, type vec3, type vec4} from 'gl-matrix';
+import {mat3, mat4, quat, vec2, vec3, type vec4} from 'gl-matrix';
 import {pixelsToTileUnits} from '../source/pixels_to_tile_units';
-import {type OverscaledTileID} from '../source/tile_id';
+import {type OverscaledTileID} from '../tile/tile_id';
+import type {Event} from './evented';
+
+/**
+ * Ensures that a value is an `Error` instance.
+ * If the value is already an `Error`, it is returned as-is.
+ * Otherwise, a new `Error` is created from its string representation.
+ */
+export function ensureError(e: unknown): Error {
+    if (e instanceof Error) return e;
+    return new Error(typeof e === 'string' ? e : String(e));
+}
 
 /**
  * Returns a new 64 bit float vec4 of zeroes.
@@ -82,6 +93,46 @@ export function pointPlaneSignedDistance(
     point: vec3 | [number, number, number]
 ): number {
     return plane[0] * point[0] + plane[1] * point[1] + plane[2] * point[2] + plane[3];
+}
+
+/**
+ * Finds an intersection points of three planes. Returns `null` if no such (single) point exists.
+ * The planes *must* be in Hessian normal form - their xyz components must form a unit vector.
+ */
+export function threePlaneIntersection(plane0: vec4, plane1: vec4, plane2: vec4): vec3 | null {
+    // https://mathworld.wolfram.com/Plane-PlaneIntersection.html
+    const det = mat3.determinant([
+        plane0[0], plane0[1], plane0[2],
+        plane1[0], plane1[1], plane1[2],
+        plane2[0], plane2[1], plane2[2]
+    ] as mat3);
+    if (det === 0) {
+        return null;
+    }
+    const cross12 = vec3.cross([] as any, [plane1[0], plane1[1], plane1[2]], [plane2[0], plane2[1], plane2[2]]);
+    const cross20 = vec3.cross([] as any, [plane2[0], plane2[1], plane2[2]], [plane0[0], plane0[1], plane0[2]]);
+    const cross01 = vec3.cross([] as any, [plane0[0], plane0[1], plane0[2]], [plane1[0], plane1[1], plane1[2]]);
+    const sum = vec3.scale([] as any, cross12, -plane0[3]);
+    vec3.add(sum, sum, vec3.scale([] as any, cross20, -plane1[3]));
+    vec3.add(sum, sum, vec3.scale([] as any, cross01, -plane2[3]));
+    vec3.scale(sum, sum, 1.0 / det);
+    return sum;
+}
+
+/**
+ * Returns a parameter `t` such that the point obtained by
+ * `origin + direction * t` lies on the given plane.
+ * If the ray is parallel to the plane, returns null.
+ * Returns a negative value if the ray is pointing away from the plane.
+ * Direction does not need to be normalized.
+ */
+export function rayPlaneIntersection(origin: vec3, direction: vec3, plane: vec4): number | null {
+    const dotOriginPlane = origin[0] * plane[0] + origin[1] * plane[1] + origin[2] * plane[2];
+    const dotDirectionPlane = direction[0] * plane[0] + direction[1] * plane[1] + direction[2] * plane[2];
+    if (dotDirectionPlane === 0) {
+        return null;
+    }
+    return (-dotOriginPlane -plane[3]) / dotDirectionPlane;
 }
 
 /**
@@ -233,7 +284,7 @@ export function lerp(a: number, b: number, mix: number): number {
  * For a given collection of 2D points, returns their axis-aligned bounding box,
  * in the format [minX, minY, maxX, maxY].
  */
-export function getAABB(points: Array<Point>): [number, number, number, number] {
+export function getAABB(points: Point[]): [number, number, number, number] {
     let tlX = Infinity;
     let tlY = Infinity;
     let brX = -Infinity;
@@ -247,6 +298,46 @@ export function getAABB(points: Array<Point>): [number, number, number, number] 
     }
 
     return [tlX, tlY, brX, brY];
+}
+
+/**
+ * For a given set of tile ids, returns the edge tile ids for the bounding box.
+ */
+export function getEdgeTiles(tileIDs: OverscaledTileID[]): Set<OverscaledTileID> {
+    if (!tileIDs.length) return new Set<OverscaledTileID>();
+
+    // set a common zoom for calculation (highest zoom) to reproject all tiles to this same zoom
+    const targetZ = Math.max(...tileIDs.map(id => id.canonical.z));
+
+    // vars to store the min and max tile x/y coordinates for edge finding
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    // project all tiles to targetZ while maintaining the reference to the original tile
+    const projected: Array<{id: OverscaledTileID; x: number; y: number}> = [];
+    for (const id of tileIDs) {
+        const {x, y, z} = id.canonical;
+        const scale = Math.pow(2, targetZ - z);
+        const px = x * scale;
+        const py = y * scale;
+
+        projected.push({id, x: px, y: py});
+
+        if (px < minX) minX = px;
+        if (px > maxX) maxX = px;
+        if (py < minY) minY = py;
+        if (py > maxY) maxY = py;
+    }
+
+    // find edge tiles using the reprojected tile ids
+    const edgeTiles: Set<OverscaledTileID> = new Set<OverscaledTileID>();
+    for (const p of projected) {
+        if (p.x === minX || p.x === maxX || p.y === minY || p.y === maxY) {
+            edgeTiles.add(p.id);
+        }
+    }
+
+    return edgeTiles;
 }
 
 /**
@@ -319,7 +410,7 @@ export function wrap(n: number, min: number, max: number): number {
 export function keysDifference<S, T>(
     obj: {[key: string]: S},
     other: {[key: string]: T}
-): Array<string> {
+): string[] {
     const difference = [];
     for (const i in obj) {
         if (!(i in other)) {
@@ -341,8 +432,8 @@ export function keysDifference<S, T>(
 export function extend<T extends {}, U>(dest: T, source: U): T & U;
 export function extend<T extends {}, U, V>(dest: T, source1: U, source2: V): T & U & V;
 export function extend<T extends {}, U, V, W>(dest: T, source1: U, source2: V, source3: W): T & U & V & W;
-export function extend(dest: object, ...sources: Array<any>): any;
-export function extend(dest: object, ...sources: Array<any>): any {
+export function extend(dest: object, ...sources: any[]): any;
+export function extend(dest: object, ...sources: any[]): any {
     for (const src of sources) {
         for (const k in src) {
             dest[k] = src[k];
@@ -370,8 +461,7 @@ type KeysOfUnion<T> = T extends T ? keyof T: never;
  */
 export function pick<T extends object>(src: T, properties: Array<KeysOfUnion<T>>): Partial<T> {
     const result: Partial<T> = {};
-    for (let i = 0; i < properties.length; i++) {
-        const k = properties[i];
+    for (const k of properties) {
         if (k in src) {
             result[k] = src[k];
         }
@@ -415,6 +505,23 @@ export function zoomScale(zoom: number) { return Math.pow(2, zoom); }
  * Computes zoom level from scaling.
  */
 export function scaleZoom(scale: number) { return Math.log(scale) / Math.LN2; }
+
+/**
+ * Evaluates the snapped zoom level based on zoomSnap. If zoomSnap is 0 or less, the zoom level is returned unchanged.
+ * If delta is provided, it performs directional snapping (ceil for zoom-in, floor for zoom-out).
+ * @param zoom - The input zoom level
+ * @param zoomSnap - The grid interval to snap to, e.g. 1.0 for 1.0 zoom levels, 0.5 for 0.5 zoom levels, etc.
+ * @param delta - Optional scroll delta or direction. If positive, snaps up; if negative, snaps down.
+ * @returns The snapped zoom level
+ */
+export function evaluateZoomSnap(zoom: number, zoomSnap: number, delta?: number): number {
+    if (zoomSnap <= 0) return zoom;
+    const inv = 1 / zoomSnap;
+    if (delta === undefined || Math.abs(delta) < 1e-10) {
+        return Math.round(zoom * inv) / inv;
+    }
+    return (delta > 0 ? Math.ceil(zoom * inv - 1e-9) : Math.floor(zoom * inv + 1e-10)) / inv;
+}
 
 /**
  * Create an object by mapping all the values of an existing object while
@@ -474,7 +581,7 @@ export function clone<T>(input: T): T {
     if (Array.isArray(input)) {
         return input.map(clone) as any as T;
     } else if (typeof input === 'object' && input) {
-        return mapObject(input, clone) as any as T;
+        return mapObject(input, clone) as T;
     } else {
         return input;
     }
@@ -483,9 +590,9 @@ export function clone<T>(input: T): T {
 /**
  * Check if two arrays have at least one common element.
  */
-export function arraysIntersect<T>(a: Array<T>, b: Array<T>): boolean {
-    for (let l = 0; l < a.length; l++) {
-        if (b.indexOf(a[l]) >= 0) return true;
+export function arraysIntersect<T>(a: T[], b: T[]): boolean {
+    for (const element of a) {
+        if (b.includes(element)) return true;
     }
     return false;
 }
@@ -685,7 +792,7 @@ export const arrayBufferToImageBitmap = async (data: ArrayBuffer): Promise<Image
     try {
         return createImageBitmap(blob);
     } catch (e) {
-        throw new Error(`Could not load image because of ${e.message}. Please make sure to use a supported image type such as PNG or JPEG. Note that SVGs are not supported.`);
+        throw new Error(`Could not load image because of ${ensureError(e).message}. Please make sure to use a supported image type such as PNG or JPEG. Note that SVGs are not supported.`);
     }
 };
 
@@ -711,7 +818,7 @@ export const arrayBufferToImage = (data: ArrayBuffer): Promise<HTMLImageElement>
             // but don't free the image immediately because it might be uploaded in the next frame
             // https://github.com/mapbox/mapbox-gl-js/issues/10226
             img.onload = null;
-            window.requestAnimationFrame(() => { img.src = transparentPngUrl; });
+            window.requestAnimationFrame(() => img.src = transparentPngUrl);
         };
         img.onerror = () => reject(new Error('Could not load image. Please make sure to use a supported image type such as PNG or JPEG. Note that SVGs are not supported.'));
         const blob: Blob = new Blob([new Uint8Array(data)], {type: 'image/png'});
@@ -1005,6 +1112,13 @@ export type Complete<T> = {
  */
 export type RequireAtLeastOne<T> = { [K in keyof T]-?: Required<Pick<T, K>> & Partial<Pick<T, Exclude<keyof T, K>>>; }[keyof T];
 
+/**
+* A helper to allow require exactly one one property
+ */
+export type ExactlyOne<T, Keys extends keyof T = keyof T> = {
+    [K in Keys]: Required<Pick<T, K>> & { [P in Exclude<Keys, K>]?: never }
+}[Keys];
+
 export type TileJSON = {
     tilejson: '2.2.0' | '2.1.0' | '2.0.1' | '2.0.0' | '1.0.0';
     name?: string;
@@ -1012,9 +1126,9 @@ export type TileJSON = {
     version?: string;
     attribution?: string;
     template?: string;
-    tiles: Array<string>;
-    grids?: Array<string>;
-    data?: Array<string>;
+    tiles: string[];
+    grids?: string[];
+    data?: string[];
     minzoom?: number;
     maxzoom?: number;
     bounds?: [number, number, number, number];
@@ -1035,3 +1149,47 @@ export const MAX_TILE_ZOOM = 25;
 export const MIN_TILE_ZOOM = 0;
 
 export const MAX_VALID_LATITUDE = 85.051129;
+
+const touchableEvents = {
+    touchstart: true,
+    touchmove: true,
+    touchmoveWindow: true,
+    touchend: true,
+    touchcancel: true
+};
+
+const pointableEvents = {
+    dblclick: true,
+    click: true,
+    mouseover: true,
+    mouseout: true,
+    mousedown: true,
+    mousemove: true,
+    mousemoveWindow: true,
+    mouseup: true,
+    mouseupWindow: true,
+    contextmenu: true,
+    wheel: true
+};
+
+export function isTouchableEvent(event: Event, eventType: string): event is TouchEvent {
+    return touchableEvents[eventType] && 'touches' in event;
+}
+
+/**
+ * Checks if an event is a pointable event (mouse or wheel event).
+ * Uses the event target's window context for cross-window support.
+ */
+export function isPointableEvent(event: Event, eventType: string): event is MouseEvent {
+    if (!pointableEvents[eventType]) return false;
+
+    // Get the window context from the event target to use the correct constructor.
+    const domEvent = event as globalThis.Event;
+    const target = domEvent?.target as Element | null;
+    const targetWindow = target?.ownerDocument?.defaultView || window;
+    return domEvent instanceof targetWindow.MouseEvent || domEvent instanceof targetWindow.WheelEvent;
+}
+
+export function isTouchableOrPointableType(eventType: string): boolean {
+    return touchableEvents[eventType] || pointableEvents[eventType];
+}

@@ -23,7 +23,7 @@
       "maxzoom": 17,
       "tileSize": 256
     },
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "maxzoom": 14,
       "tiles": [
@@ -50,7 +50,7 @@
     {
       "id": "line-line",
       "type": "line",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "road",
       "paint": {
         "line-color": "orange"

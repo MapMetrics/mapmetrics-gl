@@ -101,7 +101,7 @@ const defaultTransport: MapSessionTransport = async (url: string) => {
         const response = await makeRequest({url, method: 'POST', type: 'json'}, new AbortController());
         return {status: 200, body: response.data};
     } catch (err) {
-        return {status: (err && (err as any).status) || 0, body: null};
+        return {status: (err?.status) || 0, body: null};
     }
 };
 
@@ -406,7 +406,7 @@ export class MapSession {
     onTileResponse(requestUrl: string, status: number, headers?: {[_: string]: string} | null) {
         if (!this.isEnabled() || !requestUrl) return;
 
-        const adopted = headers && headers[`${SESSION_HEADER_PREFIX}sig`] ?
+        const adopted = headers?.[`${SESSION_HEADER_PREFIX}sig`] ?
             this.applyCredentialFromHeaders(headers, requestUrl) :
             false;
 
@@ -579,7 +579,7 @@ export class MapSession {
 
         this.transport(url).then(
             (result) => {
-                if (result && result.status === 200 && this.adoptRefreshResponse(result.body)) return;
+                if (result?.status === 200 && this.adoptRefreshResponse(result.body)) return;
                 this.handleRefreshFailure(result ? result.status : 0);
             },
             // A transport failure is not an auth failure: it must not spend the hard-failure

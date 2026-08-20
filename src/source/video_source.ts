@@ -2,8 +2,9 @@ import {getVideo} from '../util/ajax';
 import {ResourceType} from '../util/request_manager';
 
 import {ImageSource} from './image_source';
-import {Texture} from '../render/texture';
+import {Texture} from '../webgl/texture';
 import {Event, ErrorEvent} from '../util/evented';
+import {ensureError} from '../util/util';
 import {ValidationError} from '@maplibre/maplibre-gl-style-spec';
 
 import type {Map} from '../ui/map';
@@ -13,7 +14,7 @@ import type {VideoSourceSpecification} from '@maplibre/maplibre-gl-style-spec';
 
 /**
  * A data source containing video.
- * (See the [Style Specification](#sources-video) for detailed documentation of options.)
+ * (See the [Style Specification](https://maplibre.org/maplibre-style-spec/#sources-video) for detailed documentation of options.)
  *
  * @group Sources
  *
@@ -53,16 +54,15 @@ import type {VideoSourceSpecification} from '@maplibre/maplibre-gl-style-spec';
  */
 export class VideoSource extends ImageSource {
     options: VideoSourceSpecification;
-    urls: Array<string>;
+    urls: string[];
     video: HTMLVideoElement;
     roundZoom: boolean;
 
-    constructor(
-        id: string,
-        options: VideoSourceSpecification,
-        dispatcher: Dispatcher,
-        eventedParent: Evented
-    ) {
+    private _onPlayingHandler = () => {
+        this.map?.triggerRepaint();
+    };
+
+    constructor(id: string, options: VideoSourceSpecification, dispatcher: Dispatcher, eventedParent: Evented) {
         super(id, options, dispatcher, eventedParent);
         this.roundZoom = true;
         this.type = 'video';
@@ -75,12 +75,7 @@ export class VideoSource extends ImageSource {
 
         this.urls = [];
         for (const url of options.urls) {
-            this.urls.push(
-                this.map._requestManager.transformRequest(
-                    url,
-                    ResourceType.Source
-                ).url
-            );
+            this.urls.push((await this.map._requestManager.transformRequest(url, ResourceType.Source)).url);
         }
         try {
             const video = await getVideo(this.urls);
@@ -93,9 +88,7 @@ export class VideoSource extends ImageSource {
 
             // Start repainting when video starts playing. hasTransition() will then return
             // true to trigger additional frames as long as the videos continues playing.
-            this.video.addEventListener('playing', () => {
-                this.map.triggerRepaint();
-            });
+            this.video.addEventListener('playing', this._onPlayingHandler);
 
             if (this.map) {
                 this.video.play();
@@ -103,7 +96,7 @@ export class VideoSource extends ImageSource {
 
             this._finishLoading();
         } catch (err) {
-            this.fire(new ErrorEvent(err));
+            this.fire(new ErrorEvent(ensureError(err)));
         }
     }
 
@@ -131,21 +124,8 @@ export class VideoSource extends ImageSource {
     seek(seconds: number) {
         if (this.video) {
             const seekableRange = this.video.seekable;
-            if (
-                seconds < seekableRange.start(0) ||
-                seconds > seekableRange.end(0)
-            ) {
-                this.fire(
-                    new ErrorEvent(
-                        new ValidationError(
-                            `sources.${this.id}`,
-                            null,
-                            `Playback for this video can be set only between the ${seekableRange.start(
-                                0
-                            )} and ${seekableRange.end(0)}-second mark.`
-                        )
-                    )
-                );
+            if (seconds < seekableRange.start(0) || seconds > seekableRange.end(0)) {
+                this.fire(new ErrorEvent(new ValidationError(`sources.${this.id}`, null, `Playback for this video can be set only between the ${seekableRange.start(0)} and ${seekableRange.end(0)}-second mark.`)));
             } else this.video.currentTime = seconds;
         }
     }
@@ -169,6 +149,14 @@ export class VideoSource extends ImageSource {
         }
     }
 
+    onRemove() {
+        super.onRemove();
+        if (this.video) {
+            this.video.removeEventListener('playing', this._onPlayingHandler);
+            this.video.pause();
+        }
+    }
+
     /**
      * Sets the video's coordinates and re-renders the map.
      */
@@ -185,15 +173,7 @@ export class VideoSource extends ImageSource {
             this.texture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
         } else if (!this.video.paused) {
             this.texture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
-            gl.texSubImage2D(
-                gl.TEXTURE_2D,
-                0,
-                0,
-                0,
-                gl.RGBA,
-                gl.UNSIGNED_BYTE,
-                this.video
-            );
+            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.video);
         }
 
         let newTilesLoaded = false;
@@ -207,13 +187,7 @@ export class VideoSource extends ImageSource {
         }
 
         if (newTilesLoaded) {
-            this.fire(
-                new Event('data', {
-                    dataType: 'source',
-                    sourceDataType: 'idle',
-                    sourceId: this.id,
-                })
-            );
+            this.fire(new Event('data', {dataType: 'source', sourceDataType: 'idle', sourceId: this.id}));
         }
     }
 
@@ -221,7 +195,7 @@ export class VideoSource extends ImageSource {
         return {
             type: 'video',
             urls: this.urls,
-            coordinates: this.coordinates,
+            coordinates: this.coordinates
         };
     }
 

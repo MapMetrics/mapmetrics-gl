@@ -11,7 +11,7 @@ async function getSourceMapForFile(url: string|URL) {
     const content = await fs.readFile(url, {encoding: 'utf-8'});
     const result = new RegExp('^//# sourceMappingURL=(.*)$', 'm').exec(content);
     expect(result).toBeTruthy();
-    const sourcemapUrl = result![1];
+    const sourcemapUrl = result[1];
     expect(sourcemapUrl).toBeTruthy();
     const resolvedSourcemapURL = new URL(sourcemapUrl, url);
     const text = await fs.readFile(resolvedSourcemapURL, {encoding: 'utf-8'});
@@ -62,24 +62,14 @@ describe('main sourcemap', () => {
                 return false;
             if (f.startsWith(path.join('src', 'style-spec')))
                 return false;
-            if (f.startsWith(`build${path.sep}`))
-                return false;
-            // Test fixtures and shared test helpers are never reachable from src/index.ts,
-            // so they must not appear in the browser bundle's sourcemap.
-            if (f.split(path.sep).includes('__tests__'))
-                return false;
-            if (f.startsWith(path.join('src', 'util', 'test') + path.sep))
-                return false;
-            return true;
+            return !f.startsWith(`build${path.sep}`);
         }).sort();
 
         // actual files from *.js.map
         const actualEntriesInSourcemapJSON = sourcemapEntriesNormalized.filter(f => {
             if (f.startsWith('node_modules'))
                 return false;
-            if (f.startsWith(path.join('src', 'style-spec')))
-                return false;
-            return true;
+            return !f.startsWith(path.join('src', 'style-spec'));
         }).sort();
 
         function setMinus<T>(a: T[], b: T[]) : T[] {
@@ -89,16 +79,7 @@ describe('main sourcemap', () => {
 
         const s1 = setMinus(actualEntriesInSourcemapJSON, expectedEntriesInSourcemapJSON);
         expect(s1.length).toBeLessThan(5);
-        // Source files that legitimately produce no sourcemap entry in the browser bundle.
-        // Two categories, 21 files at the time of writing:
-        //   - type-only modules (interfaces / type aliases) that erase to nothing:
-        //     e.g. src/gl/types.ts, src/util/actor_messages.ts, src/ui/control/control.ts
-        //   - MapMetrics fork: the server-side half of src/seo (server entry points,
-        //     src/seo/index.ts, demo.ts, privacy-filter, crawler-detector). Only the parts
-        //     reachable from ui/map.ts via src/seo/client are bundled; the rest is
-        //     intentionally tree-shaken out of the browser build.
-        // Keep this threshold tight - a jump means real runtime code stopped being bundled.
         const s2 = setMinus(expectedEntriesInSourcemapJSON, actualEntriesInSourcemapJSON);
-        expect(s2.length).toBeLessThan(22);
+        expect(s2.length).toBeLessThan(17);
     });
 });

@@ -11,7 +11,7 @@
   ],
   "zoom": 0,
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "maxzoom": 14,
       "tiles": [
@@ -28,9 +28,9 @@
       }
     },
     {
-      "id": "maplibre",
+      "id": "mapmetrics",
       "type": "fill",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "water",
       "paint": {
         "fill-color": "black",

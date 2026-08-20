@@ -103,7 +103,7 @@
                 source.expandTileCoverage = size;
                 
                 // Force a reload to apply the new buffer size
-                map.getStyle().sourceCaches['osm'].clearTiles();
+                map.getStyle().tileManagers['osm'].clearTiles();
                 map.triggerRepaint();
             }
 

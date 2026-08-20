@@ -29,6 +29,10 @@ function nativeType(property) {
             return 'Color';
         case 'padding':
             return 'Padding';
+        case 'numberArray':
+            return 'NumberArray';
+        case 'colorArray':
+            return 'ColorArray';
         case 'variableAnchorOffsetCollection':
             return 'VariableAnchorOffsetCollection';
         case 'sprite':
@@ -41,7 +45,8 @@ function nativeType(property) {
             if (property.length) {
                 return `[${new Array(property.length).fill(nativeType({type: property.value})).join(', ')}]`;
             } else {
-                return `Array<${nativeType({type: property.value, values: property.values})}>`;
+                const inner = nativeType({type: property.value, values: property.values});
+                return inner.includes('|') ? `Array<${inner}>` : `${inner}[]`;
             }
         default: throw new Error(`unknown type "${property.type}" for "${property.name}"`);
     }
@@ -186,7 +191,7 @@ import {
     CrossFaded
 } from '../properties';
 
-import type {Color, Formatted, Padding, ResolvedImage, VariableAnchorOffsetCollection} from '@maplibre/maplibre-gl-style-spec';
+import type {Color, Formatted, Padding, NumberArray, ColorArray, ResolvedImage, VariableAnchorOffsetCollection} from '@maplibre/maplibre-gl-style-spec';
 import {StylePropertySpecification} from '@maplibre/maplibre-gl-style-spec';
 `);
 

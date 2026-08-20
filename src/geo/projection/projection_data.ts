@@ -1,8 +1,8 @@
 import type {mat4} from 'gl-matrix';
-import type {OverscaledTileID} from '../../source/tile_id';
+import type {OverscaledTileID} from '../../tile/tile_id';
 
 /**
- * This type contains all data necessary to project a tile to screen in MapLibre's shader system.
+ * This type contains all data necessary to project a tile to screen in Mapmetrics's shader system.
  * Contains data used for both mercator and globe projection.
  */
 export type ProjectionData = {

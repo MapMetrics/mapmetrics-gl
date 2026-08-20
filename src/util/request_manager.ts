@@ -3,7 +3,7 @@ import {mapSession} from './map_session';
 import type {RequestParameters} from './ajax';
 
 /**
- * A type of MapLibre resource.
+ * A type of Mapmetrics resource.
  */
 export const enum ResourceType {
     Glyphs = 'Glyphs',
@@ -17,24 +17,41 @@ export const enum ResourceType {
 }
 
 /**
- * This function is used to tranform a request.
+ * This function is used to transform a request.
  * It is used just before executing the relevant request.
  */
-export type RequestTransformFunction = (url: string, resourceType?: ResourceType) => RequestParameters | undefined;
+export type RequestTransformFunction = (url: string, resourceType?: ResourceType) => RequestParameters | Promise<RequestParameters> | undefined;
 
 export class RequestManager {
-    _transformRequestFn: RequestTransformFunction;
+    _transformRequestFn: RequestTransformFunction | null;
 
-    constructor(transformRequestFn?: RequestTransformFunction) {
-        this._transformRequestFn = transformRequestFn;
+    constructor(transformRequestFn?: RequestTransformFunction | null) {
+        this._transformRequestFn = transformRequestFn ?? null;
     }
 
-    transformRequest(url: string, type: ResourceType): RequestParameters {
+    /**
+     * MUST STAY `async`, AND THE `await` BELOW MUST STAY.
+     *
+     * Upstream #7184 made `RequestTransformFunction` able to return
+     * `RequestParameters | Promise<RequestParameters>`. If the `await` is dropped and an
+     * integrator supplies an async
+     * `transformRequest`, `params` is a Promise, `params.url` is `undefined`, `signUrl(undefined)`
+     * returns undefined and the signed value is written to an expando on the Promise object. The
+     * URL actually requested is whatever the promise resolves to — UNSIGNED. Nothing throws, the
+     * map renders correctly, `tsc` stays clean, and every tile bills on the v1 path.
+     *
+     * Grep marker 15 (`mapSession.signUrl` present) passes on the broken version too, so it cannot
+     * catch this. `request_manager.test.ts` is the regression net — see
+     * 'awaits an async transformRequest before signing'.
+     *
+     * All 15 upstream call sites already `await` this, so returning a Promise is safe.
+     */
+    async transformRequest(url: string, type: ResourceType): Promise<RequestParameters> {
         // The application's own callback runs FIRST and owns the result: it may rewrite the URL to
         // a CDN, add headers or set credentials, and none of that may be lost. v2 map-session
         // signing is then layered on TOP of whatever it produced, so an app that sets
         // `transformRequest` keeps its behaviour instead of having it clobbered.
-        const params = (this._transformRequestFn && this._transformRequestFn(url, type)) || {url};
+        const params = (this._transformRequestFn && await this._transformRequestFn(url, type)) || {url};
         if (type === ResourceType.Style) {
             // v2 map sessions are ON BY DEFAULT, and this is how: the style URL the SDK is about to
             // request already carries a `token=` JWT whose scope includes `maps`, which is all
@@ -56,7 +73,7 @@ export class RequestManager {
         return params;
     }
 
-    setTransformRequest(transformRequest: RequestTransformFunction) {
+    setTransformRequest(transformRequest: RequestTransformFunction | null) {
         this._transformRequestFn = transformRequest;
     }
 }

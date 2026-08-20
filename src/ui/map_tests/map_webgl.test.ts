@@ -1,5 +1,6 @@
 import {beforeEach, afterEach, test, expect, vi} from 'vitest';
 import {createMap, beforeMapTest} from '../../util/test/util';
+import {ensureError} from '../../util/util';
 
 let originalGetContext: typeof HTMLCanvasElement.prototype.getContext;
 beforeEach(() => {
@@ -12,32 +13,65 @@ afterEach(() => {
     HTMLCanvasElement.prototype.getContext = originalGetContext;
 });
 
-test('does not fire "webglcontextlost" after #remove has been called', () => new Promise<void>((done) => {
+test('does not fire "webglcontextlost" after remove has been called', () => {
     const map = createMap();
     const canvas = map.getCanvas();
-    map.once('webglcontextlost', () => { throw new Error('"webglcontextlost" fired after #remove has been called'); });
+    const spy = vi.fn();
+    map.on('webglcontextlost', spy);
     map.remove();
     // Dispatch the event manually because at the time of this writing, gl does not support
     // the WEBGL_lose_context extension.
     canvas.dispatchEvent(new window.Event('webglcontextlost'));
-    done();
-}));
+    expect(spy).not.toHaveBeenCalled();
+});
 
-test('does not fire "webglcontextrestored" after #remove has been called', () => new Promise<void>((done) => {
+test('handles "webglcontextlost" when map is created without style', () => {
+    // This test verifies fix for #7022 - map should not throw when WebGL context
+    // is lost before the style is loaded (i.e., when style is null/undefined)
+    const map = createMap({deleteStyle: true});
+    const canvas = map.getCanvas();
+    const spy = vi.fn();
+    map.on('webglcontextlost', spy);
+    // Dispatch the event manually because at the time of this writing, gl does not support
+    // the WEBGL_lose_context extension.
+    expect(() => {
+        canvas.dispatchEvent(new window.Event('webglcontextlost'));
+    }).not.toThrow();
+    expect(spy).toHaveBeenCalled();
+    map.remove();
+});
+
+test('handles "webglcontextrestored" when map is created without style', async () => {
+    const map = createMap({deleteStyle: true});
+    const canvas = map.getCanvas();
+
+    const contextLostPromise = map.once('webglcontextlost');
+    canvas.dispatchEvent(new window.Event('webglcontextlost'));
+    await contextLostPromise;
+
+    expect(() => {
+        canvas.dispatchEvent(new window.Event('webglcontextrestored'));
+    }).not.toThrow();
+    map.remove();
+});
+
+test('does not fire "webglcontextrestored" after remove has been called', async () => {
     const map = createMap();
     const canvas = map.getCanvas();
 
-    map.once('webglcontextlost', () => {
-        map.once('webglcontextrestored', () => { throw new Error('"webglcontextrestored" fired after #remove has been called'); });
-        map.remove();
-        canvas.dispatchEvent(new window.Event('webglcontextrestored'));
-        done();
-    });
+    const contextLostPromise =  map.once('webglcontextlost');
 
     // Dispatch the event manually because at the time of this writing, gl does not support
     // the WEBGL_lose_context extension.
     canvas.dispatchEvent(new window.Event('webglcontextlost'));
-}));
+
+    await contextLostPromise;
+    const spy = vi.fn();
+    map.on('webglcontextrestored', spy);
+    map.remove();
+    canvas.dispatchEvent(new window.Event('webglcontextrestored'));
+    expect(spy).not.toHaveBeenCalled();
+});
 
 test('WebGL error while creating map', () => {
     HTMLCanvasElement.prototype.getContext = function (type: string) {
@@ -51,7 +85,7 @@ test('WebGL error while creating map', () => {
     try {
         createMap();
     } catch (e) {
-        const errorMessageObject = JSON.parse(e.message);
+        const errorMessageObject = JSON.parse(ensureError(e).message);
 
         // this message is from map code
         expect(errorMessageObject.message).toBe('Failed to initialize WebGL');
@@ -72,14 +106,14 @@ test('Check Map is being created with desired WebGL version', () => {
     try {
         createMap({canvasContextAttributes: {contextType: 'webgl2'}});
     } catch (e) {
-        const errorMessageObject = JSON.parse(e.message);
+        const errorMessageObject = JSON.parse(ensureError(e).message);
         expect(errorMessageObject.statusMessage).toBe('webgl2 is not supported');
     }
   
     try {
         createMap({canvasContextAttributes: {contextType: 'webgl'}});
     } catch (e) {
-        const errorMessageObject = JSON.parse(e.message);
+        const errorMessageObject = JSON.parse(ensureError(e).message);
         expect(errorMessageObject.statusMessage).toBe('webgl is not supported');
     }
 

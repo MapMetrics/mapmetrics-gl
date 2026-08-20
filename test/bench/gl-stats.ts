@@ -3,12 +3,12 @@ import fs from 'fs';
 import zlib from 'zlib';
 import {execSync} from 'child_process';
 
-const mapmetricsglJSSrc = fs.readFileSync('dist/mapmetrics-gl.js');
-const mapmetricsglCSSSrc = fs.readFileSync('dist/mapmetrics-gl.css');
+const mapmetricsGLJSSrc = fs.readFileSync('dist/mapmetrics-gl.js');
+const mapmetricsGLCSSSrc = fs.readFileSync('dist/mapmetrics-gl.css');
 const benchSrc = fs.readFileSync('test/bench/gl-stats.html', 'utf8');
 
 const benchHTML = benchSrc
-    .replace('<script src="/dist\/mapmetrics-gl.js"></script>', `<script src="data:text/javascript;base64,${mapmetricsglJSSrc.toString('base64')}"></script>`);
+    .replace('<script src="/dist\/mapmetrics-gl.js"></script>', `<script src="data:text/javascript;base64,${mapmetricsGLJSSrc.toString('base64')}"></script>`);
 
 function waitForConsole(page: Page): Promise<string> {
     return new Promise((resolve) => {
@@ -30,8 +30,8 @@ try {
     await page.setContent(benchHTML);
 
     const stats = JSON.parse(await waitForConsole(page));
-    stats['bundle_size'] = mapmetricsglJSSrc.length + mapmetricsglCSSSrc.length;
-    stats['bundle_size_gz'] = zlib.gzipSync(mapmetricsglJSSrc).length + zlib.gzipSync(mapmetricsglCSSSrc).length;
+    stats['bundle_size'] = mapmetricsGLJSSrc.length + mapmetricsGLCSSSrc.length;
+    stats['bundle_size_gz'] = zlib.gzipSync(mapmetricsGLJSSrc).length + zlib.gzipSync(mapmetricsGLCSSSrc).length;
     stats.dt = execSync('git show --no-patch --no-notes --pretty=\'%cI\' HEAD').toString().substring(0, 19);
     stats.commit = execSync('git rev-parse --short HEAD').toString().trim();
     stats.message = execSync('git show -s --format=%s HEAD').toString().trim();

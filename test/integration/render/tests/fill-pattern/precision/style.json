@@ -10,7 +10,7 @@
     0
   ],
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "maxzoom": 0,
       "tiles": [
@@ -30,7 +30,7 @@
     {
       "id": "land",
       "type": "fill",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "water",
       "paint": {
         "fill-pattern": "generic_icon"

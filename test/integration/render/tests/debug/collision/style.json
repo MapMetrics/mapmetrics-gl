@@ -15,7 +15,7 @@
   ],
   "zoom": 14,
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "maxzoom": 14,
       "tiles": [
@@ -36,7 +36,7 @@
     {
       "id": "line",
       "type": "symbol",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "road_label",
       "layout": {
         "icon-image": "triangle-stroked-12",

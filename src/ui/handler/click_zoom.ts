@@ -2,6 +2,7 @@ import type Point from '@mapbox/point-geometry';
 import type {Map} from '../map';
 import {TransformProvider} from './transform-provider';
 import {type Handler} from '../handler_manager';
+import {evaluateZoomSnap} from '../../util/util';
 
 /**
  * The `ClickZoomHandler` allows the user to zoom the map at a point by double clicking
@@ -25,37 +26,29 @@ export class ClickZoomHandler implements Handler {
 
     dblclick(e: MouseEvent, point: Point) {
         e.preventDefault();
-        const zoomDelta = e.shiftKey ? -1 : 1;
-        const targetZoom = this._tr.zoom + zoomDelta;
-        
         return {
             cameraAnimation: async (map: Map) => {
-                // For zoom-out operations, wait for tiles to load before completing the animation
+                const zoomDelta = e.shiftKey ? -1 : 1;
+                const targetZoom = evaluateZoomSnap(this._tr.zoom + zoomDelta, map.getZoomSnap());
+
+                // Zoom-out waits for the destination tiles. If they did not arrive in time we
+                // still zoom, but with a longer 1800ms ease so the grey window reads as motion
+                // rather than a stall.
                 if (zoomDelta < 0 && map.tileLoadingManager) {
                     const tilesLoaded = await map.tileLoadingManager.waitForZoomOutTiles(targetZoom, 3500);
-                    if (tilesLoaded) {
-                        // Tiles loaded successfully, proceed with animation
-                        map.easeTo({
-                            duration: 300,
-                            zoom: targetZoom,
-                            around: this._tr.unproject(point)
-                        }, {originalEvent: e});
-                    } else {
-                        // Timeout reached, proceed anyway
-                        map.easeTo({
-                            duration: 1800,
-                            zoom: targetZoom,
-                            around: this._tr.unproject(point)
-                        }, {originalEvent: e});
-                    }
-                } else {
-                    // Zoom-in or no tile loading manager, proceed normally
                     map.easeTo({
-                        duration: 300,
+                        duration: tilesLoaded ? 300 : 1800,
                         zoom: targetZoom,
                         around: this._tr.unproject(point)
                     }, {originalEvent: e});
+                    return;
                 }
+
+                map.easeTo({
+                    duration: 300,
+                    zoom: targetZoom,
+                    around: this._tr.unproject(point)
+                }, {originalEvent: e});
             }
         };
     }

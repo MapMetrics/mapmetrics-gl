@@ -1,9 +1,22 @@
 import {describe, beforeEach, test, expect, vi} from 'vitest';
-import {browser} from '../../util/browser';
+import * as timeControl from '../../util/time_control';
 import {Map} from '../map';
 import {DOM} from '../../util/dom';
 import simulate from '../../../test/unit/lib/simulate_interaction';
 import {beforeMapTest, sleep} from '../../util/test/util';
+
+/**
+ * MapMetrics fork behaviour: the wheel/default zoom rates are deliberately retuned --
+ * `defaultZoomRate` 1/100 becomes 1/1000 and `wheelZoomRate` 1/450 becomes 1/1000, with
+ * `maxScalePerFrame` 2 becoming 2.2 (see `scroll_zoom.ts`, MAPMETRICS-FORK.md §3 item 10).
+ * One wheel tick therefore moves ~0.1404 zoom levels rather than upstream's 0.0285.
+ *
+ * This constant is DERIVED FROM the retuned rates, not copied: if someone reverts the rates
+ * these expectations fail, which is the entire point -- reverting them is otherwise completely
+ * invisible ("zoom just feels twitchier"). Do not "fix" a failure here by editing the number;
+ * check `scroll_zoom.ts` first.
+ */
+const singleTickZoomDelta = 0.1404;
 
 function createMap(cooperativeGestures) {
     return new Map({
@@ -17,14 +30,6 @@ function createMap(cooperativeGestures) {
     });
 }
 
-/**
- * Zoom change produced by one `simulate.magicWheelZoomDelta` wheel tick.
- * The MapMetrics fork retunes `defaultZoomRate`/`wheelZoomRate` in `scroll_zoom.ts`
- * (1/1200 to 1/1000), so a tick moves ~0.1404 zoom levels rather than upstream's 0.0285.
- * See the matching constant in `scroll_zoom.test.ts`.
- */
-const singleTickZoomDelta = 0.1404;
-
 beforeEach(() => {
     beforeMapTest();
 });
@@ -32,9 +37,9 @@ beforeEach(() => {
 describe('CoopGesturesHandler', () => {
 
     test('Does not zoom on wheel if no key is down', async () => {
-        const browserNow = vi.spyOn(browser, 'now');
+        const timeControlNow = vi.spyOn(timeControl, 'now');
         let now = 1555555555555;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
 
         const map = createMap(true);
         map._renderTaskQueue.run();
@@ -44,7 +49,7 @@ describe('CoopGesturesHandler', () => {
 
         const startZoom = map.getZoom();
         // simulate a single 'wheel' event
-        const wheelEvent = {type: 'wheel', deltaY: -simulate.magicWheelZoomDelta};
+        const wheelEvent = {deltaY: -simulate.magicWheelZoomDelta};
         simulate.wheel(map.getCanvas(), wheelEvent);
         map._renderTaskQueue.run();
         expect(map.getContainer().querySelector('.mapmetricsgl-cooperative-gesture-screen.mapmetricsgl-show')).toBeInstanceOf(HTMLDivElement);
@@ -58,7 +63,7 @@ describe('CoopGesturesHandler', () => {
         expect(cooperativegestureprevented.mock.calls[0][0].originalEvent).toMatchObject(wheelEvent);
 
         now += 400;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
         const endZoom = map.getZoom();
@@ -71,9 +76,9 @@ describe('CoopGesturesHandler', () => {
     });
 
     test('Zooms on wheel if no key is down after disabling cooperative gestures', () => {
-        const browserNow = vi.spyOn(browser, 'now');
+        const timeControlNow = vi.spyOn(timeControl, 'now');
         let now = 1555555555555;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
 
         const map = createMap(true);
         map.cooperativeGestures.disable();
@@ -81,11 +86,11 @@ describe('CoopGesturesHandler', () => {
 
         const startZoom = map.getZoom();
         // simulate a single 'wheel' event
-        simulate.wheel(map.getCanvas(), {type: 'wheel', deltaY: -simulate.magicWheelZoomDelta});
+        simulate.wheel(map.getCanvas(), {deltaY: -simulate.magicWheelZoomDelta});
         map._renderTaskQueue.run();
 
         now += 400;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
         const endZoom = map.getZoom();
@@ -96,20 +101,20 @@ describe('CoopGesturesHandler', () => {
 
     test('Zooms on wheel if control key is down', () => {
         // NOTE: This should pass regardless of whether cooperativeGestures is enabled or not
-        const browserNow = vi.spyOn(browser, 'now');
+        const timeControlNow = vi.spyOn(timeControl, 'now');
         let now = 1555555555555;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
 
         const map = createMap(true);
         map._renderTaskQueue.run();
 
         const startZoom = map.getZoom();
         // simulate a single 'wheel' event
-        simulate.wheel(map.getCanvas(), {type: 'wheel', deltaY: -simulate.magicWheelZoomDelta, ctrlKey: true});
+        simulate.wheel(map.getCanvas(), {deltaY: -simulate.magicWheelZoomDelta, ctrlKey: true});
         map._renderTaskQueue.run();
 
         now += 400;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
         const endZoom = map.getZoom();
@@ -120,9 +125,9 @@ describe('CoopGesturesHandler', () => {
 
     test('Zooms on trackpad pinch when metaKey is the bypass key', () => {
         // NOTE: This should pass regardless of whether cooperativeGestures is enabled or not
-        const browserNow = vi.spyOn(browser, 'now');
+        const timeControlNow = vi.spyOn(timeControl, 'now');
         let now = 1555555555555;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
 
         const map = createMap(true);
 
@@ -133,7 +138,6 @@ describe('CoopGesturesHandler', () => {
         const startZoom = map.getZoom();
         // simulate a single 'wheel' trackpad pinch event
         simulate.wheel(map.getCanvas(), {
-            type: 'wheel',
             deltaY: -simulate.magicWheelZoomDelta,
 
             // this is how a browser identifies a trackpad pinch
@@ -142,7 +146,7 @@ describe('CoopGesturesHandler', () => {
         map._renderTaskQueue.run();
 
         now += 400;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
         const endZoom = map.getZoom();
@@ -153,9 +157,9 @@ describe('CoopGesturesHandler', () => {
 
     test('Does not show message if scrollZoom is disabled', () => {
         // NOTE: This should pass regardless of whether cooperativeGestures is enabled or not
-        const browserNow = vi.spyOn(browser, 'now');
+        const timeControlNow = vi.spyOn(timeControl, 'now');
         const now = 1555555555555;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
 
         const map = createMap(true);
 
@@ -166,7 +170,7 @@ describe('CoopGesturesHandler', () => {
         map._renderTaskQueue.run();
 
         // simulate a single 'wheel' event
-        simulate.wheel(map.getCanvas(), {type: 'wheel', deltaY: -simulate.magicWheelZoomDelta});
+        simulate.wheel(map.getCanvas(), {deltaY: -simulate.magicWheelZoomDelta});
         map._renderTaskQueue.run();
         expect(map.getContainer().querySelector('.mapmetricsgl-cooperative-gesture-screen.mapmetricsgl-show')).toBeNull();
 
@@ -308,20 +312,20 @@ describe('CoopGesturesHandler', () => {
     });
 
     test('Initially disabled cooperative gestures can be later enabled', () => {
-        const browserNow = vi.spyOn(browser, 'now');
+        const timeControlNow = vi.spyOn(timeControl, 'now');
         let now = 1555555555555;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
 
         const map = createMap(false);
         map._renderTaskQueue.run();
 
         const startZoom = map.getZoom();
         // simulate a single 'wheel' event
-        simulate.wheel(map.getCanvas(), {type: 'wheel', deltaY: -simulate.magicWheelZoomDelta});
+        simulate.wheel(map.getCanvas(), {deltaY: -simulate.magicWheelZoomDelta});
         map._renderTaskQueue.run();
 
         now += 400;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
         const midZoom = map.getZoom();
@@ -331,11 +335,11 @@ describe('CoopGesturesHandler', () => {
         map.cooperativeGestures.enable();
 
         // This 'wheel' event should not zoom
-        simulate.wheel(map.getCanvas(), {type: 'wheel', deltaY: -simulate.magicWheelZoomDelta});
+        simulate.wheel(map.getCanvas(), {deltaY: -simulate.magicWheelZoomDelta});
         map._renderTaskQueue.run();
 
         now += 400;
-        browserNow.mockReturnValue(now);
+        timeControlNow.mockReturnValue(now);
         map._renderTaskQueue.run();
 
         const endZoom = map.getZoom();

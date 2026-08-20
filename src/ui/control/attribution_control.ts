@@ -17,7 +17,7 @@ export type AttributionControlOptions = {
     /**
      * Attributions to show in addition to any other attributions.
      */
-    customAttribution?: string | Array<string>;
+    customAttribution?: string | string[];
 };
 
 export const defaultAttributionControlOptions: AttributionControlOptions = {
@@ -34,6 +34,7 @@ export const defaultAttributionControlOptions: AttributionControlOptions = {
  *         compact: true
  *     }));
  * ```
+ * @see [Change the default position for attribution](https://maplibre.org/maplibre-gl-js/docs/examples/change-the-default-position-for-attribution/)
  */
 export class AttributionControl implements IControl {
     options: AttributionControlOptions;
@@ -43,7 +44,7 @@ export class AttributionControl implements IControl {
     _innerContainer: HTMLElement;
     _compactButton: HTMLElement;
     _editLink: HTMLAnchorElement;
-    _sanitizedAttributionHTML: string;
+    _attribHTML: string;
     styleId: string;
     styleOwner: string;
 
@@ -82,7 +83,7 @@ export class AttributionControl implements IControl {
 
     /** {@inheritDoc IControl.onRemove} */
     onRemove() {
-        DOM.remove(this._container);
+        this._container.remove();
 
         this._map.off('styledata', this._updateData);
         this._map.off('sourcedata', this._updateData);
@@ -92,7 +93,7 @@ export class AttributionControl implements IControl {
 
         this._map = undefined;
         this._compact = undefined;
-        this._sanitizedAttributionHTML = undefined;
+        this._attribHTML = undefined;
     }
 
     _setElementTitle(element: HTMLElement, title: 'ToggleAttribution' | 'MapFeedback') {
@@ -121,7 +122,7 @@ export class AttributionControl implements IControl {
 
     _updateAttributions() {
         if (!this._map.style) return;
-        let attributions: Array<string> = [];
+        let attributions: string[] = [];
         if (this.options.customAttribution) {
             if (Array.isArray(this.options.customAttribution)) {
                 attributions = attributions.concat(
@@ -141,12 +142,12 @@ export class AttributionControl implements IControl {
             this.styleId = stylesheet.id;
         }
 
-        const sourceCaches = this._map.style.sourceCaches;
-        for (const id in sourceCaches) {
-            const sourceCache = sourceCaches[id];
-            if (sourceCache.used || sourceCache.usedForTerrain) {
-                const source = sourceCache.getSource();
-                if (source.attribution && attributions.indexOf(source.attribution) < 0) {
+        const tileManagers = this._map.style.tileManagers;
+        for (const id in tileManagers) {
+            const tileManager = tileManagers[id];
+            if (tileManager.used || tileManager.usedForTerrain) {
+                const source = tileManager.getSource();
+                if (source.attribution && !attributions.includes(source.attribution)) {
                     attributions.push(source.attribution);
                 }
             }
@@ -159,13 +160,13 @@ export class AttributionControl implements IControl {
         // first sort by length so that substrings come first
         attributions.sort((a, b) => a.length - b.length);
         attributions = attributions.filter((attrib, i) => {
-            // Strip HTML tags for comparison to handle cases where one has HTML and one doesn't
+            // Compare on TAG-STRIPPED text, not raw HTML: the same attribution supplied once as
+            // plain text and once wrapped in an <a> is one attribution, and upstream's raw
+            // substring test shows it twice.
             const attribText = attrib.replace(/<[^>]*>/g, '').trim();
             for (let j = i + 1; j < attributions.length; j++) {
                 const otherText = attributions[j].replace(/<[^>]*>/g, '').trim();
-                // Check if this attribution text is contained in another (longer) one
-                // or if they're the same after stripping HTML
-                if (otherText.indexOf(attribText) >= 0 || attribText === otherText) {
+                if (otherText.includes(attribText) || attribText === otherText) {
                     return false;
                 }
             }
@@ -174,12 +175,12 @@ export class AttributionControl implements IControl {
 
         // check if attribution string is different to minimize DOM changes
         const attribHTML = attributions.join(' | ');
-        if (attribHTML === this._sanitizedAttributionHTML) return;
+        if (attribHTML === this._attribHTML) return;
 
-        this._sanitizedAttributionHTML = DOM.sanitize(attribHTML);
+        this._attribHTML = attribHTML;
 
         if (attributions.length) {
-            this._innerContainer.innerHTML = this._sanitizedAttributionHTML;
+            this._innerContainer.innerHTML = DOM.sanitize(attribHTML);
             this._container.classList.remove('mapmetricsgl-attrib-empty');
         } else {
             this._container.classList.add('mapmetricsgl-attrib-empty');
@@ -194,7 +195,8 @@ export class AttributionControl implements IControl {
             if (this._compact === false) {
                 this._container.setAttribute('open', '');
             } else if (!this._container.classList.contains('mapmetricsgl-compact') && !this._container.classList.contains('mapmetricsgl-attrib-empty')) {
-                // Start collapsed - don't set 'open' attribute initially
+                // Branding: start COLLAPSED. Upstream forces the compact attribution open on
+                // first layout; the fork shows the round badge and lets the user expand it.
                 this._container.classList.add('mapmetricsgl-compact');
                 this._container.removeAttribute('open');
             }

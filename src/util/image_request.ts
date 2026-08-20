@@ -1,8 +1,7 @@
 import {type RequestParameters, makeRequest, sameOrigin, type GetResourceResponse} from './ajax';
-import {arrayBufferToImageBitmap, arrayBufferToImage, extend, isWorker, isImageBitmap} from './util';
-import {webpSupported} from './webp_supported';
+import {arrayBufferToImageBitmap, arrayBufferToImage, ensureError, extend, isWorker, isImageBitmap} from './util';
 import {config} from './config';
-import {createAbortError} from './abort_error';
+import {AbortError} from './abort_error';
 import {getProtocol} from '../source/protocol_crud';
 import {isMapMetricsGatewayUrl, isCredentialExemptUrl} from './mapmetrics_hosts';
 
@@ -107,14 +106,11 @@ export namespace ImageRequest {
      */
     export const getImage = (requestParameters: RequestParameters, abortController: AbortController, supportImageRefresh: boolean = true): Promise<GetResourceResponse<HTMLImageElement | ImageBitmap | null>> => {
         return new Promise<GetResourceResponse<HTMLImageElement | ImageBitmap | null>>((resolve, reject) => {
-            if (webpSupported.supported) {
-                if (!requestParameters.headers) {
-                    requestParameters.headers = {};
-                }
-                requestParameters.headers.accept = 'image/webp,*/*';
-            }
+            requestParameters.headers ||= {};
+            requestParameters.headers.accept = 'image/webp,*/*';
 
-            // Sprites are public assets: never send credentials for them.
+            // Sprites and fonts are public assets: never send credentials for them. Doing so forces
+            // a non-wildcard CORS preflight the gateway does not answer, which blanks the map.
             if (isMapMetricsGatewayUrl(requestParameters.url) && isCredentialExemptUrl(requestParameters.url)) {
                 requestParameters.credentials = undefined;
             }
@@ -185,7 +181,7 @@ export namespace ImageRequest {
             }
         } catch (err) {
             delete itemInQueue.abortController;
-            onError(err);
+            onError(ensureError(err));
         } finally {
             currentParallelImageRequests--;
             processQueue();
@@ -216,17 +212,8 @@ export namespace ImageRequest {
     };
 
     const getImageUsingHtmlImage = (requestParameters: RequestParameters, abortController: AbortController): Promise<GetResourceResponse<HTMLImageElement | ImageBitmap | null>>  => {
-        // NOTE: there used to be a `url.includes('gateway.mapmetrics.org') -> credentials='include'`
-        // block here. It never executed, because that host does not resolve and the live gateway is
-        // `gateway.mapmetrics-atlas.net`. Routing it through the shared predicate would have made it
-        // fire for the first time, setting `crossOrigin='use-credentials'` on <img> loads — which
-        // FAILS outright unless the gateway answers with an exact `Access-Control-Allow-Origin` plus
-        // `Access-Control-Allow-Credentials: true`. That is unverifiable from here and could only
-        // break image loads that work today, so current effective behaviour is preserved: no
-        // credentials are forced on the HTMLImageElement path. Credentials set upstream (by
-        // transformRequest or by getImage) are still honoured below. Enabling this needs a check of
-        // the gateway's actual CORS response headers first.
         return new Promise<GetResourceResponse<HTMLImageElement | ImageBitmap | null>>((resolve, reject) => {
+
             const image = new Image() as HTMLImageElementWithPriority;
             const url = requestParameters.url;
             const credentials = requestParameters.credentials;
@@ -239,7 +226,7 @@ export namespace ImageRequest {
             abortController.signal.addEventListener('abort', () => {
                 // Set src to '' to actually cancel the request
                 image.src = '';
-                reject(createAbortError());
+                reject(new AbortError(abortController.signal.reason));
             });
 
             image.fetchPriority = 'high';

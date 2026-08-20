@@ -1,7 +1,7 @@
 import {VectorTileSource} from '../source/vector_tile_source';
 import {RasterTileSource} from '../source/raster_tile_source';
 import {RasterDEMTileSource} from '../source/raster_dem_tile_source';
-import {GeoJSONSource} from '../source/geojson_source';
+import {GeoJSONSource, type GeoJSONSourceShouldReloadTileOptions} from '../source/geojson_source';
 import {VideoSource} from '../source/video_source';
 import {ImageSource} from '../source/image_source';
 import {CanvasSource} from '../source/canvas_source';
@@ -10,12 +10,13 @@ import {type Dispatcher} from '../util/dispatcher';
 import type {SourceSpecification} from '@maplibre/maplibre-gl-style-spec';
 import type {Event, Evented} from '../util/evented';
 import type {Map} from '../ui/map';
-import type {Tile} from './tile';
-import type {OverscaledTileID, CanonicalTileID} from './tile_id';
+import type {Tile} from '../tile/tile';
+import type {OverscaledTileID, CanonicalTileID} from '../tile/tile_id';
+import type {LoadTileResult} from '../source/vector_tile_source';
 import type {CanvasSourceSpecification} from '../source/canvas_source';
 import {type CalculateTileZoomFunction} from '../geo/projection/covering_tiles';
 
-const registeredSources = {} as { [key: string]: SourceClass };
+const registeredSources = {} as {[key:string]: SourceClass};
 
 /**
  * The `Source` interface must be implemented by each source type, including "core" types (`vector`, `raster`,
@@ -62,7 +63,7 @@ export interface Source {
      * `true` if tiles should be sent back to the worker for each overzoomed zoom level, `false` if not.
      */
     reparseOverscaled?: boolean;
-    vectorLayerIds?: Array<string>;
+    vectorLayerIds?: string[];
     /**
      * True if the source has transition, false otherwise.
      */
@@ -91,7 +92,7 @@ export interface Source {
      * In most cases it will defer the work to the relevant worker source.
      * @param tile - The tile to load
      */
-    loadTile(tile: Tile): Promise<void>;
+    loadTile(tile: Tile): Promise<LoadTileResult | void>;
     /**
      * True is the tile is part of the source, false otherwise.
      * @param tileID - The tile ID
@@ -122,23 +123,18 @@ export interface Source {
      */
     calculateTileZoom?: CalculateTileZoomFunction;
     /**
-     * Number of tile rows/columns to add around the perimeter for expanded coverage.
-     * This helps prevent loading delays during panning and zooming by pre-loading neighboring tiles.
-     * Default is 1, set to 0 to disable expansion.
+     * Optional function to determine whether a tile should be reloaded, given a
+     * set of options associated with a `MapSourceDataChangedEvent`.
+     * @internal
      */
-    expandTileCoverage?: number;
+    shouldReloadTile?(tile: Tile, options: GeoJSONSourceShouldReloadTileOptions): boolean;
 }
 
 /**
  * A general definition of a {@link Source} class for factory usage
  */
 export type SourceClass = {
-    new (
-        id: string,
-        specification: SourceSpecification | CanvasSourceSpecification,
-        dispatcher: Dispatcher,
-        eventedParent: Evented
-    ): Source;
+    new (id: string, specification: SourceSpecification | CanvasSourceSpecification, dispatcher: Dispatcher, eventedParent: Evented): Source;
 };
 
 /**
@@ -147,24 +143,18 @@ export type SourceClass = {
  * @param id - The id for the source. Must not be used by any existing source.
  * @param specification - Source options, specific to the source type (except for `options.type`, which is always required).
  * @param source - A source definition object compliant with
- * [`maplibre-gl-style-spec`](#sources) or, for a third-party source type,
- * with that type's requirements.
+ * [`mapmetrics-gl-style-spec`](https://maplibre.org/maplibre-style-spec/#sources) or, for a third-party source type,
+  * with that type's requirements.
  * @param dispatcher - A {@link Dispatcher} instance, which can be used to send messages to the workers.
  * @returns a newly created source
  */
-export const create = (
-    id: string,
-    specification: SourceSpecification | CanvasSourceSpecification,
-    dispatcher: Dispatcher,
-    eventedParent: Evented
-): Source => {
+export const create = (id: string, specification: SourceSpecification | CanvasSourceSpecification, dispatcher: Dispatcher, eventedParent: Evented): Source => {
+
     const Class = getSourceType(specification.type);
     const source = new Class(id, specification, dispatcher, eventedParent);
 
     if (source.id !== id) {
-        throw new Error(
-            `Expected Source id to be ${id} instead of ${source.id}`
-        );
+        throw new Error(`Expected Source id to be ${id} instead of ${source.id}`);
     }
 
     return source;
@@ -195,15 +185,12 @@ const setSourceType = (name: string, type: SourceClass) => {
 };
 
 /**
- * Adds a custom source type, making it available for use with {@link Map#addSource}.
+ * Adds a custom source type, making it available for use with {@link Map.addSource}.
  * @param name - The name of the source type; source definition objects use this name in the `{type: ...}` field.
  * @param SourceType - A {@link SourceClass} - which is a constructor for the `Source` interface.
  * @returns a promise that is resolved when the source type is ready or rejected with an error.
  */
-export const addSourceType = async (
-    name: string,
-    SourceType: SourceClass
-): Promise<void> => {
+export const addSourceType = async (name: string, SourceType: SourceClass): Promise<void> => {
     if (getSourceType(name)) {
         throw new Error(`A source type called "${name}" already exists.`);
     }

@@ -4,7 +4,7 @@ import {extend, isImageBitmap, readImageUsingVideoFrame} from '../util/util';
 import {type Evented} from '../util/evented';
 import {browser} from '../util/browser';
 import {offscreenCanvasSupported} from '../util/offscreen_canvas_supported';
-import {OverscaledTileID} from './tile_id';
+import {OverscaledTileID} from '../tile/tile_id';
 import {RasterTileSource} from './raster_tile_source';
 // ensure DEMData is registered for worker transfer on main thread:
 import '../data/dem_data';
@@ -12,14 +12,14 @@ import type {DEMEncoding} from '../data/dem_data';
 
 import type {Source} from './source';
 import type {Dispatcher} from '../util/dispatcher';
-import type {Tile} from './tile';
+import type {Tile} from '../tile/tile';
 import type {RasterDEMSourceSpecification} from '@maplibre/maplibre-gl-style-spec';
 import {isOffscreenCanvasDistorted} from '../util/offscreen_canvas_distorted';
 import {RGBAImage} from '../util/image';
 import {MessageType} from '../util/actor_messages';
 
 /**
- * A source containing raster DEM tiles (See the [Style Specification]() for detailed documentation of options.)
+ * A source containing raster DEM tiles (See the [Style Specification](https://maplibre.org/maplibre-style-spec/) for detailed documentation of options.)
  * This source can be used to show hillshading and 3D terrain
  *
  * @group Sources
@@ -28,7 +28,7 @@ import {MessageType} from '../util/actor_messages';
  * ```ts
  * map.addSource('raster-dem-source', {
  *      type: 'raster-dem',
- *      url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
+ *      url: 'https://demotiles.mapmetrics.org/terrain-tiles/tiles.json',
  *      tileSize: 256
  * });
  * ```
@@ -41,12 +41,7 @@ export class RasterDEMTileSource extends RasterTileSource implements Source {
     blueFactor?: number;
     baseShift?: number;
 
-    constructor(
-        id: string,
-        options: RasterDEMSourceSpecification,
-        dispatcher: Dispatcher,
-        eventedParent: Evented
-    ) {
+    constructor(id: string, options: RasterDEMSourceSpecification, dispatcher: Dispatcher, eventedParent: Evented) {
         super(id, options, dispatcher, eventedParent);
         this.type = 'raster-dem';
         this.maxzoom = 22;
@@ -59,45 +54,24 @@ export class RasterDEMTileSource extends RasterTileSource implements Source {
     }
 
     override async loadTile(tile: Tile): Promise<void> {
-        const url = tile.tileID.canonical.url(
-            this.tiles,
-            this.map.getPixelRatio(),
-            this.scheme
-        );
-        const request = this.map._requestManager.transformRequest(
-            url,
-            ResourceType.Tile
-        );
+        const url = tile.tileID.canonical.url(this.tiles, this.map.getPixelRatio(), this.scheme);
+        const request = await this.map._requestManager.transformRequest(url, ResourceType.Tile);
         tile.neighboringTiles = this._getNeighboringTiles(tile.tileID);
         tile.abortController = new AbortController();
         try {
-            const response = await ImageRequest.getImage(
-                request,
-                tile.abortController,
-                this.map._refreshExpiredTiles
-            );
+            const response = await ImageRequest.getImage(request, tile.abortController, this.map._refreshExpiredTiles);
             delete tile.abortController;
             if (tile.aborted) {
                 tile.state = 'unloaded';
                 return;
             }
-            if (response && response.data) {
+            if (response?.data) {
                 const img = response.data;
-                if (
-                    this.map._refreshExpiredTiles &&
-                    response.cacheControl &&
-                    response.expires
-                ) {
-                    tile.setExpiryData({
-                        cacheControl: response.cacheControl,
-                        expires: response.expires,
-                    });
+                if (this.map._refreshExpiredTiles && (response.cacheControl || response.expires)) {
+                    tile.setExpiryData({cacheControl: response.cacheControl, expires: response.expires});
                 }
-                const transfer =
-                    isImageBitmap(img) && offscreenCanvasSupported();
-                const rawImageData = transfer
-                    ? img
-                    : await this.readImageNow(img);
+                const transfer = isImageBitmap(img) && offscreenCanvasSupported();
+                const rawImageData = transfer ? img : await this.readImageNow(img);
                 const params = {
                     type: this.type,
                     uid: tile.uid,
@@ -107,20 +81,19 @@ export class RasterDEMTileSource extends RasterTileSource implements Source {
                     redFactor: this.redFactor,
                     greenFactor: this.greenFactor,
                     blueFactor: this.blueFactor,
-                    baseShift: this.baseShift,
+                    baseShift: this.baseShift
                 };
 
+                if (tile.actor && tile.state !== 'expired' && tile.state !== 'reloading') {
+                    return;
+                }
                 if (!tile.actor || tile.state === 'expired') {
                     tile.actor = this.dispatcher.getActor();
-                    const data = await tile.actor.sendAsync({
-                        type: MessageType.loadDEMTile,
-                        data: params,
-                    });
-                    tile.dem = data;
-                    tile.needsHillshadePrepare = true;
-                    tile.needsTerrainPrepare = true;
-                    tile.state = 'loaded';
                 }
+                tile.dem = await tile.actor.sendAsync({type: MessageType.loadDEMTile, data: params});
+                tile.needsHillshadePrepare = true;
+                tile.needsTerrainPrepare = true;
+                tile.state = 'loaded';
             }
         } catch (err) {
             delete tile.abortController;
@@ -133,17 +106,12 @@ export class RasterDEMTileSource extends RasterTileSource implements Source {
         }
     }
 
-    async readImageNow(
-        img: ImageBitmap | HTMLImageElement
-    ): Promise<RGBAImage | ImageData> {
+    async readImageNow(img: ImageBitmap | HTMLImageElement): Promise<RGBAImage | ImageData> {
         if (typeof VideoFrame !== 'undefined' && isOffscreenCanvasDistorted()) {
             const width = img.width + 2;
             const height = img.height + 2;
             try {
-                return new RGBAImage(
-                    {width, height},
-                    await readImageUsingVideoFrame(img, -1, -1, width, height)
-                );
+                return new RGBAImage({width, height}, await readImageUsingVideoFrame(img, -1, -1, width, height));
             } catch {
                 // fall-back to browser canvas decoding
             }
@@ -151,7 +119,7 @@ export class RasterDEMTileSource extends RasterTileSource implements Source {
         return browser.getImageData(img, 1);
     }
 
-    _getNeighboringTiles(tileID: OverscaledTileID) {
+    _getNeighboringTiles(tileID: OverscaledTileID): Record<string, {backfilled: boolean}> {
         const canonical = tileID.canonical;
         const dim = Math.pow(2, canonical.z);
 
@@ -160,86 +128,22 @@ export class RasterDEMTileSource extends RasterTileSource implements Source {
         const nx = (canonical.x + 1 + dim) % dim;
         const nxw = canonical.x + 1 === dim ? tileID.wrap + 1 : tileID.wrap;
 
-        const neighboringTiles = {};
+        const neighboringTiles: Record<string, {backfilled: boolean}> = {};
         // add adjacent tiles
-        neighboringTiles[
-            new OverscaledTileID(
-                tileID.overscaledZ,
-                pxw,
-                canonical.z,
-                px,
-                canonical.y
-            ).key
-        ] = {backfilled: false};
-        neighboringTiles[
-            new OverscaledTileID(
-                tileID.overscaledZ,
-                nxw,
-                canonical.z,
-                nx,
-                canonical.y
-            ).key
-        ] = {backfilled: false};
+        neighboringTiles[new OverscaledTileID(tileID.overscaledZ, pxw, canonical.z, px, canonical.y).key] = {backfilled: false};
+        neighboringTiles[new OverscaledTileID(tileID.overscaledZ, nxw, canonical.z, nx, canonical.y).key] = {backfilled: false};
 
         // Add upper neighboringTiles
         if (canonical.y > 0) {
-            neighboringTiles[
-                new OverscaledTileID(
-                    tileID.overscaledZ,
-                    pxw,
-                    canonical.z,
-                    px,
-                    canonical.y - 1
-                ).key
-            ] = {backfilled: false};
-            neighboringTiles[
-                new OverscaledTileID(
-                    tileID.overscaledZ,
-                    tileID.wrap,
-                    canonical.z,
-                    canonical.x,
-                    canonical.y - 1
-                ).key
-            ] = {backfilled: false};
-            neighboringTiles[
-                new OverscaledTileID(
-                    tileID.overscaledZ,
-                    nxw,
-                    canonical.z,
-                    nx,
-                    canonical.y - 1
-                ).key
-            ] = {backfilled: false};
+            neighboringTiles[new OverscaledTileID(tileID.overscaledZ, pxw, canonical.z, px, canonical.y - 1).key] = {backfilled: false};
+            neighboringTiles[new OverscaledTileID(tileID.overscaledZ, tileID.wrap, canonical.z, canonical.x, canonical.y - 1).key] = {backfilled: false};
+            neighboringTiles[new OverscaledTileID(tileID.overscaledZ, nxw, canonical.z, nx, canonical.y - 1).key] = {backfilled: false};
         }
         // Add lower neighboringTiles
         if (canonical.y + 1 < dim) {
-            neighboringTiles[
-                new OverscaledTileID(
-                    tileID.overscaledZ,
-                    pxw,
-                    canonical.z,
-                    px,
-                    canonical.y + 1
-                ).key
-            ] = {backfilled: false};
-            neighboringTiles[
-                new OverscaledTileID(
-                    tileID.overscaledZ,
-                    tileID.wrap,
-                    canonical.z,
-                    canonical.x,
-                    canonical.y + 1
-                ).key
-            ] = {backfilled: false};
-            neighboringTiles[
-                new OverscaledTileID(
-                    tileID.overscaledZ,
-                    nxw,
-                    canonical.z,
-                    nx,
-                    canonical.y + 1
-                ).key
-            ] = {backfilled: false};
+            neighboringTiles[new OverscaledTileID(tileID.overscaledZ, pxw, canonical.z, px, canonical.y + 1).key] = {backfilled: false};
+            neighboringTiles[new OverscaledTileID(tileID.overscaledZ, tileID.wrap, canonical.z, canonical.x, canonical.y + 1).key] = {backfilled: false};
+            neighboringTiles[new OverscaledTileID(tileID.overscaledZ, nxw, canonical.z, nx, canonical.y + 1).key] = {backfilled: false};
         }
 
         return neighboringTiles;
@@ -256,10 +160,7 @@ export class RasterDEMTileSource extends RasterTileSource implements Source {
 
         tile.state = 'unloaded';
         if (tile.actor) {
-            await tile.actor.sendAsync({
-                type: MessageType.removeDEMTile,
-                data: {type: this.type, uid: tile.uid, source: this.id},
-            });
+            await tile.actor.sendAsync({type: MessageType.removeDEMTile, data: {type: this.type, uid: tile.uid, source: this.id}});
         }
     }
 }

@@ -1,6 +1,6 @@
 const DEFAULT_BASE_URL = 'https://static.mapatlas.com/v1/static';
 
-export interface StaticImageInput {
+export type StaticImageInput = {
     center: [number, number];
     zoom: number;
     width: number;
@@ -8,8 +8,8 @@ export interface StaticImageInput {
     baseUrl?: string;
     style?: string;
     apiKey?: string;
-    markers?: [number, number][];
-}
+    markers?: Array<[number, number]>;
+};
 
 /**
  * Builds a deterministic static map image URL.

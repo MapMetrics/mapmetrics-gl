@@ -1,6 +1,6 @@
 import {coveringTiles} from '../../geo/projection/covering_tiles';
 import type {Map} from '../map';
-import type {OverscaledTileID} from '../../source/tile_id';
+import type {OverscaledTileID} from '../../tile/tile_id';
 
 /**
  * Manages tile loading states and provides utilities to wait for tiles to load
@@ -56,7 +56,7 @@ export class TileLoadingManager {
     private _notifyTileLoaded(tileKey: string): void {
         const callbacks = this._loadingCallbacks.get(tileKey);
         if (callbacks) {
-            callbacks.forEach(callback => callback());
+            for (const callback of callbacks) callback();
             this._loadingCallbacks.delete(tileKey);
         }
     }
@@ -77,7 +77,7 @@ export class TileLoadingManager {
         const requiredTiles: OverscaledTileID[] = [];
         
         // Get all source caches
-        const sourceCaches = this._map.style.sourceCaches;
+        const sourceCaches = this._map.style.tileManagers;
         for (const sourceId in sourceCaches) {
             const sourceCache = sourceCaches[sourceId];
             const source = sourceCache.getSource();
@@ -98,7 +98,7 @@ export class TileLoadingManager {
             // Filter to only include tiles that aren't already loaded
             for (const tileID of coveringTilesResult) {
                 const tile = sourceCache.getTile(tileID);
-                if (!tile || !tile.hasData()) {
+                if (!tile?.hasData()) {
                     requiredTiles.push(tileID);
                 }
             }
@@ -138,10 +138,10 @@ export class TileLoadingManager {
 
             // Check if tiles are already loaded
             for (const tileID of requiredTiles) {
-                const sourceCache = this._map.style?.sourceCaches[tileID.key.split('/')[0]];
+                const sourceCache = this._map.style?.tileManagers[tileID.key.split('/')[0]];
                 if (sourceCache) {
                     const tile = sourceCache.getTile(tileID);
-                    if (tile && tile.hasData()) {
+                    if (tile?.hasData()) {
                         loadedTiles.add(tileID.key);
                     }
                 }
@@ -233,10 +233,10 @@ export class TileLoadingManager {
                         // Check if fallback tiles are already loaded
                         for (const tileKey of fallbackTileKeys) {
                             const [sourceId] = tileKey.split('/');
-                            const sourceCache = this._map.style?.sourceCaches[sourceId];
+                            const sourceCache = this._map.style?.tileManagers[sourceId];
                             if (sourceCache) {
-                                const tile = sourceCache._tiles[tileKey];
-                                if (tile && tile.hasData()) {
+                                const tile = sourceCache.getTileByID(tileKey);
+                                if (tile?.hasData()) {
                                     loadedFallbackTiles.add(tileKey);
                                 }
                             }
@@ -266,10 +266,10 @@ export class TileLoadingManager {
                             // Check if rapid zoom fallback tiles are already loaded
                             for (const tileKey of rapidTiles) {
                                 const [sourceId] = tileKey.split('/');
-                                const sourceCache = this._map.style?.sourceCaches[sourceId];
+                                const sourceCache = this._map.style?.tileManagers[sourceId];
                                 if (sourceCache) {
-                                    const tile = sourceCache._tiles[tileKey];
-                                    if (tile && tile.hasData()) {
+                                    const tile = sourceCache.getTileByID(tileKey);
+                                    if (tile?.hasData()) {
                                         loadedRapidZoomFallbackTiles.add(tileKey);
                                     }
                                 }
@@ -299,7 +299,7 @@ export class TileLoadingManager {
         const preloadedTiles: string[] = [];
         
         // Get all source caches
-        const sourceCaches = this._map.style.sourceCaches;
+        const sourceCaches = this._map.style.tileManagers;
         for (const sourceId in sourceCaches) {
             const sourceCache = sourceCaches[sourceId];
             const source = sourceCache.getSource();
@@ -325,7 +325,7 @@ export class TileLoadingManager {
             // Pre-load tiles that aren't already loaded
             for (const tileID of coveringTilesResult) {
                 const tile = sourceCache.getTile(tileID);
-                if (!tile || !tile.hasData()) {
+                if (!tile?.hasData()) {
                     // Force load the tile
                     sourceCache._addTile(tileID);
                     preloadedTiles.push(tileID.key);

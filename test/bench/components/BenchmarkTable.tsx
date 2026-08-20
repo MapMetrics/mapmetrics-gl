@@ -9,7 +9,7 @@ type BenchmarksTableProps = {
 export const BenchmarksTable = (props: BenchmarksTableProps) => (
     <div style={{width: 960, margin: '2em auto'}}>
         <h1>TITLE</h1>
-        <h1 className="space-bottom1">MapMetrics GL JS Benchmarks – {
+        <h1 className="space-bottom1">Mapmetrics GL JS Benchmarks – {
             props.finished ?
                 <span>Finished</span> :
                 <span>Running</span>}</h1>

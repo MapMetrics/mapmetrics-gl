@@ -13,7 +13,7 @@
   ],
   "zoom": 14,
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "maxzoom": 14,
       "tiles": [
@@ -32,7 +32,7 @@
     {
       "id": "poi_label",
       "type": "heatmap",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "poi_label",
       "paint": {
         "heatmap-weight": 0.5

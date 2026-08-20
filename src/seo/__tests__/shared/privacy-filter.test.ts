@@ -43,8 +43,8 @@ describe('applyPrivacyFilter', () => {
         const result = applyPrivacyFilter(collection, {
             excludeProperties: ['secret']
         });
-        expect(result.features[0].properties!.name).toBe('Test Place');
-        expect(result.features[0].properties!.rating).toBe(4.5);
+        expect(result.features[0].properties.name).toBe('Test Place');
+        expect(result.features[0].properties.rating).toBe(4.5);
     });
 
     it('filters features via excludeFeatures callback', () => {
@@ -53,7 +53,7 @@ describe('applyPrivacyFilter', () => {
             excludeFeatures: (f) => f.properties?.rating < 4
         });
         expect(result.features).toHaveLength(1);
-        expect(result.features[0].properties!.name).toBe('Test Place');
+        expect(result.features[0].properties.name).toBe('Test Place');
     });
 
     it('rounds Point coordinates to specified decimal places', () => {
@@ -141,15 +141,15 @@ describe('applyPrivacyFilter', () => {
         const collection = makeCollection();
         const result = applyPrivacyFilter(collection, {});
         expect(result.features).toHaveLength(2);
-        expect(result.features[0].properties!.secret).toBe('hidden-value');
+        expect(result.features[0].properties.secret).toBe('hidden-value');
         const coords = (result.features[0].geometry as any).coordinates;
         expect(coords[0]).toBe(4.8832456);
     });
 
     it('does not mutate the original collection', () => {
         const collection = makeCollection();
-        const originalName = collection.features[0].properties!.name;
+        const originalName = collection.features[0].properties.name;
         applyPrivacyFilter(collection, {excludeProperties: ['name']});
-        expect(collection.features[0].properties!.name).toBe(originalName);
+        expect(collection.features[0].properties.name).toBe(originalName);
     });
 });

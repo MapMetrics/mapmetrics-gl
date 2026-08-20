@@ -11,7 +11,7 @@
   ],
   "zoom": 1,
   "sources": {
-    "maplibre": {
+    "mapmetrics": {
       "type": "vector",
       "tiles": [
         "local://tiles/sparse204/{z}-{x}-{y}.mvt"
@@ -28,7 +28,7 @@
     },
     {
       "id": "water-layer",
-      "source": "maplibre",
+      "source": "mapmetrics",
       "source-layer": "water",
       "type": "fill",
       "paint": {

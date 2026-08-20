@@ -1,0 +1,206 @@
+identical:        458
+cosmetic-only:    19
+semantic change:  50
+new in fork:      124
+deleted in fork:  0
+
+=== SEMANTIC (delta tokens) ===
+   3420  ui/map.ts
+    879  util/ajax.ts
+    496  geo/projection/covering_tiles.ts
+    367  ui/handler/scroll_zoom.ts
+    320  ui/control/navigation_control.ts
+    279  ui/control/attribution_control.test.ts
+    255  css/svg/mapmetricsgl-ctrl-logo.svg
+    208  ui/handler/keyboard.ts
+    161  source/source_cache.test.ts
+    143  css/mapmetrics-gl.css
+    132  ui/handler/click_zoom.ts
+    110  source/worker.ts
+    101  ui/handler/tap_zoom.ts
+     99  ui/control/logo_control.test.ts
+     77  util/dom.test.ts
+     71  ui/marker.ts
+     69  ui/control/attribution_control.ts
+     59  css/svg/mapmetricsgl-ctrl-attrib.svg
+     57  source/vector_tile_source.ts
+     55  util/request_manager.ts
+     53  ui/map_tests/map_style.test.ts
+     40  ui/handler/keyboard.test.ts
+     37  source/source_cache.ts
+     33  ui/control/logo_control.ts
+     31  util/image_request.ts
+     28  ui/camera.ts
+     25  index.ts
+     20  style/style.test.ts
+     20  style/style.ts
+     20  ui/handler/scroll_zoom.test.ts
+     20  ui/popup.ts
+     19  ui/map_tests/map_control.test.ts
+     18  source/vector_tile_worker_source.ts
+     16  ui/events.ts
+     14  source/query_features.ts
+      8  ui/handler/cooperative_gestures.test.ts
+      6  source/image_source.ts
+      5  util/dom.ts
+      4  source/source.ts
+      3  source/vector_tile_source.test.ts
+      2  source/geojson_source.ts
+      2  ui/map_tests/map_layer.test.ts
+      1  render/glyph_manager.ts
+      1  shaders/atmosphere.fragment.glsl
+      1  source/terrain_source_cache.test.ts
+      1  source/video_source.ts
+      1  ui/control/control.ts
+      1  ui/default_locale.ts
+      1  ui/map_tests/map_events.test.ts
+      1  util/test/util.ts
+
+=== COSMETIC ONLY (take upstream wholesale) ===
+         geo/edge_insets.ts
+         geo/lng_lat.ts
+         geo/mercator_coordinate.ts
+         geo/projection/projection.ts
+         geo/projection/projection_data.ts
+         render/update_pattern_positions_in_program.ts
+         shaders/README.md
+         source/raster_dem_tile_source.ts
+         source/raster_tile_source.ts
+         style/style_image.ts
+         style/style_layer/custom_style_layer.ts
+         symbol/projection.ts
+         ui/control/fullscreen_control.ts
+         ui/control/geolocate_control.ts
+         ui/control/globe_control.ts
+         ui/handler/cooperative_gestures.ts
+         util/create_tile_mesh.ts
+         util/vectortile_to_geojson.ts
+         util/worker_pool.ts
+
+=== NEW IN FORK ===
+         .DS_Store
+         css/.DS_Store
+         css/svg/mapmetricsgl-globe.svg
+         data/array_types.g.ts
+         geo/geojson-rewind/index.ts
+         seo/__tests__/analytics/crawler-detector.test.ts
+         seo/__tests__/client/seo-manager.test.ts
+         seo/__tests__/fixtures/cycling-route.ts
+         seo/__tests__/fixtures/delivery-zones.ts
+         seo/__tests__/fixtures/edge-cases.ts
+         seo/__tests__/fixtures/restaurants.ts
+         seo/__tests__/server/generate-map-seo.test.ts
+         seo/__tests__/server/json-ld-generator.test.ts
+         seo/__tests__/server/meta-tags-generator.test.ts
+         seo/__tests__/server/noscript-generator.test.ts
+         seo/__tests__/server/static-image-url.test.ts
+         seo/__tests__/shared/auto-detector.test.ts
+         seo/__tests__/shared/entity-linker.test.ts
+         seo/__tests__/shared/privacy-filter.test.ts
+         seo/__tests__/shared/property-mapper.test.ts
+         seo/__tests__/shared/provenance.test.ts
+         seo/__tests__/shared/schema-presets.test.ts
+         seo/__tests__/shared/validator.test.ts
+         seo/analytics/crawler-detector.ts
+         seo/client/cache.ts
+         seo/client/dom-injector.ts
+         seo/client/seo-manager.ts
+         seo/demo.ts
+         seo/index.ts
+         seo/server/index.ts
+         seo/server/json-ld-generator.ts
+         seo/server/meta-tags-generator.ts
+         seo/server/noscript-generator.ts
+         seo/server/static-image-url.ts
+         seo/shared/auto-detector.ts
+         seo/shared/entity-linker.ts
+         seo/shared/privacy-filter.ts
+         seo/shared/property-mapper.ts
+         seo/shared/provenance.ts
+         seo/shared/schema-presets.ts
+         seo/shared/types.ts
+         seo/shared/validator.ts
+         shaders/_prelude.fragment.glsl.g.ts
+         shaders/_prelude.vertex.glsl.g.ts
+         shaders/_projection_globe.vertex.glsl.g.ts
+         shaders/_projection_mercator.vertex.glsl.g.ts
+         shaders/atmosphere.fragment.glsl.g.ts
+         shaders/atmosphere.vertex.glsl.g.ts
+         shaders/background.fragment.glsl.g.ts
+         shaders/background.vertex.glsl.g.ts
+         shaders/background_pattern.fragment.glsl.g.ts
+         shaders/background_pattern.vertex.glsl.g.ts
+         shaders/circle.fragment.glsl.g.ts
+         shaders/circle.vertex.glsl.g.ts
+         shaders/clipping_mask.fragment.glsl.g.ts
+         shaders/clipping_mask.vertex.glsl.g.ts
+         shaders/collision_box.fragment.glsl.g.ts
+         shaders/collision_box.vertex.glsl.g.ts
+         shaders/collision_circle.fragment.glsl.g.ts
+         shaders/collision_circle.vertex.glsl.g.ts
+         shaders/debug.fragment.glsl.g.ts
+         shaders/debug.vertex.glsl.g.ts
+         shaders/depth.vertex.glsl.g.ts
+         shaders/fill.fragment.glsl.g.ts
+         shaders/fill.vertex.glsl.g.ts
+         shaders/fill_extrusion.fragment.glsl.g.ts
+         shaders/fill_extrusion.vertex.glsl.g.ts
+         shaders/fill_extrusion_pattern.fragment.glsl.g.ts
+         shaders/fill_extrusion_pattern.vertex.glsl.g.ts
+         shaders/fill_outline.fragment.glsl.g.ts
+         shaders/fill_outline.vertex.glsl.g.ts
+         shaders/fill_outline_pattern.fragment.glsl.g.ts
+         shaders/fill_outline_pattern.vertex.glsl.g.ts
+         shaders/fill_pattern.fragment.glsl.g.ts
+         shaders/fill_pattern.vertex.glsl.g.ts
+         shaders/heatmap.fragment.glsl.g.ts
+         shaders/heatmap.vertex.glsl.g.ts
+         shaders/heatmap_texture.fragment.glsl.g.ts
+         shaders/heatmap_texture.vertex.glsl.g.ts
+         shaders/hillshade.fragment.glsl.g.ts
+         shaders/hillshade.vertex.glsl.g.ts
+         shaders/hillshade_prepare.fragment.glsl.g.ts
+         shaders/hillshade_prepare.vertex.glsl.g.ts
+         shaders/line.fragment.glsl.g.ts
+         shaders/line.vertex.glsl.g.ts
+         shaders/line_gradient.fragment.glsl.g.ts
+         shaders/line_gradient.vertex.glsl.g.ts
+         shaders/line_pattern.fragment.glsl.g.ts
+         shaders/line_pattern.vertex.glsl.g.ts
+         shaders/line_sdf.fragment.glsl.g.ts
+         shaders/line_sdf.vertex.glsl.g.ts
+         shaders/projection_error_measurement.fragment.glsl.g.ts
+         shaders/projection_error_measurement.vertex.glsl.g.ts
+         shaders/raster.fragment.glsl.g.ts
+         shaders/raster.vertex.glsl.g.ts
+         shaders/sky.fragment.glsl.g.ts
+         shaders/sky.vertex.glsl.g.ts
+         shaders/symbol_icon.fragment.glsl.g.ts
+         shaders/symbol_icon.vertex.glsl.g.ts
+         shaders/symbol_sdf.fragment.glsl.g.ts
+         shaders/symbol_sdf.vertex.glsl.g.ts
+         shaders/symbol_text_and_icon.fragment.glsl.g.ts
+         shaders/symbol_text_and_icon.vertex.glsl.g.ts
+         shaders/terrain.fragment.glsl.g.ts
+         shaders/terrain.vertex.glsl.g.ts
+         shaders/terrain_coords.fragment.glsl.g.ts
+         shaders/terrain_coords.vertex.glsl.g.ts
+         shaders/terrain_depth.fragment.glsl.g.ts
+         shaders/terrain_depth.vertex.glsl.g.ts
+         style/mapmetrics-style.json
+         style/style_layer/background_style_layer_properties.g.ts
+         style/style_layer/circle_style_layer_properties.g.ts
+         style/style_layer/fill_extrusion_style_layer_properties.g.ts
+         style/style_layer/fill_style_layer_properties.g.ts
+         style/style_layer/heatmap_style_layer_properties.g.ts
+         style/style_layer/hillshade_style_layer_properties.g.ts
+         style/style_layer/line_style_layer_properties.g.ts
+         style/style_layer/raster_style_layer_properties.g.ts
+         style/style_layer/symbol_style_layer_properties.g.ts
+         ui/handler/tile_loading_manager.ts
+         util/map_session.test.ts
+         util/map_session.ts
+         util/mapmetrics_hosts.test.ts
+         util/mapmetrics_hosts.ts
+
+=== DELETED IN FORK ===

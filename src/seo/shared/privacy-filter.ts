@@ -19,7 +19,7 @@ export function applyPrivacyFilter(
     if (config.excludeFeatures) {
         // Re-bind the callback since it can't survive JSON serialization
         // We use the original callback against the cloned features
-        features = features.filter((f) => !config.excludeFeatures!(f));
+        features = features.filter((f) => !config.excludeFeatures(f));
     }
 
     // Remove excluded properties from each feature

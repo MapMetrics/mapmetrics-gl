@@ -7,7 +7,7 @@ export type PolygonPreset = 'serviceArea' | 'neighborhood' | 'zone' | 'coverage'
 export type PresetType = PointPreset | LinePreset | PolygonPreset;
 
 // --- Config types ---
-export interface SeoConfig {
+export type SeoConfig = {
     enabled: boolean;
     autoMetadata?: boolean;
     indexSources?: string[];
@@ -23,29 +23,29 @@ export interface SeoConfig {
     clusterSummary?: boolean;
     clusterBy?: 'spatial' | 'property';
     provider?: ProviderConfig | false;
-}
+};
 
-export interface SourcePropertyMap {
+export type SourcePropertyMap = {
     nameProperty?: string;
     addressProperty?: string;
     categoryProperty?: string;
     ratingProperty?: string;
     ratingCountProperty?: string;
     schemaType?: PresetType;
-}
+};
 
-export interface SourceConfig {
+export type SourceConfig = {
     id: string;
     schemaType?: PresetType;
     featureLimit?: number;
     propertyMap?: Record<string, string>;
-}
+};
 
-export interface AeoConfig {
+export type AeoConfig = {
     generateFAQ?: boolean;
     generateSummary?: boolean;
     questionTemplates?: Record<string, string[]>;
-}
+};
 
 export interface PrivacyConfig {
     excludeProperties?: string[];
@@ -53,28 +53,28 @@ export interface PrivacyConfig {
     roundCoordinates?: number;
 }
 
-export interface ProvenanceConfig {
+export type ProvenanceConfig = {
     source?: string;
     license?: string;
     organization?: string;
     updated?: string;
-}
+};
 
-export interface StaticImageConfig {
+export type StaticImageConfig = {
     enabled?: boolean;
     width?: number;
     height?: number;
     style?: string;
     apiKey?: string;
     baseUrl?: string;
-}
+};
 
-export interface ProviderConfig {
+export type ProviderConfig = {
     name: string;
-}
+};
 
 // --- Server input/output ---
-export interface GenerateMapSEOInput {
+export type GenerateMapSEOInput = {
     geojson: FeatureCollection | Record<string, FeatureCollection>;
     center: [number, number];
     bounds: [[number, number], [number, number]];
@@ -82,9 +82,9 @@ export interface GenerateMapSEOInput {
     area?: string;
     sources: SourceConfig[];
     options?: GenerateMapSEOOptions;
-}
+};
 
-export interface GenerateMapSEOOptions {
+export type GenerateMapSEOOptions = {
     generateFAQ?: boolean;
     generateSummary?: boolean;
     staticImage?: StaticImageConfig;
@@ -95,24 +95,24 @@ export interface GenerateMapSEOOptions {
     featureLimit?: number;
     clusterSummary?: boolean;
     clusterBy?: 'spatial' | 'property';
-}
+};
 
-export interface GenerateMapSEOResult {
+export type GenerateMapSEOResult = {
     jsonLd: string;
     noscriptHtml: string;
     metaTags: string;
     staticImageUrl: string | null;
     schema: Record<string, unknown>;
     stats: SeoStats;
-}
+};
 
-export interface SeoStats {
+export type SeoStats = {
     featuresIndexed: number;
     routesIndexed: number;
     zonesIndexed: number;
     estimatedHtmlSize: string;
     schemaTypes: string[];
-}
+};
 
 // --- Schema preset definition ---
 export interface SchemaPreset {

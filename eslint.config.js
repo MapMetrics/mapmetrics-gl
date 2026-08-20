@@ -1,15 +1,16 @@
 import typescriptEslint from '@typescript-eslint/eslint-plugin';
-import stylisticTs from '@stylistic/eslint-plugin-ts';
+import stylisticTs from '@stylistic/eslint-plugin';
 import tsdoc from 'eslint-plugin-tsdoc';
-import vitest from 'eslint-plugin-vitest';
+import vitest from '@vitest/eslint-plugin';
 import globals from 'globals';
 import tsParser from '@typescript-eslint/parser';
 import react from 'eslint-plugin-react';
 import html from 'eslint-plugin-html';
+import preferTypeForDataShapes from './build/eslint-rules/prefer-type-for-data-shapes.js';
 
 export default [
     {
-        ignores: ['build/*.js', 'staging/**', 'coverage/**', 'node_modules/**', 'docs/**', 'dist/**']
+        ignores: ['build/*.js', 'build/rollup/**', 'staging/**', 'coverage/**', 'node_modules/**', 'docs/**', 'dist/**', '**/*_generated.js']
     },
     {
         ignores: ['test/bench/**'],
@@ -19,6 +20,7 @@ export default [
             '@stylistic': stylisticTs,
             tsdoc,
             vitest,
+            'local': {rules: {'prefer-type-for-data-shapes': preferTypeForDataShapes}},
         },
 
         linterOptions: {
@@ -37,6 +39,20 @@ export default [
 
             parserOptions: {
                 createDefaultProgram: true,
+                projectService: {
+                    allowDefaultProject: [
+                        'build/generate-*.ts',
+                        'build/eslint-rules/*.js',
+                        'test/build/*.ts',
+                        'eslint.config.js',
+                        'postcss.config.js',
+                        // MapMetrics fork addition: standalone Node upload scripts. They are not
+                        // part of the TS project (not in tsconfig `include`), so without this the
+                        // project service refuses to parse them and `npm run lint` fails.
+                        'cdn-upload/*.js',
+                    ],
+                    maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 20,
+                },
             },
         },
 
@@ -49,7 +65,22 @@ export default [
             '@typescript-eslint/no-unused-vars': ['warn', {
                 argsIgnorePattern: '^_',
             }],
+            '@typescript-eslint/prefer-optional-chain': 'error',
+            '@typescript-eslint/prefer-reduce-type-parameter': 'error',
+            '@typescript-eslint/prefer-return-this-type': 'error',
+            '@typescript-eslint/prefer-for-of': 'error',
+            '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+            '@typescript-eslint/prefer-includes': 'error',
+            '@typescript-eslint/prefer-string-starts-ends-with': 'error',
+            '@typescript-eslint/array-type': ['error', {default: 'array-simple'}],
+            'local/prefer-type-for-data-shapes': 'error',
 
+            'logical-assignment-operators': ['error', 'always', {enforceForIfStatements: true}],
+            'prefer-object-spread': 'error',
+            'prefer-object-has-own': 'error',
+            'object-shorthand': 'error',
+            'no-useless-computed-key': 'error',
+            'no-object-constructor': 'error',
             '@stylistic/member-delimiter-style': ['error'],
             'no-useless-constructor': 'off',
             '@typescript-eslint/no-useless-constructor': ['error'],
@@ -79,7 +110,6 @@ export default [
             'no-unused-vars': 'off',
             'no-warning-comments': 'error',
             'object-curly-spacing': ['error', 'never'],
-            'prefer-arrow-callback': 'error',
 
             'prefer-const': ['error', {
                 destructuring: 'all',
@@ -97,6 +127,13 @@ export default [
             indent: 'off',
             '@stylistic/indent': ['error'],
             '@stylistic/semi': ['error'],
+            'no-restricted-syntax': [
+                'error',
+                {
+                    'selector': 'CallExpression[callee.property.name=\'forEach\']',
+                    'message': 'Do not use forEach. Use for...of for iteration, map for mapping, or reduce for accumulation instead.'
+                }
+            ],
 
             'no-multiple-empty-lines': ['error', {
                 max: 1,

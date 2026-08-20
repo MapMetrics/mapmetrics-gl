@@ -1,12 +1,13 @@
-import {OverscaledTileID} from '../../source/tile_id';
+import {OverscaledTileID} from '../../tile/tile_id';
 import {vec2, type vec4} from 'gl-matrix';
 import {MercatorCoordinate} from '../mercator_coordinate';
-import {clamp, degreesToRadians, scaleZoom} from '../../util/util';
-import {type Aabb, IntersectionResult} from '../../util/primitives/aabb';
+import {degreesToRadians, scaleZoom} from '../../util/util';
 
 import type {IReadonlyTransform} from '../transform_interface';
 import type {Terrain} from '../../render/terrain';
 import type {Frustum} from '../../util/primitives/frustum';
+import {maxMercatorHorizonAngle} from './mercator_utils';
+import {type IBoundingVolume, IntersectionResult} from '../../util/primitives/bounding_volume';
 
 type CoveringTilesResult = {
     tileID: OverscaledTileID;
@@ -22,7 +23,15 @@ type CoveringTilesStackEntry = {
     fullyVisible: boolean;
 };
 
-export type CoveringZoomOptions = {
+export type CoveringTilesOptions = {
+    /**
+     * Smallest allowed tile zoom.
+     */
+    minzoom?: number;
+    /**
+     * Largest allowed tile zoom.
+     */
+    maxzoom?: number;
     /**
      * Whether to round or floor the target zoom level. If true, the value will be rounded to the closest integer. Otherwise the value will be floored.
      */
@@ -33,15 +42,7 @@ export type CoveringZoomOptions = {
     tileSize: number;
 };
 
-export type CoveringTilesOptions = CoveringZoomOptions & {
-    /**
-     * Smallest allowed tile zoom.
-     */
-    minzoom?: number;
-    /**
-     * Largest allowed tile zoom.
-     */
-    maxzoom?: number;
+export type CoveringTilesOptionsInternal = CoveringTilesOptions & {
     /**
      * `true` if tiles should be sent back to the worker for each overzoomed zoom level, `false` if not.
      * Fill this option when computing covering tiles for a source.
@@ -78,15 +79,14 @@ export type CalculateTileZoomFunction = (requestedCenterZoom: number,
  * A simple/heuristic function that returns whether the tile is visible under the current transform.
  * @returns an {@link IntersectionResult}.
  */
-export function isTileVisible(frustum: Frustum, aabb: Aabb, plane?: vec4): IntersectionResult {
-
-    const frustumTest = aabb.intersectsFrustum(frustum);
-    if (!plane) {
+export function isTileVisible(frustum: Frustum, tileBoundingVolume: IBoundingVolume, plane?: vec4): IntersectionResult {
+    const frustumTest = tileBoundingVolume.intersectsFrustum(frustum);
+    if (!plane || frustumTest === IntersectionResult.None) {
         return frustumTest;
     }
-    const planeTest = aabb.intersectsPlane(plane);
+    const planeTest = tileBoundingVolume.intersectsPlane(plane);
 
-    if (frustumTest === IntersectionResult.None || planeTest === IntersectionResult.None) {
+    if (planeTest === IntersectionResult.None) {
         return IntersectionResult.None;
     }
 
@@ -97,42 +97,70 @@ export function isTileVisible(frustum: Frustum, aabb: Aabb, plane?: vec4): Inter
     return IntersectionResult.Partial;
 }
 
-function calculateTileZoom(requestedCenterZoom: number,
-    distanceToTile2D: number,
-    distanceToTileZ: number,
-    distanceToCenter3D: number,
-    cameraVerticalFOV: number) : number {
-    /**
-    * Controls how tiles are loaded at high pitch angles. Higher numbers cause fewer, lower resolution
-    * tiles to be loaded. At 0, tiles are loaded with approximately constant screen X resolution.
-    * At 1, tiles are loaded with approximately constant screen area.
-    * At 2, tiles are loaded with approximately constant screen Y resolution.
-    */
-    const pitchTileLoadingBehavior = 1.0;
-    /**
-    * Controls how tiles are loaded at high pitch angles. Controls how different the distance to a tile must be (compared with the center point)
-    * before a new zoom level is requested. For example, if tileZoomDeadband = 1 and the center zoom is 14, tiles distant enough to be loaded at
-    * z13 will be loaded at z14, and tiles distant enough to be loaded at z14 will be loaded at z15. A higher number causes more tiles to be loaded
-    * at the center zoom level. This also results in more tiles being loaded overall.
-    */
-    const tileZoomDeadband = 0.0;
-    let thisTileDesiredZ = requestedCenterZoom;
-    const thisTilePitch = Math.atan(distanceToTile2D / distanceToTileZ);
-    const distanceToTile3D = Math.hypot(distanceToTile2D, distanceToTileZ);
-    // if distance to candidate tile is a tiny bit farther than distance to center,
-    // use the same zoom as the center. This is achieved by the scaling distance ratio by cos(fov/2)
-    thisTileDesiredZ = requestedCenterZoom + scaleZoom(distanceToCenter3D / distanceToTile3D / Math.max(0.5, Math.cos(degreesToRadians(cameraVerticalFOV / 2))));
-    thisTileDesiredZ += pitchTileLoadingBehavior * scaleZoom(Math.cos(thisTilePitch)) / 2;
-    thisTileDesiredZ = thisTileDesiredZ + clamp(requestedCenterZoom - thisTileDesiredZ, -tileZoomDeadband, tileZoomDeadband);
-    return thisTileDesiredZ;
+/**
+ * Definite integral of cos(x)^p. The analytical solution is described in `developer-guides/covering-tiles.md`,
+ * but here the integral is evaluated numerically.
+ * @param p - the power to raise cos(x) to inside the integral
+ * @param x1 - the starting point of the integral.
+ * @param x2 - the ending point of the integral.
+ * @return the integral of cos(x)^p from x=x1 to x=x2
+ */
+function integralOfCosXByP(p: number, x1: number, x2: number): number {
+    const numPoints = 10;
+    let sum = 0;
+    const dx = (x2 - x1 ) / numPoints;
+    // Midpoint integration
+    for( let i = 0; i < numPoints; i++)
+    {
+        const x = x1 + (i + 0.5)/numPoints * (x2 - x1);
+        sum += dx * Math.pow(Math.cos(x), p);
+    }
+    return sum;
 }
+
+export function createCalculateTileZoomFunction(maxZoomLevelsOnScreen: number, tileCountMaxMinRatio: number): CalculateTileZoomFunction {
+    return function (requestedCenterZoom: number,
+        distanceToTile2D: number,
+        distanceToTileZ: number,
+        distanceToCenter3D: number,
+        cameraVerticalFOV: number): number {
+        /**
+        * Controls how tiles are loaded at high pitch angles. Higher numbers cause fewer, lower resolution
+        * tiles to be loaded. Calculate the value that will result in the selected number of zoom levels in
+        * the worst-case condition (when the horizon is at the top of the screen). For more information, see
+        * `developer-guides/covering-tiles.md`
+        */
+        const pitchTileLoadingBehavior = 2 * ((maxZoomLevelsOnScreen - 1) /
+            scaleZoom(Math.cos(degreesToRadians(maxMercatorHorizonAngle - cameraVerticalFOV)) /
+                Math.cos(degreesToRadians(maxMercatorHorizonAngle))) - 1);
+
+        const centerPitch = Math.acos(distanceToTileZ / distanceToCenter3D);
+        const tileCountPitch0 = 2 * integralOfCosXByP(pitchTileLoadingBehavior - 1, 0, degreesToRadians(cameraVerticalFOV / 2));
+        const highestPitch = Math.min(degreesToRadians(maxMercatorHorizonAngle), centerPitch + degreesToRadians(cameraVerticalFOV / 2));
+        const lowestPitch = Math.min(highestPitch, centerPitch - degreesToRadians(cameraVerticalFOV / 2));
+        const tileCount = integralOfCosXByP(pitchTileLoadingBehavior - 1, lowestPitch, highestPitch);
+        const thisTilePitch = Math.atan(distanceToTile2D / distanceToTileZ);
+        const distanceToTile3D = Math.hypot(distanceToTile2D, distanceToTileZ);
+
+        let thisTileDesiredZ = requestedCenterZoom;
+        // if distance to candidate tile is a tiny bit farther than distance to center,
+        // use the same zoom as the center. This is achieved by the scaling distance ratio by cos(fov/2)
+        thisTileDesiredZ = thisTileDesiredZ + scaleZoom(distanceToCenter3D / distanceToTile3D / Math.max(0.5, Math.cos(degreesToRadians(cameraVerticalFOV / 2))));
+        thisTileDesiredZ += pitchTileLoadingBehavior * scaleZoom(Math.cos(thisTilePitch)) / 2;
+        thisTileDesiredZ -= scaleZoom(Math.max(1, tileCount / tileCountPitch0 / tileCountMaxMinRatio)) / 2;
+        return thisTileDesiredZ;
+    };
+}
+const defaultMaxZoomLevelsOnScreen = 9.314;
+const defaultTileCountMaxMinRatio = 3.0;
+const defaultCalculateTileZoom = createCalculateTileZoomFunction(defaultMaxZoomLevelsOnScreen, defaultTileCountMaxMinRatio);
 
 /**
  * Return what zoom level of a tile source would most closely cover the tiles displayed by this transform.
  * @param options - The options, most importantly the source's tile size.
  * @returns An integer zoom level at which all tiles will be visible.
  */
-export function coveringZoomLevel(transform: IReadonlyTransform, options: CoveringZoomOptions): number {
+export function coveringZoomLevel(transform: IReadonlyTransform, options: CoveringTilesOptions): number {
     const z = (options.roundZoom ? Math.round : Math.floor)(
         transform.zoom + scaleZoom(transform.tileSize / options.tileSize)
     );
@@ -152,7 +180,7 @@ export function coveringZoomLevel(transform: IReadonlyTransform, options: Coveri
  * @param details - Interface to define required helper functions.
  * @returns A list of tile coordinates, ordered by ascending distance from camera.
  */
-export function coveringTiles(transform: IReadonlyTransform, options: CoveringTilesOptions): OverscaledTileID[] {
+export function coveringTiles(transform: IReadonlyTransform, options: CoveringTilesOptionsInternal): OverscaledTileID[] {
     const frustum = transform.getCameraFrustum();
     const plane = transform.getClippingPlane();
     const cameraCoord = transform.screenPointToMercatorCoordinate(transform.getCameraPoint());
@@ -184,8 +212,8 @@ export function coveringTiles(transform: IReadonlyTransform, options: CoveringTi
     };
 
     // Do a depth-first traversal to find visible tiles and proper levels of detail
-    const stack: Array<CoveringTilesStackEntry> = [];
-    const result: Array<CoveringTilesResult> = [];
+    const stack: CoveringTilesStackEntry[] = [];
+    const result: CoveringTilesResult[] = [];
 
     if (transform.renderWorldCopies && detailsProvider.allowWorldCopies()) {
         // Render copy of the globe thrice on both sides
@@ -203,11 +231,11 @@ export function coveringTiles(transform: IReadonlyTransform, options: CoveringTi
         const y = it.y;
         let fullyVisible = it.fullyVisible;
         const tileID = {x, y, z: it.zoom};
-        const aabb = detailsProvider.getTileAABB(tileID, it.wrap, transform.elevation, options);
+        const boundingVolume = detailsProvider.getTileBoundingVolume(tileID, it.wrap, transform.elevation, options);
 
         // Visibility of a tile is not required if any of its ancestor is fully visible
         if (!fullyVisible) {
-            const intersectResult = isTileVisible(frustum, aabb, plane);
+            const intersectResult = isTileVisible(frustum, boundingVolume, plane);
 
             if (intersectResult === IntersectionResult.None)
                 continue;
@@ -215,11 +243,11 @@ export function coveringTiles(transform: IReadonlyTransform, options: CoveringTi
             fullyVisible = intersectResult === IntersectionResult.Full;
         }
 
-        const distToTile2d = detailsProvider.distanceToTile2d(cameraCoord.x, cameraCoord.y, tileID, aabb);
+        const distToTile2d = detailsProvider.distanceToTile2d(cameraCoord.x, cameraCoord.y, tileID, boundingVolume);
 
         let thisTileDesiredZ = desiredZ;
         if (allowVariableZoom) {
-            const tileZoomFunc = options.calculateTileZoom || calculateTileZoom;
+            const tileZoomFunc = options.calculateTileZoom || defaultCalculateTileZoom;
             thisTileDesiredZ = tileZoomFunc(transform.zoom + scaleZoom(transform.tileSize / options.tileSize),
                 distToTile2d,
                 distanceZ,
@@ -260,98 +288,4 @@ export function coveringTiles(transform: IReadonlyTransform, options: CoveringTi
     }
 
     return result.sort((a, b) => a.distanceSq - b.distanceSq).map(a => a.tileID);
-}
-
-/**
- * Expands tile coverage by adding neighboring tiles around the bounding box.
- * This function takes the original covering tiles and adds a buffer of additional tiles
- * around the perimeter to ensure smooth panning and zooming.
- * @param originalTiles - The original list of covering tiles
- * @param bufferSize - Number of tile rows/columns to add around the perimeter (default: 1)
- * @returns Expanded list of tiles including the buffer
- */
-export function expandTileCoverage(originalTiles: OverscaledTileID[], bufferSize: number = 1): OverscaledTileID[] {
-    if (bufferSize <= 0 || originalTiles.length === 0) {
-        return originalTiles;
-    }
-
-    const expandedTiles = new Map<string, OverscaledTileID>();
-    
-    // Add original tiles to the result
-    for (const tile of originalTiles) {
-        expandedTiles.set(tile.key, tile);
-    }
-
-    // Group tiles by zoom level and wrap
-    const tilesByZoom = new Map<string, OverscaledTileID[]>();
-    for (const tile of originalTiles) {
-        const key = `${tile.canonical.z}-${tile.wrap}`;
-        if (!tilesByZoom.has(key)) {
-            tilesByZoom.set(key, []);
-        }
-        tilesByZoom.get(key).push(tile);
-    }
-
-    // For each zoom level, expand the coverage
-    for (const [zoomKey, tiles] of tilesByZoom) {
-        const [zoomStr, wrapStr] = zoomKey.split('-');
-        const zoom = parseInt(zoomStr);
-        const wrap = parseInt(wrapStr);
-
-        // Find the bounding box of tiles at this zoom level
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        for (const tile of tiles) {
-            minX = Math.min(minX, tile.canonical.x);
-            maxX = Math.max(maxX, tile.canonical.x);
-            minY = Math.min(minY, tile.canonical.y);
-            maxY = Math.max(maxY, tile.canonical.y);
-        }
-
-        // Add buffer tiles around the perimeter
-        for (let dx = -bufferSize; dx <= bufferSize; dx++) {
-            for (let dy = -bufferSize; dy <= bufferSize; dy++) {
-                // Skip the original tiles (dx=0, dy=0 when within bounds)
-                if (dx === 0 && dy === 0 && 
-                    minX <= tiles[0].canonical.x && tiles[0].canonical.x <= maxX &&
-                    minY <= tiles[0].canonical.y && tiles[0].canonical.y <= maxY) {
-                    continue;
-                }
-
-                // Add tiles in the buffer area
-                for (let x = minX + dx; x <= maxX + dx; x++) {
-                    for (let y = minY + dy; y <= maxY + dy; y++) {
-                        // Handle world wrapping
-                        let adjustedX = x;
-                        let adjustedWrap = wrap;
-                        
-                        const worldSize = Math.pow(2, zoom);
-                        if (x < 0) {
-                            adjustedX = x + worldSize;
-                            adjustedWrap = wrap - 1;
-                        } else if (x >= worldSize) {
-                            adjustedX = x - worldSize;
-                            adjustedWrap = wrap + 1;
-                        }
-
-                        // Clamp Y coordinates
-                        if (y < 0 || y >= worldSize) {
-                            continue;
-                        }
-
-                        const expandedTile = new OverscaledTileID(
-                            tiles[0].overscaledZ || zoom,
-                            adjustedWrap,
-                            zoom,
-                            adjustedX,
-                            y
-                        );
-                        
-                        expandedTiles.set(expandedTile.key, expandedTile);
-                    }
-                }
-            }
-        }
-    }
-
-    return Array.from(expandedTiles.values());
 }

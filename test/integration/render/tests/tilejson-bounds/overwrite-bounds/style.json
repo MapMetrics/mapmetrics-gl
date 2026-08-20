@@ -11,7 +11,7 @@
     ],
     "zoom": 14,
     "sources": {
-      "maplibre": {
+      "mapmetrics": {
         "type": "vector",
         "maxzoom": 14,
         "url": "local://tilesets/vector.json",
@@ -29,7 +29,7 @@
       {
         "id": "road",
         "type": "line",
-        "source": "maplibre",
+        "source": "mapmetrics",
         "source-layer": "road",
         "paint": {
           "line-width": 2,

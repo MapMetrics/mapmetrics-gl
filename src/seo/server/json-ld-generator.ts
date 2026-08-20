@@ -5,7 +5,7 @@ import {generateEntityLinks} from '../shared/entity-linker';
 import {validateSchema} from '../shared/validator';
 import {generateProvenanceSchema} from '../shared/provenance';
 
-export interface JsonLdInput {
+export type JsonLdInput = {
     geojson: FeatureCollection | Record<string, FeatureCollection>;
     center: [number, number];
     bounds: [[number, number], [number, number]];
@@ -17,7 +17,7 @@ export interface JsonLdInput {
         provenance?: ProvenanceConfig;
         featureLimit?: number;
     };
-}
+};
 
 /**
  * Normalizes input geojson to a single FeatureCollection.
@@ -33,7 +33,7 @@ function normalizeToFeatureCollection(
     // Record<string, FeatureCollection> - merge all features
     const allFeatures: Feature[] = [];
     for (const fc of Object.values(geojson as Record<string, FeatureCollection>)) {
-        if (fc && fc.features) {
+        if (fc?.features) {
             allFeatures.push(...fc.features);
         }
     }
@@ -121,7 +121,7 @@ function generateItemListSchema(
         '@context': 'https://schema.org',
         '@type': 'ItemList',
         'numberOfItems': limitedFeatures.length,
-        'itemListElement': itemListElement,
+        itemListElement,
     };
 }
 
