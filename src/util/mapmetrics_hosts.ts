@@ -29,8 +29,11 @@
  * documentation, and was only ever named by two of the four old copies — an artefact, not a host).
  */
 export const MAPMETRICS_GATEWAY_HOSTS: readonly string[] = [
-    'gateway.mapmetrics-atlas.net',
-    'gateway.mapmetrics.org'
+    'gateway.mapmetrics-atlas.net'
+    // `gateway.mapmetrics.org` was here and is NXDOMAIN -- it does not resolve, so it never fired.
+    // That is the same defect this file was created to fix: a list whose entries nobody had
+    // checked. A dead host in a billing-relevant allow-list is pure surface area. Verify DNS
+    // before adding anything back.
 ];
 
 /**

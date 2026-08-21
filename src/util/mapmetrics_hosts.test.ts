@@ -16,8 +16,11 @@ describe('isMapMetricsGatewayUrl', () => {
         expect(isMapMetricsGatewayUrl('https://gateway.mapmetrics-atlas.net/planet/12/2094/1362.mvt?token=x')).toBe(true);
     });
 
-    test('matches the documented legacy gateway', () => {
-        expect(isMapMetricsGatewayUrl('https://gateway.mapmetrics.org/styles/light.json')).toBe(true);
+    // `gateway.mapmetrics.org` was on the list and is NXDOMAIN. It never resolved, so it never
+    // fired, and it is now removed -- a dead entry in an allow-list is pure surface area. Asserted
+    // as FALSE so restoring it silently is a test failure rather than a quiet widening.
+    test('does not match the removed, non-resolving legacy gateway', () => {
+        expect(isMapMetricsGatewayUrl('https://gateway.mapmetrics.org/styles/light.json')).toBe(false);
     });
 
     test('is case-insensitive on the host', () => {
@@ -51,10 +54,9 @@ describe('isMapMetricsGatewayUrl', () => {
         expect(isMapMetricsGatewayUrl(undefined as any)).toBe(false);
     });
 
-    test('the exported host list is exactly the two intended gateways', () => {
+    test('the exported host list is exactly the one live gateway', () => {
         expect([...MAPMETRICS_GATEWAY_HOSTS].sort()).toEqual([
-            'gateway.mapmetrics-atlas.net',
-            'gateway.mapmetrics.org'
+            'gateway.mapmetrics-atlas.net'
         ]);
     });
 });

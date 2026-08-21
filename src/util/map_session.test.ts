@@ -11,7 +11,10 @@ import {RequestManager, ResourceType} from './request_manager';
 // An ALLOW-LISTED gateway host, because the origin guards now require one -- but deliberately the
 // one that does NOT resolve. Using the live host makes any test that forgets to stub `transport`
 // issue a REAL request to production, which then lands asynchronously inside a later test.
-const ORIGIN = 'https://gateway.mapmetrics.org';
+// The live gateway. `gateway.mapmetrics.org` used to stand in here and has been removed from
+// MAPMETRICS_GATEWAY_HOSTS -- it is NXDOMAIN -- so it no longer learns and cannot serve as the
+// origin these tests assume. No traffic leaves the process; the transport is faked.
+const ORIGIN = 'https://gateway.mapmetrics-atlas.net';
 const TILE = `${ORIGIN}/planet20251013/12/2094/1362.mvt?token=JWT`;
 
 function nowSeconds() {
@@ -61,6 +64,28 @@ function stubTransport(response: {status: number; body: any} | null = {status: 2
 
 beforeEach(() => {
     mapSession.reset();
+
+    // NO TEST IN THIS FILE MAY REACH THE NETWORK. `configure()` creates eagerly and `signUrl()`
+    // creates on a cold credential, so any test that calls either before `stubTransport()` used to
+    // issue a REAL `POST /v2/map-sessions` — roughly thirty of them per run, against production,
+    // once ORIGIN became a host that resolves.
+    //
+    // Those requests were not merely wasteful, they CORRUPTED LATER TESTS. A vitest body never
+    // yields, so the leaked promises all stayed queued until the first test that genuinely awaits
+    // — and then the whole backlog of real 401s drained inside it, each one running
+    // `handleRefreshFailure` and clearing `_sig`. That is what made two coalescing tests fail with
+    // `expected null to be 'SIG1'`: their own stubbed credential was wiped by another test's
+    // network reply.
+    //
+    // This default makes that impossible rather than unlikely. `stubTransport()` overwrites it, so
+    // a test that stubs is unaffected; a test that forgets fails loudly here instead of silently
+    // succeeding against production. It replaces a subtler guard — ORIGIN used to be a deliberately
+    // NXDOMAIN host — which worked only for as long as nobody pointed ORIGIN at a live gateway.
+    mapSession.transport = () => Promise.reject(new Error(
+        'map_session.test.ts: this test reached the real network. Call stubTransport() BEFORE ' +
+        'configure()/signUrl()/seedCredential() — configure() creates eagerly.'
+    ));
+
     setVisibility('visible');
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
