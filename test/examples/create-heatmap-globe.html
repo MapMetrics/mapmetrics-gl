@@ -30,7 +30,7 @@
     <body>
         <div id="map"></div>
         <script>
-            const map = new mapmetrics.Map({
+            const map = new mapmetricsgl.Map({
                 container: "map",
                 maxPitch: 55,
                 center: [-120, 37.422],
@@ -63,14 +63,14 @@
             });
 
             map.addControl(
-                new mapmetrics.NavigationControl({
+                new mapmetricsgl.NavigationControl({
                     visualizePitch: true,
                     showZoom: true,
                     showCompass: true,
                 })
             );
 
-            map.addControl(new mapmetrics.GlobeControl());
+            map.addControl(new mapmetricsgl.GlobeControl());
 
             map.on("load", () => {
                 // Add a geojson point source.

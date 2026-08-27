@@ -26,7 +26,12 @@
         <script>
             const map = new mapmetricsgl.Map({
                 container: "map",
-                style: 'https://gateway.mapmetrics-atlas.net/styles/?fileName=<YOUR_ACCOUNT_ID>/<YOUR_STYLE>.json&token=<YOUR_TOKEN>',
+                // Keyless demo style -- renders without an account, watermarked.
+                // Serve this page over http://localhost; the demo endpoint allowlists
+                // origins and answers 403 to file:// (Origin: null).
+                // With your own key, swap in:
+                //   `https://gateway.mapmetrics-atlas.net/styles/?fileName=${accountId}/${style}.json&token=${accessToken}`
+                style: "https://gateway.mapmetrics-atlas.net/demo/style.json",
                 zoom: 11,
                 center: [2.349902, 48.852966],
                 attributionControl: false  // Hides the attribution control

@@ -26,17 +26,21 @@
     <body>
         <div id="map"></div>
         <script>
-            const accessToken = "<YOUR_ACCESS_TOKEN>";
 
             const protocol = new pmtiles.Protocol();
-            mapmetrics.addProtocol("pmtiles", protocol.tile);
-            const map = new mapmetrics.Map({
+            mapmetricsgl.addProtocol("pmtiles", protocol.tile);
+            const map = new mapmetricsgl.Map({
                 container: "map",
-                style: `https://gateway.mapmetrics-atlas.net/styles/?fileName=<YOUR_ACCOUNT_ID>/<YOUR_STYLE>.json&token=${accessToken}`,
+                // Keyless demo style -- renders without an account, watermarked.
+                // Serve this page over http://localhost; the demo endpoint allowlists
+                // origins and answers 403 to file:// (Origin: null).
+                // With your own key, swap in:
+                //   `https://gateway.mapmetrics-atlas.net/styles/?fileName=${accountId}/${style}.json&token=${accessToken}`
+                style: "https://gateway.mapmetrics-atlas.net/demo/style.json",
                 center: [-103.59179687498357, 40.66995747013945],
                 zoom: 3,
             });
-            mapmetrics.setRTLTextPlugin(
+            mapmetricsgl.setRTLTextPlugin(
                 "https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js"
             );
             map.on("load", () => {
@@ -129,7 +133,7 @@
                             e.lngLat.lng > coordinates[0] ? 360 : -360;
                     }
 
-                    new mapmetrics.Popup()
+                    new mapmetricsgl.Popup()
                         .setLngLat(coordinates)
                         .setHTML(
                             `magnitude: ${mag}<br>Was there a tsunami?: ${tsunami}`

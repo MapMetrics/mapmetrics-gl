@@ -29,12 +29,15 @@
     <body>
         <div id="map"></div>
         <script>
-            // Don't forget to replace <YOUR_ACCESS_TOKEN> by your own access token
-            const accessToken = "<YOUR_ACCESS_TOKEN>";
 
-            const map = new mapmetrics.Map({
+            const map = new mapmetricsgl.Map({
                 container: "map",
-                style: `https://gateway.mapmetrics-atlas.net/styles/?fileName=<YOUR_ACCOUNT_ID>/<YOUR_STYLE>.json&token=${accessToken}`,
+                // Keyless demo style -- renders without an account, watermarked.
+                // Serve this page over http://localhost; the demo endpoint allowlists
+                // origins and answers 403 to file:// (Origin: null).
+                // With your own key, swap in:
+                //   `https://gateway.mapmetrics-atlas.net/styles/?fileName=${accountId}/${style}.json&token=${accessToken}`
+                style: "https://gateway.mapmetrics-atlas.net/demo/style.json",
                 zoom: 0,
                 center: [137.9150899566626, 36.25956997955441],
             });

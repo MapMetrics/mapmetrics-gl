@@ -33,23 +33,26 @@
     <body>
         <div id="map"></div>
         <script>
-            // Don't forget to replace <YOUR_ACCESS_TOKEN> by your own access token
-            const accessToken = "<YOUR_ACCESS_TOKEN>";
             const protocol = new pmtiles.Protocol();
-            mapmetrics.addProtocol("pmtiles", protocol.tile);
-            const map = new mapmetrics.Map({
+            mapmetricsgl.addProtocol("pmtiles", protocol.tile);
+            const map = new mapmetricsgl.Map({
                 container: "map",
-                style: `https://gateway.mapmetrics-atlas.net/styles/?fileName=<YOUR_ACCOUNT_ID>/<YOUR_STYLE>.json&token=${accessToken}`,
+                // Keyless demo style -- renders without an account, watermarked.
+                // Serve this page over http://localhost; the demo endpoint allowlists
+                // origins and answers 403 to file:// (Origin: null).
+                // With your own key, swap in:
+                //   `https://gateway.mapmetrics-atlas.net/styles/?fileName=${accountId}/${style}.json&token=${accessToken}`
+                style: "https://gateway.mapmetrics-atlas.net/demo/style.json",
                 zoom: 11,
                 center: [2.349902, 48.852966],
-            }).addControl(new mapmetrics.NavigationControl(), "top-right");
+            }).addControl(new mapmetricsgl.NavigationControl(), "top-right");
             // This plugin is used for right to left languages
-            mapmetrics.setRTLTextPlugin(
+            mapmetricsgl.setRTLTextPlugin(
                 "https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js"
             );
 
             // Add a marker with the default icon
-            new mapmetrics.Marker().setLngLat([2.349902, 48.852966]).addTo(map);
+            new mapmetricsgl.Marker().setLngLat([2.349902, 48.852966]).addTo(map);
 
             // Add a Marker with a custom icon.
 
@@ -59,7 +62,7 @@
             });
 
             // add marker to map
-            new mapmetrics.Marker({
+            new mapmetricsgl.Marker({
                 className: "eiffel-marker",
                 element: el,
             })
